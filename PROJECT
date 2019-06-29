@@ -1,0 +1,7 @@
+version: "2"
+domain: lwolf.org
+repo: github.com/lwolf/konsumerator
+resources:
+- group: konsumerator
+  version: v1alpha1
+  kind: Consumer

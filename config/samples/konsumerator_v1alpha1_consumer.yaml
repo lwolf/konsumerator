@@ -1,0 +1,27 @@
+apiVersion: konsumerator.lwolf.org/v1alpha1
+kind: Consumer
+metadata:
+  name: consumer-sample
+spec:
+  numPartitions: 4
+  name: "test-consumer"
+  namespace: "default"
+  allowedLagSeconds: 100
+  prometheusLagMetricName: ""
+  prometheusAddress: "http://localhost:9091"
+  deploymentTemplate:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: my-dep
+    strategy: {}
+    template:
+      metadata:
+        labels:
+          app: my-dep
+      spec:
+        containers:
+          - image: busybox
+            name: busybox
+            resources: {}
+  resourcesMaximum: {}
