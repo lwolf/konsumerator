@@ -60,7 +60,7 @@ type ConsumerStatus struct {
 	// +optional
 	Lagging *int32 `json:"lagging,omitempty"`
 	// +optional
-	Actual *int32 `json:"actual,omitempty"`
+	Expected *int32 `json:"expected,omitempty"`
 	// +optional
 	Missing *int32 `json:"missing,omitempty"`
 	// +optional

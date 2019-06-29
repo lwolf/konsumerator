@@ -46,6 +46,20 @@ func ignoreNotFound(err error) error {
 	return err
 }
 
+func ignoreAlreadyExists(err error) error {
+	if apierrs.IsAlreadyExists(err) {
+		return nil
+	}
+	return err
+}
+
+func ignoreConflict(err error) error {
+	if apierrs.IsConflict(err) {
+		return nil
+	}
+	return err
+}
+
 // ConsumerReconciler reconciles a Consumer object
 type ConsumerReconciler struct {
 	client.Client
@@ -64,7 +78,6 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	var consumer konsumeratorv1alpha1.Consumer
 	if err := r.Get(ctx, req.NamespacedName, &consumer); err != nil {
-		log.Error(err, "unable to fetch Consumer by name")
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
 		// requeue (we'll need to wait for a new notification), and we can get them
 		// on deleted requests.
@@ -84,9 +97,11 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		log.Error(err, "unable to parse prometheus metrics, skipping adjustments to the lag")
 	}
 
-	var runningInstances []konsumeratorv1alpha1.ObjectStatus
-	var laggingInstances []konsumeratorv1alpha1.ObjectStatus
-	var missingInstances []konsumeratorv1alpha1.ObjectStatus
+	var runningStatuses []konsumeratorv1alpha1.ObjectStatus
+	var missingStatuses []konsumeratorv1alpha1.ObjectStatus
+	var runningInstances []*appsv1.Deployment
+	var laggingInstances []*appsv1.Deployment
+	var redundantInstances []*appsv1.Deployment
 
 	parts := make(map[int32]bool)
 	for _, deploy := range managedDeploys.Items {
@@ -94,7 +109,6 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if partition == nil {
 			log.Error(nil, "failed to parse annotation with partition number. Panic!!!")
 			continue
-
 		}
 		reference, err := ref.GetReference(r.Scheme, &deploy)
 		if err != nil {
@@ -103,14 +117,18 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		parts[*partition] = true
 		lag := metrics[*partition]
-		instance := konsumeratorv1alpha1.ObjectStatus{
+		status := konsumeratorv1alpha1.ObjectStatus{
 			Partition: partition,
 			Lag:       &lag,
 			Ref:       *reference,
 		}
-		runningInstances = append(runningInstances, instance)
+		runningStatuses = append(runningStatuses, status)
+		runningInstances = append(runningInstances, &deploy)
 		if lag >= *consumer.Spec.AllowedLagSeconds {
-			laggingInstances = append(laggingInstances, instance)
+			laggingInstances = append(laggingInstances, &deploy)
+		}
+		if *partition > *consumer.Spec.NumPartitions {
+			redundantInstances = append(redundantInstances, &deploy)
 		}
 	}
 	var i int32
@@ -125,32 +143,42 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			Lag:       &lag,
 			Ref:       corev1.ObjectReference{},
 		}
-		missingInstances = append(missingInstances, instance)
+		missingStatuses = append(missingStatuses, instance)
 	}
 	tm := metav1.Now()
-	consumer.Status.Active = runningInstances
+	consumer.Status.Active = runningStatuses
 	consumer.Status.LastUpdateTime = &tm
 	consumer.Status.Running = Ptr2Int32(int32(len(runningInstances)))
 	consumer.Status.Lagging = Ptr2Int32(int32(len(laggingInstances)))
-	consumer.Status.Missing = Ptr2Int32(int32(len(missingInstances)))
-	log.V(1).Info("deployments count", "expected", consumer.Spec.NumPartitions, "running", len(runningInstances), "missing", len(missingInstances), "lagging", len(laggingInstances))
-	if err := r.Status().Update(ctx, &consumer); err != nil {
+	consumer.Status.Missing = Ptr2Int32(int32(len(missingStatuses)))
+	consumer.Status.Expected = consumer.Spec.NumPartitions
+	log.V(1).Info("deployments count", "expected", consumer.Spec.NumPartitions, "running", len(runningInstances), "missing", len(missingStatuses), "lagging", len(laggingInstances))
+
+	if err := r.Status().Update(ctx, &consumer); ignoreConflict(err) != nil {
 		log.Error(err, "unable to update Consumer status")
 		return ctrl.Result{}, err
 	}
 
-	if len(missingInstances) > 0 {
-		for _, mi := range missingInstances {
+	if len(missingStatuses) > 0 {
+		for _, mi := range missingStatuses {
 			d, err := r.constructDeployment(consumer, *mi.Partition)
 			if err != nil {
 				log.Error(err, "failed to construct deployment from template")
 				continue
 			}
-			if err := r.Create(ctx, d); err != nil {
+			if err := r.Create(ctx, d); ignoreAlreadyExists(err) != nil {
 				log.Error(err, "unable to create new Deployment", "deployment", d, "partition", *mi.Partition)
-				return ctrl.Result{}, err
+				continue
 			}
 			log.V(1).Info("created new Deployment", "deployment", d, "partition", *mi.Partition)
+		}
+	}
+
+	if len(redundantInstances) > 0 {
+		for _, deploy := range redundantInstances {
+			if err := r.Delete(ctx, deploy); ignoreNotFound(err) != nil {
+				log.Error(err, "unable to delete deployment", "deployment", deploy)
+			}
 		}
 	}
 

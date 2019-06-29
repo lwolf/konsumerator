@@ -1,7 +1,6 @@
 ## Bugs
 [x] - fix case when prometheus is not available
-[ ] - reducing number of replicas should delete old deployments
-[ ] - ? increase sync period to avoid races on bulk delete/recreate
+[x] - reducing number of replicas should delete old deployments
 [ ] - 
 ## Features
 [ ] - expose metrics about own health and behaviour

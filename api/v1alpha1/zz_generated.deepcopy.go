@@ -123,8 +123,8 @@ func (in *ConsumerStatus) DeepCopyInto(out *ConsumerStatus) {
 		*out = new(int32)
 		**out = **in
 	}
-	if in.Actual != nil {
-		in, out := &in.Actual, &out.Actual
+	if in.Expected != nil {
+		in, out := &in.Expected, &out.Expected
 		*out = new(int32)
 		**out = **in
 	}
