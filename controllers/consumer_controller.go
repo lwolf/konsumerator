@@ -51,7 +51,6 @@ type ConsumerReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
-	// Clock
 }
 
 // +kubebuilder:rbac:groups=konsumerator.lwolf.org,resources=consumers,verbs=get;list;watch;create;update;patch;delete
@@ -65,7 +64,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	var consumer konsumeratorv1alpha1.Consumer
 	if err := r.Get(ctx, req.NamespacedName, &consumer); err != nil {
-		log.Error(err, "unable to fetch CronJob")
+		log.Error(err, "unable to fetch Consumer by name")
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
 		// requeue (we'll need to wait for a new notification), and we can get them
 		// on deleted requests.
@@ -106,11 +105,11 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		lag := metrics[*partition]
 		instance := konsumeratorv1alpha1.ObjectStatus{
 			Partition: partition,
-			Lag:       lag,
+			Lag:       &lag,
 			Ref:       *reference,
 		}
 		runningInstances = append(runningInstances, instance)
-		if lag != nil && *lag >= *consumer.Spec.AllowedLagSeconds {
+		if lag >= *consumer.Spec.AllowedLagSeconds {
 			laggingInstances = append(laggingInstances, instance)
 		}
 	}
@@ -123,7 +122,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		lag := metrics[i]
 		instance := konsumeratorv1alpha1.ObjectStatus{
 			Partition: Ptr2Int32(i),
-			Lag:       lag,
+			Lag:       &lag,
 			Ref:       corev1.ObjectReference{},
 		}
 		missingInstances = append(missingInstances, instance)
@@ -197,7 +196,7 @@ func parsePartitionAnnotation(partition string) *int32 {
 	return &p32
 }
 
-func parsePrometheus(s string) (map[int32]*int64, error) {
+func parsePrometheus(s string) (map[int32]int64, error) {
 	// needs to be processed differently depending on resultType (vector, matrix,scalar)
 	return nil, nil
 }
