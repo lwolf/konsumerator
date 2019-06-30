@@ -1,6 +1,9 @@
 package providers
 
 type LagSource interface {
+	// QueryConsumption() error
+	// QueryProduction() error
+	// QueryLag() error
 	// Query calls remote storage and populates internal map
 	// with the per partition lag
 	Query() error

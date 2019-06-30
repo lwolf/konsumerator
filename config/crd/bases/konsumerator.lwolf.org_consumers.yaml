@@ -387,7 +387,36 @@ spec:
           type: object
         spec:
           properties:
+            autoscaler:
+              properties:
+                criticalLag:
+                  type: string
+                lagSyncPeriod:
+                  type: string
+                maxAllowedLag:
+                  type: string
+                prometheus:
+                  properties:
+                    address:
+                      description: 'TODO: needs to be extended to support protocol,address,tls,etc...
+                        for now just http://prometheus:9091/graph should work'
+                      type: string
+                    lagQuery:
+                      type: string
+                  required:
+                  - address
+                  - lagQuery
+                  type: object
+                provider:
+                  type: string
+              required:
+              - provider
+              - maxAllowedLag
+              - criticalLag
+              - lagSyncPeriod
+              type: object
             deploymentTemplate:
+              description: 'TODO: ? split into multiple small settings'
               properties:
                 minReadySeconds:
                   description: Minimum number of seconds for which a newly created
@@ -5076,31 +5105,6 @@ spec:
               - selector
               - template
               type: object
-            lagProvider:
-              properties:
-                lagSyncPeriod:
-                  type: string
-                maxAllowedLag:
-                  type: string
-                prometheus:
-                  properties:
-                    address:
-                      description: 'TODO: needs to be extended to support protocol,address,tls,etc...
-                        for now just http://prometheus:9091/graph should work'
-                      type: string
-                    lagQuery:
-                      type: string
-                  required:
-                  - address
-                  - lagQuery
-                  type: object
-                provider:
-                  type: string
-              required:
-              - provider
-              - maxAllowedLag
-              - lagSyncPeriod
-              type: object
             name:
               type: string
             namespace:
@@ -5110,27 +5114,25 @@ spec:
               description: Number of partitions
               format: int32
               type: integer
-            resourcesMaximum:
+            resources:
               properties:
-                limits:
+                default:
                   additionalProperties:
                     type: string
-                  description: 'Limits describes the maximum amount of compute resources
-                    allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
                   type: object
-                requests:
+                limit:
                   additionalProperties:
                     type: string
-                  description: 'Requests describes the minimum amount of compute resources
-                    required. If Requests is omitted for a container, it defaults
-                    to Limits if that is explicitly specified, otherwise to an implementation-defined
-                    value. More info: https://kubernetes.io/docs/concepts/configuration/manage-compute-resources-container/'
                   type: object
+              required:
+              - default
+              - limit
               type: object
           required:
           - numPartitions
           - name
           - namespace
+          - resources
           - deploymentTemplate
           type: object
         status:

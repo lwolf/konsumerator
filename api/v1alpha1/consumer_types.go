@@ -44,10 +44,14 @@ type ConsumerSpec struct {
 	Namespace string `json:"namespace"`
 	// +optional
 	Autoscaler AutoscalerSpec `json:"autoscaler,omitempty"`
-	// +optional
-	ResourcesMaximum corev1.ResourceRequirements `json:"resourcesMaximum,omitempty"`
+	Resources  ResourceSpec   `json:"resources"`
 	// TODO: ? split into multiple small settings
 	DeploymentTemplate appsv1.DeploymentSpec `json:"deploymentTemplate"`
+}
+
+type ResourceSpec struct {
+	Default corev1.ResourceList `json:"default"`
+	Limit   corev1.ResourceList `json:"limit"`
 }
 
 type AutoscalerSpec struct {

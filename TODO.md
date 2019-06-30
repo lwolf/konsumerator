@@ -3,6 +3,7 @@
 [x] - reducing number of replicas should delete old deployments
 [ ] - 
 ## Features
+[ ] - build simple service to produce pseudo-data to local kafka/prometheus
 [ ] - expose metrics about own health and behaviour
 [ ] - dynamic scaling up/down based on metrics
 [ ] - update GOMAXPROCS based on number of CPUs

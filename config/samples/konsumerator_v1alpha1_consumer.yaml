@@ -20,12 +20,18 @@ spec:
     # if lag has reached this point, autoscaler will
     # give maximum allowed resource to that deployment
     criticalLag: "30m"
+  # DeploymentSpec to run the consumer
+  # NOTE: replicas will always be overridden to 1 and deploymentStrategy
+  # set to Recreate
+  # TODO: current assumption is that deployment contains only one container
+  # so resources are being set to all of them. This should be fixed by
+  # adding container-name selector to allow sidecars.
   deploymentTemplate:
-    replicas: 1
+    # replicas will be replaced with 1
+    replicas: 10
     selector:
       matchLabels:
         app: my-dep
-    strategy: {}
     template:
       metadata:
         labels:
@@ -34,5 +40,11 @@ spec:
         containers:
           - image: busybox
             name: busybox
-            resources: {}
-  resourcesMaximum: {}
+            command: ["/bin/sh", "-ec", "sleep 1000"]
+  resources:
+    default:
+      cpu: "100m"
+      memory: "100Mi"
+    limit:
+      cpu: "1"
+      memory: "1Gi"

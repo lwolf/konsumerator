@@ -182,6 +182,14 @@ func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.C
 		Spec: consumer.Spec.DeploymentTemplate,
 	}
 	deploy.Annotations[managedPartitionAnnotation] = strconv.Itoa(int(p))
+	deploy.Spec.Replicas = helpers.Ptr2Int32(1)
+	for i, _ := range deploy.Spec.Template.Spec.Containers {
+		deploy.Spec.Template.Spec.Containers[i].Resources.Requests = consumer.Spec.Resources.Default
+		deploy.Spec.Template.Spec.Containers[i].Resources.Limits = consumer.Spec.Resources.Default
+	}
+	deploy.Spec.Strategy = v1.DeploymentStrategy{
+		Type: v1.RecreateDeploymentStrategyType,
+	}
 	if err := ctrl.SetControllerReference(&consumer, deploy, r.Scheme); err != nil {
 		return nil, err
 	}
