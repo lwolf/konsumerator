@@ -7,6 +7,7 @@
 [ ] - dynamic scaling up/down based on metrics
 [ ] - update GOMAXPROCS based on number of CPUs
 [ ] - post behaviour updates to Kubernetes events
+[ ] - resource requirements based on topic production distribution
 ## Future
 [ ] - call webhooks on scaling events 
 [ ] - different sources of lag (promtheus,kafka,http endpoint)

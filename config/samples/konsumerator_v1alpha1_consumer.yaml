@@ -3,12 +3,23 @@ kind: Consumer
 metadata:
   name: consumer-sample
 spec:
-  numPartitions: 4
+  numPartitions: 10
   name: "test-consumer"
   namespace: "default"
-  allowedLagSeconds: 100
-  prometheusLagMetricName: ""
-  prometheusAddress: "http://localhost:9091"
+  autoscaler:
+    # only one provider type prometheus is supported at the moment
+    # dummy provider returns random lag value in range [0,350] for
+    # testing purposes
+    provider: "dummy"
+    # do not scale up if the lag is less than 5 minutes
+    maxAllowedLag: "5m"
+    # minimum allowed period to query remote datasources for the lag
+    # information to avoid DDoS of that service
+    lagSyncPeriod: "1m"
+    # criticalLag is some value close to the SLO.
+    # if lag has reached this point, autoscaler will
+    # give maximum allowed resource to that deployment
+    criticalLag: "30m"
   deploymentTemplate:
     replicas: 1
     selector:

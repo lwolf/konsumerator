@@ -21,6 +21,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type LagProviderType string
+
+const (
+	LagProviderTypePrometheus LagProviderType = "prometheus"
+	LagProviderTypeDummy      LagProviderType = "dummy"
+)
+
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -35,17 +42,28 @@ type ConsumerSpec struct {
 	Name string `json:"name"`
 	// Labels    []labels.Labels `json:"labels"`
 	Namespace string `json:"namespace"`
-
-	AllowedLagSeconds       *int64 `json:"allowedLagSeconds"`
-	PrometheusLagMetricName string `json:"prometheusLagMetricName"`
-	// TODO: needs to be extended to support protocol,address,tls,etc...
-	// for now just http://prometheus:9091/graph should work
-	PrometheusAddress string `json:"prometheusAddress"`
-
+	// +optional
+	Autoscaler AutoscalerSpec `json:"autoscaler,omitempty"`
 	// +optional
 	ResourcesMaximum corev1.ResourceRequirements `json:"resourcesMaximum,omitempty"`
-
+	// TODO: ? split into multiple small settings
 	DeploymentTemplate appsv1.DeploymentSpec `json:"deploymentTemplate"`
+}
+
+type AutoscalerSpec struct {
+	Provider      LagProviderType  `json:"provider"`
+	MaxAllowedLag *metav1.Duration `json:"maxAllowedLag"`
+	CriticalLag   *metav1.Duration `json:"criticalLag"`
+	LagSyncPeriod *metav1.Duration `json:"lagSyncPeriod"`
+	// +optional
+	PrometheusProvider *LagProviderPrometheus `json:"prometheus,omitempty"`
+}
+
+type LagProviderPrometheus struct {
+	// TODO: needs to be extended to support protocol,address,tls,etc...
+	// for now just http://prometheus:9091/graph should work
+	Address  string `json:"address"`
+	LagQuery string `json:"lagQuery"`
 }
 
 // ConsumerStatus defines the observed state of Consumer
@@ -56,23 +74,15 @@ type ConsumerStatus struct {
 	// A list of pointers to currently running deployments.
 
 	// +optional
+	Expected *int32 `json:"expected,omitempty"`
+	// +optional
 	Running *int32 `json:"running,omitempty"`
 	// +optional
 	Lagging *int32 `json:"lagging,omitempty"`
 	// +optional
-	Expected *int32 `json:"expected,omitempty"`
+	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
 	// +optional
-	Missing *int32 `json:"missing,omitempty"`
-	// +optional
-	LastUpdateTime *metav1.Time `json:"lastUpdateTime,omitempty"`
-	// +optional
-	Active []ObjectStatus `json:"active,omitempty"`
-}
-
-type ObjectStatus struct {
-	Partition *int32                 `json:"partition"`
-	Lag       *int64                 `json:"lag"`
-	Ref       corev1.ObjectReference `json:"ref"`
+	PartitionsLag *[]int64 `json:"partitionsLag,omitempty"` // todo: store as string
 }
 
 // +kubebuilder:object:root=true
