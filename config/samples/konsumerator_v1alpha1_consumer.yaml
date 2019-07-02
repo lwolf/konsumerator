@@ -20,6 +20,19 @@ spec:
     # if lag has reached this point, autoscaler will
     # give maximum allowed resource to that deployment
     criticalLag: "30m"
+    prometheus:
+      address:
+        - "http://prometheus.monitoring.svc.cluster.local:9091"
+      offset:
+        query: ""
+        partitionLabel: "partition"
+      production:
+        query: ""
+        metricName: ""
+        partitionLabel: "partition"
+      consumption:
+        query: ""
+        partitionLabel: "partition"
   # DeploymentSpec to run the consumer
   # NOTE: replicas will always be overridden to 1 and deploymentStrategy
   # set to Recreate

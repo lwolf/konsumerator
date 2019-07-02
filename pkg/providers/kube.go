@@ -1,25 +1,38 @@
 package providers
 
+import "time"
+
 // KubeLagSource makes data stored in the Consumer status
 // compatible with base LagSource data provider interface
 type KubeLagSource struct {
-	currentLag []int64
+	lag []float64
 }
 
-func (l *KubeLagSource) GetLagByPartition(partition int32) int64 {
-	if int(partition) > len(l.currentLag) {
+func (l *KubeLagSource) GetLagByPartition(partition int32) time.Duration {
+	if int(partition) > len(l.lag) {
 		return 0
 	}
-	return l.currentLag[partition]
+	return time.Duration(l.lag[partition]) * time.Second
+
 }
-func (l *KubeLagSource) Query() error {
+func (l *KubeLagSource) QueryConsumptionRate() (map[int32]float64, error) {
+	return nil, nil
+}
+func (l *KubeLagSource) QueryProductionRate() (map[int32]float64, error) {
+	return nil, nil
+}
+func (l *KubeLagSource) QueryProductionRateDistribution() (map[int32]float64, error) {
+	return nil, nil
+}
+func (l *KubeLagSource) QueryOffset() (map[int32]float64, error) {
+	return nil, nil
+}
+func (l *KubeLagSource) EstimateLag() error {
 	return nil
 }
-func (l *KubeLagSource) GetLag() []int64 {
-	return l.currentLag
-}
-func NewLagSourceKube(l []int64) *KubeLagSource {
+
+func NewLagSourceKube(l []float64) *KubeLagSource {
 	return &KubeLagSource{
-		currentLag: l,
+		lag: l,
 	}
 }

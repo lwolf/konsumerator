@@ -1,14 +1,13 @@
 package providers
 
+import "time"
+
 type LagSource interface {
-	// QueryConsumption() error
-	// QueryProduction() error
-	// QueryLag() error
-	// Query calls remote storage and populates internal map
-	// with the per partition lag
-	Query() error
-	// GetLagByPartition returns lag time in seconds for provided partition number
-	GetLagByPartition(int32) int64
-	// GetLag returns entire list
-	GetLag() []int64
+	GetLag() map[int32]float64
+	GetLagByPartition(int32) time.Duration
+	QueryConsumptionRate() (map[int32]float64, error)
+	QueryProductionRate() (map[int32]float64, error)
+	QueryProductionRateDistribution() (map[int32]float64, error)
+	QueryOffset() (map[int32]float64, error)
+	EstimateLag() error
 }

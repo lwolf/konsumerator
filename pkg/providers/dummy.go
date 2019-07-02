@@ -1,32 +1,46 @@
 package providers
 
-import "math/rand"
+import (
+	"time"
+)
 
 type DummyLagSource struct {
-	currentLag []int64
-	random     bool
+	lag        map[int32]float64
 	partitions int32
 }
 
-func (l *DummyLagSource) GetLagByPartition(partition int32) int64 {
-	if int(partition) > len(l.currentLag) {
+func (l *DummyLagSource) GetLagByPartition(partition int32) time.Duration {
+	if int(partition) > len(l.lag) {
 		return 0
 	}
-	return l.currentLag[partition]
+	return time.Duration(l.lag[partition]) * time.Second
 }
-func (l *DummyLagSource) Query() error {
-	for i := 0; i < int(l.partitions); i++ {
-		lag := int64(0)
-		if l.random {
-			lag = rand.Int63n(500)
-		}
-		l.currentLag = append(l.currentLag, lag)
-	}
+
+func (l *DummyLagSource) QueryConsumptionRate() (map[int32]float64, error) {
+	return nil, nil
+}
+
+func (l *DummyLagSource) QueryProductionRate() (map[int32]float64, error) {
+	return nil, nil
+}
+
+func (l *DummyLagSource) QueryOffset() (map[int32]float64, error) {
+	return nil, nil
+}
+func (l *DummyLagSource) EstimateLag() error {
 	return nil
 }
-func (l *DummyLagSource) GetLag() []int64 {
-	return l.currentLag
+func (l *DummyLagSource) GetLag() map[int32]float64 {
+	return nil
 }
-func NewLagSourceDummy(random bool, numPartitions int32) *DummyLagSource {
-	return &DummyLagSource{random: random, partitions: numPartitions}
+
+func (l *DummyLagSource) QueryProductionRateDistribution() (map[int32]float64, error) {
+	for i := 0; i < int(l.partitions); i++ {
+		l.lag[int32(i)] = float64(0)
+	}
+	return l.lag, nil
+}
+
+func NewLagSourceDummy(numPartitions int32) *DummyLagSource {
+	return &DummyLagSource{partitions: numPartitions}
 }

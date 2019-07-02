@@ -66,8 +66,27 @@ type AutoscalerSpec struct {
 type LagProviderPrometheus struct {
 	// TODO: needs to be extended to support protocol,address,tls,etc...
 	// for now just http://prometheus:9091/graph should work
-	Address  string `json:"address"`
-	LagQuery string `json:"lagQuery"`
+	Address     []string             `json:"address"`
+	Offset      OffsetQuerySpec      `json:"offset"`
+	Production  ProductionQuerySpec  `json:"production"`
+	Consumption ConsumptionQuerySpec `json:"consumption"`
+}
+
+type OffsetQuerySpec struct {
+	Query          string `json:"query"`
+	PartitionLabel string `json:"partitionLabel"`
+}
+
+type ProductionQuerySpec struct {
+	Query string `json:"query"`
+	// container_cpu_user_seconds_total{namespace="monitoring"}
+	MetricName     string `json:"metricName"`
+	PartitionLabel string `json:"partitionLabel"`
+}
+
+type ConsumptionQuerySpec struct {
+	Query          string `json:"query"`
+	PartitionLabel string `json:"partitionLabel"`
 }
 
 // ConsumerStatus defines the observed state of Consumer
@@ -86,7 +105,7 @@ type ConsumerStatus struct {
 	// +optional
 	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
 	// +optional
-	PartitionsLag *[]int64 `json:"partitionsLag,omitempty"` // todo: store as string
+	PartitionsLag string `json:"partitionsLag,omitempty"`
 }
 
 // +kubebuilder:object:root=true

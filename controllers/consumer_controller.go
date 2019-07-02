@@ -17,6 +17,7 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -42,11 +43,16 @@ var (
 
 func shouldUpdateLag(consumer *konsumeratorv1alpha1.Consumer) bool {
 	status := consumer.Status
-	if status.LastSyncTime == nil || status.PartitionsLag == nil {
+	if status.LastSyncTime == nil || status.PartitionsLag == "" {
 		return true
 	}
 	timeToSync := metav1.Now().Sub(status.LastSyncTime.Time) > consumer.Spec.Autoscaler.LagSyncPeriod.Duration
-	if len(*status.PartitionsLag) > 0 && timeToSync {
+	var lag map[int32]float64
+	err := json.Unmarshal([]byte(status.PartitionsLag), &lag)
+	if err != nil {
+		return true
+	}
+	if len(lag) > 0 && timeToSync {
 		return true
 	}
 	return false
@@ -81,30 +87,29 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	var err error
 	var lagProvider providers.LagSource
+	lagProvider = providers.NewLagSourceDummy(*consumer.Spec.NumPartitions)
 	// set lagProvider to dummy if disable-autoscaler-annotation is set
-	if len(consumer.Annotations[disableAutoscalerAnnotation]) > 0 {
-		lagProvider = providers.NewLagSourceDummy(false, *consumer.Spec.NumPartitions)
-	} else {
-		switch consumer.Spec.Autoscaler.Provider {
-		case konsumeratorv1alpha1.LagProviderTypePrometheus:
-			lagProvider = providers.NewLagSourcePrometheus(consumer.Spec.Autoscaler.PrometheusProvider)
-		case konsumeratorv1alpha1.LagProviderTypeDummy:
-			lagProvider = providers.NewLagSourceDummy(false, *consumer.Spec.NumPartitions)
-		default:
-			lagProvider = providers.NewLagSourceDummy(false, *consumer.Spec.NumPartitions)
+	autoscalerDisabled := len(consumer.Annotations[disableAutoscalerAnnotation]) > 0
+	if !autoscalerDisabled && consumer.Spec.Autoscaler.Provider == konsumeratorv1alpha1.LagProviderTypePrometheus {
+		lagProvider, err = providers.NewLagSourcePrometheus(consumer.Spec.Autoscaler.PrometheusProvider)
+		if err != nil {
+			lagProvider = providers.NewLagSourceDummy(*consumer.Spec.NumPartitions)
 		}
 		if shouldUpdateLag(&consumer) {
 			log.Info("going to upgrade lag")
-			if err := lagProvider.Query(); err != nil {
+			if err := lagProvider.EstimateLag(); err != nil {
 				log.Error(err, "failed to query lag provider")
 			}
-			lagLst := lagProvider.GetLag()
-			tm := metav1.Now()
-			consumer.Status.LastSyncTime = &tm
-			consumer.Status.PartitionsLag = &lagLst
-		} else {
-			lagProvider = providers.NewLagSourceKube(*consumer.Status.PartitionsLag)
+			lagLst, err := json.Marshal(lagProvider.GetLag())
+			if err != nil {
+				log.Error(err, "failed to serialize lag data")
+			} else {
+				tm := metav1.Now()
+				consumer.Status.LastSyncTime = &tm
+				consumer.Status.PartitionsLag = string(lagLst)
+			}
 		}
 	}
 
@@ -123,7 +128,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		parts[*partition] = true
 		lag := lagProvider.GetLagByPartition(*partition)
 		runningInstances = append(runningInstances, &deploy)
-		if consumer.Spec.Autoscaler.MaxAllowedLag != nil && lag >= int64(consumer.Spec.Autoscaler.MaxAllowedLag.Seconds()) {
+		if consumer.Spec.Autoscaler.MaxAllowedLag != nil && lag >= consumer.Spec.Autoscaler.MaxAllowedLag.Duration {
 			laggingInstances = append(laggingInstances, &deploy)
 		}
 		if *partition > *consumer.Spec.NumPartitions {
