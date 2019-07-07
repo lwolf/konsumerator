@@ -16,12 +16,16 @@ limitations under the License.
 package v1alpha1
 
 import (
+	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-
 	"golang.org/x/net/context"
+	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/lwolf/konsumerator/pkg/helpers"
 )
 
 // These tests are written in BDD-style using Ginkgo framework. Refer to
@@ -57,7 +61,27 @@ var _ = Describe("Consumer", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "foo",
 					Namespace: "default",
-				}}
+				},
+				Spec: ConsumerSpec{
+					NumPartitions: helpers.Ptr2Int32(1),
+					Name:          "foo",
+					Namespace:     "default",
+					DeploymentTemplate: appsv1.DeploymentSpec{
+						Replicas: helpers.Ptr2Int32(1),
+						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}, MatchExpressions: nil},
+						Template: v1.PodTemplateSpec{
+							ObjectMeta: metav1.ObjectMeta{
+								CreationTimestamp: metav1.Now(),
+							},
+							Spec: v1.PodSpec{
+								Containers: []v1.Container{
+									{Name: "pod", Image: "busybox"},
+								},
+							}},
+					}, // spec.deploymentTemplate.template.metadata.creationTimestamp
+					ResourcePolicy: &autoscalev1.PodResourcePolicy{},
+				},
+			}
 
 			By("creating an API obj")
 			Expect(k8sClient.Create(context.TODO(), created)).To(Succeed())
