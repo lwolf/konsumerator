@@ -7,20 +7,19 @@ spec:
   name: "test-consumer"
   namespace: "default"
   autoscaler:
-    # only one provider type prometheus is supported at the moment
-    # dummy provider returns random lag value in range [0,350] for
-    # testing purposes
-    provider: "dummy"
-    # do not scale up if the lag is less than 5 minutes
-    maxAllowedLag: "5m"
-    # minimum allowed period to query remote datasources for the lag
-    # information to avoid DDoS of that service
-    lagSyncPeriod: "1m"
-    # criticalLag is some value close to the SLO.
-    # if lag has reached this point, autoscaler will
-    # give maximum allowed resource to that deployment
-    criticalLag: "30m"
+    # mode could be vpa or prometheus.
+    # `prometheus` is configured using prometheus provider and user specific metrics
+    mode: "prometheus"
     prometheus:
+      # minimum allowed period to query prometheus for the lag
+      # information to avoid DDoS of that service
+      minSyncPeriod: "1m"
+      # do not scale up if the lag is less than 5 minutes
+      tolerableLag: "5m"
+      # criticalLag is some value close to the SLO.
+      # if lag has reached this point, autoscaler will
+      # give maximum allowed resource to that deployment
+      criticalLag: "30m"
       address:
         - "http://prometheus.monitoring.svc.cluster.local:9091"
       offset:
@@ -33,15 +32,12 @@ spec:
       consumption:
         query: ""
         partitionLabel: "partition"
+  # partitionEnvKey - the name of the environment variable
+  # containing partition number the deployment is responsible for
+  # partitionEnvKey: "PARTITION"
   # DeploymentSpec to run the consumer
-  # NOTE: replicas will always be overridden to 1 and deploymentStrategy
-  # set to Recreate
-  # TODO: current assumption is that deployment contains only one container
-  # so resources are being set to all of them. This should be fixed by
-  # adding container-name selector to allow sidecars.
   deploymentTemplate:
-    # replicas will be replaced with 1
-    replicas: 10
+    replicas: 1
     selector:
       matchLabels:
         app: my-dep
@@ -52,12 +48,20 @@ spec:
       spec:
         containers:
           - image: busybox
+            name: busybox-info
+            command: ["/bin/sh", "-ec", "env && sleep 3000"]
+          - image: busybox
             name: busybox
-            command: ["/bin/sh", "-ec", "sleep 1000"]
-  resources:
-    default:
-      cpu: "100m"
-      memory: "100Mi"
-    limit:
-      cpu: "1"
-      memory: "1Gi"
+            command: ["/bin/sh", "-ec", "sleep 2000"]
+            env:
+              - name: "TEST_KEY"
+                value: "test-value"
+  resourcePolicy:
+    containerPolicies:
+    - containerName: busybox
+      minAllowed:
+        cpu: "100m"
+        memory: "100Mi"
+      maxAllowed:
+        cpu: "1"
+        memory: "1Gi"

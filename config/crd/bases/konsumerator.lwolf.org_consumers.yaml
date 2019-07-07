@@ -6,6 +6,24 @@ metadata:
   creationTimestamp: null
   name: consumers.konsumerator.lwolf.org
 spec:
+  additionalPrinterColumns:
+  - JSONPath: .spec.numPartitions
+    description: Number of replicas
+    name: Replicas
+    type: integer
+  - JSONPath: .spec.autoscaler.mode
+    description: Autoscaler in use
+    name: Autoscaler
+    type: string
+  - JSONPath: .status.lagging
+    name: Lagging
+    type: integer
+  - JSONPath: .status.running
+    name: Available
+    type: integer
+  - JSONPath: .metadata.creationTimestamp
+    name: Age
+    type: date
   group: konsumerator.lwolf.org
   names:
     kind: Consumer
@@ -389,34 +407,69 @@ spec:
           properties:
             autoscaler:
               properties:
-                criticalLag:
-                  type: string
-                lagSyncPeriod:
-                  type: string
-                maxAllowedLag:
+                mode:
                   type: string
                 prometheus:
                   properties:
                     address:
                       description: 'TODO: needs to be extended to support protocol,address,tls,etc...
                         for now just http://prometheus:9091/graph should work'
+                      items:
+                        type: string
+                      type: array
+                    consumption:
+                      properties:
+                        partitionLabel:
+                          type: string
+                        query:
+                          type: string
+                      required:
+                      - query
+                      - partitionLabel
+                      type: object
+                    criticalLag:
                       type: string
-                    lagQuery:
+                    minSyncPeriod:
+                      type: string
+                    offset:
+                      properties:
+                        partitionLabel:
+                          type: string
+                        query:
+                          type: string
+                      required:
+                      - query
+                      - partitionLabel
+                      type: object
+                    production:
+                      properties:
+                        metricName:
+                          description: container_cpu_user_seconds_total{namespace="monitoring"}
+                          type: string
+                        partitionLabel:
+                          type: string
+                        query:
+                          type: string
+                      required:
+                      - query
+                      - metricName
+                      - partitionLabel
+                      type: object
+                    tolerableLag:
                       type: string
                   required:
                   - address
-                  - lagQuery
+                  - offset
+                  - production
+                  - consumption
+                  - tolerableLag
+                  - criticalLag
+                  - minSyncPeriod
                   type: object
-                provider:
-                  type: string
               required:
-              - provider
-              - maxAllowedLag
-              - criticalLag
-              - lagSyncPeriod
+              - mode
               type: object
             deploymentTemplate:
-              description: 'TODO: ? split into multiple small settings'
               properties:
                 minReadySeconds:
                   description: Minimum number of seconds for which a newly created
@@ -5108,32 +5161,52 @@ spec:
             name:
               type: string
             namespace:
-              description: Labels    []labels.Labels `json:"labels"`
               type: string
             numPartitions:
-              description: Number of partitions
+              description: 'Important: Run "make" to regenerate code after modifying
+                this file'
               format: int32
               type: integer
-            resources:
+            partitionEnvKey:
+              type: string
+            resourcePolicy:
               properties:
-                default:
-                  additionalProperties:
-                    type: string
-                  type: object
-                limit:
-                  additionalProperties:
-                    type: string
-                  type: object
-              required:
-              - default
-              - limit
+                containerPolicies:
+                  description: Per-container resource policies.
+                  items:
+                    properties:
+                      containerName:
+                        description: Name of the container or DefaultContainerResourcePolicy,
+                          in which case the policy is used by the containers that
+                          don't have their own policy specified.
+                        type: string
+                      maxAllowed:
+                        additionalProperties:
+                          type: string
+                        description: Specifies the maximum amount of resources that
+                          will be recommended for the container. The default is no
+                          maximum.
+                        type: object
+                      minAllowed:
+                        additionalProperties:
+                          type: string
+                        description: Specifies the minimal amount of resources that
+                          will be recommended for the container. The default is no
+                          minimum.
+                        type: object
+                      mode:
+                        description: Whether autoscaler is enabled for the container.
+                          The default is "Auto".
+                        type: string
+                    type: object
+                  type: array
               type: object
           required:
           - numPartitions
           - name
           - namespace
-          - resources
           - deploymentTemplate
+          - resourcePolicy
           type: object
         status:
           properties:
@@ -5146,11 +5219,16 @@ spec:
             lastSyncTime:
               format: date-time
               type: string
+            observedGeneration:
+              description: 'Important: Run "make" to regenerate code after modifying
+                this file'
+              format: int64
+              type: integer
+            outdated:
+              format: int32
+              type: integer
             partitionsLag:
-              items:
-                format: int64
-                type: integer
-              type: array
+              type: string
             running:
               format: int32
               type: integer

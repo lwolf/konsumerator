@@ -16,16 +16,17 @@ limitations under the License.
 package v1alpha1
 
 import (
+	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type LagProviderType string
+type AutoscalerType string
 
 const (
-	LagProviderTypePrometheus LagProviderType = "prometheus"
-	LagProviderTypeDummy      LagProviderType = "dummy"
+	AutoscalerTypePrometheus AutoscalerType = "prometheus"
+	AutoscalerTypeVpa        AutoscalerType = "vpa"
+	AutoscalerTypeNone       AutoscalerType = ""
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -33,43 +34,36 @@ const (
 
 // ConsumerSpec defines the desired state of Consumer
 type ConsumerSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Number of partitions
-	NumPartitions *int32 `json:"numPartitions"`
-
-	Name string `json:"name"`
-	// Labels    []labels.Labels `json:"labels"`
-	Namespace string `json:"namespace"`
+	NumPartitions *int32 `json:"numPartitions"` // Number of partitions
+	Name          string `json:"name"`          // Name of the deployments to run
+	Namespace     string `json:"namespace"`     // Namespace to run managed deployments
 	// +optional
 	Autoscaler AutoscalerSpec `json:"autoscaler,omitempty"`
-	Resources  ResourceSpec   `json:"resources"`
-	// TODO: ? split into multiple small settings
-	DeploymentTemplate appsv1.DeploymentSpec `json:"deploymentTemplate"`
-}
 
-type ResourceSpec struct {
-	Default corev1.ResourceList `json:"default"`
-	Limit   corev1.ResourceList `json:"limit"`
+	// +optional
+	PartitionEnvKey    string                         `json:"partitionEnvKey,omitempty"`
+	DeploymentTemplate appsv1.DeploymentSpec          `json:"deploymentTemplate"`
+	ResourcePolicy     *autoscalev1.PodResourcePolicy `json:"resourcePolicy"`
 }
 
 type AutoscalerSpec struct {
-	Provider      LagProviderType  `json:"provider"`
-	MaxAllowedLag *metav1.Duration `json:"maxAllowedLag"`
-	CriticalLag   *metav1.Duration `json:"criticalLag"`
-	LagSyncPeriod *metav1.Duration `json:"lagSyncPeriod"`
+	Mode AutoscalerType `json:"mode"`
 	// +optional
-	PrometheusProvider *LagProviderPrometheus `json:"prometheus,omitempty"`
+	Prometheus *PrometheusAutoscalerSpec `json:"prometheus,omitempty"`
 }
 
-type LagProviderPrometheus struct {
+type PrometheusAutoscalerSpec struct {
 	// TODO: needs to be extended to support protocol,address,tls,etc...
 	// for now just http://prometheus:9091/graph should work
 	Address     []string             `json:"address"`
 	Offset      OffsetQuerySpec      `json:"offset"`
 	Production  ProductionQuerySpec  `json:"production"`
 	Consumption ConsumptionQuerySpec `json:"consumption"`
+
+	TolerableLag  *metav1.Duration `json:"tolerableLag"`
+	CriticalLag   *metav1.Duration `json:"criticalLag"`
+	MinSyncPeriod *metav1.Duration `json:"minSyncPeriod"`
 }
 
 type OffsetQuerySpec struct {
@@ -91,17 +85,17 @@ type ConsumptionQuerySpec struct {
 
 // ConsumerStatus defines the observed state of Consumer
 type ConsumerStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// A list of pointers to currently running deployments.
-
+	// +optional
+	ObservedGeneration *int64 `json:"observedGeneration,omitempty"`
 	// +optional
 	Expected *int32 `json:"expected,omitempty"`
 	// +optional
 	Running *int32 `json:"running,omitempty"`
 	// +optional
 	Lagging *int32 `json:"lagging,omitempty"`
+	// +optional
+	Outdated *int32 `json:"outdated,omitempty"`
 	// +optional
 	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
 	// +optional
@@ -110,6 +104,11 @@ type ConsumerStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.numPartitions",description="Number of replicas"
+// +kubebuilder:printcolumn:name="Autoscaler",type="string",JSONPath=".spec.autoscaler.mode",description="Autoscaler in use"
+// +kubebuilder:printcolumn:name="Lagging",type="integer",JSONPath=".status.lagging"
+// +kubebuilder:printcolumn:name="Available",type="integer",JSONPath=".status.running"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Consumer is the Schema for the consumers API
 type Consumer struct {

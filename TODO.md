@@ -1,13 +1,15 @@
 ## Roadmap
 v0.1
 * [x] Controlled scheduling of deployments according to the CRD spec
-* [ ] Allow updates of deployments (store generation of the deployment in status)
+* [x] Allow updates of deployments (store generation of the deployment in status)
+* [x] Propagate partition ID to the managed deployment
 * [x] Adding or removing deployments based on CRD spec
-* [ ] Expose metrics about own health and behaviour
-* [ ] Propagate generated ID to the managed deployment
 
 v0.2
+* [ ] Recreate deployments from scrath, if any of the immutable fields were changed in the deploymentSpec
+      Now, it requires manual deleting of all deployments.
 * [ ] Initial resource allocation based on Kafka production rate (24h window)
+* [ ] Expose metrics about own health and behaviour
 
 v0.3
 * [ ] Autoscaling based on Production/Consumption/Offset

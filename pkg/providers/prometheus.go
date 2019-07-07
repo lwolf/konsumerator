@@ -3,13 +3,13 @@ package providers
 import (
 	"context"
 	"fmt"
-	"github.com/prometheus/common/log"
-	"github.com/prometheus/common/model"
+	"log"
 	"strconv"
 	"time"
 
 	"github.com/prometheus/client_golang/api"
 	"github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
 
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 )
@@ -30,7 +30,7 @@ type LagSourcePrometheus struct {
 	consumptionRate map[int32]float64
 }
 
-func NewLagSourcePrometheus(spec *konsumeratorv1alpha1.LagProviderPrometheus) (*LagSourcePrometheus, error) {
+func NewLagSourcePrometheus(spec *konsumeratorv1alpha1.PrometheusAutoscalerSpec) (*LagSourcePrometheus, error) {
 	c, err := api.NewClient(api.Config{Address: spec.Address[0]})
 	if err != nil {
 		return nil, err
@@ -97,14 +97,14 @@ func (l *LagSourcePrometheus) QueryProductionRateDistribution() (map[int32]float
 		return nil, err
 	}
 	for _, w := range warnings {
-		log.Debugf("WARNING getting production distribution: %s", w)
+		log.Printf("WARNING getting production distribution: %s", w)
 	}
 	offsets := make(map[int32]float64)
 	for _, v := range value.(model.Vector) {
 		partitionNumberStr := string(v.Metric[model.LabelName(l.productionPartitionLabel)])
 		partitionNumber, err := strconv.Atoi(partitionNumberStr)
 		if err != nil {
-			log.Errorf("unable to parse partition number from the label %s", partitionNumberStr)
+			log.Printf("unable to parse partition number from the label %s", partitionNumberStr)
 		}
 		offsets[int32(partitionNumber)] = float64(v.Value)
 	}
