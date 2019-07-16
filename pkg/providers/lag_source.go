@@ -2,12 +2,15 @@ package providers
 
 import "time"
 
+type MetricsMap map[int32]int64
+
 type LagSource interface {
-	GetLag() map[int32]float64
+	GetProductionRate(int32) int64
+	GetConsumptionRate(int32) int64
+	GetMessagesBehind(int32) int64
 	GetLagByPartition(int32) time.Duration
-	QueryConsumptionRate() (map[int32]float64, error)
-	QueryProductionRate() (map[int32]float64, error)
-	QueryProductionRateDistribution() (map[int32]float64, error)
-	QueryOffset() (map[int32]float64, error)
+	QueryConsumptionRate() (MetricsMap, error)
+	QueryProductionRate() (MetricsMap, error)
+	QueryOffset() (MetricsMap, error)
 	EstimateLag() error
 }

@@ -16,21 +16,33 @@ spec:
       minSyncPeriod: "1m"
       # do not scale up if the lag is less than 5 minutes
       tolerableLag: "5m"
+      # approximate consumption rate per CPU
+      ratePerCore: 10000
       # criticalLag is some value close to the SLO.
       # if lag has reached this point, autoscaler will
       # give maximum allowed resource to that deployment
-      criticalLag: "30m"
+      criticalLag: "60m"
+      # preferable catchup time. During lag, if resources are
+      # available, consumer will be scaled up to catchup during
+      # during this time.
+      preferableCatchupPeriod: "30m"
+      # prometheus addresses to query
       address:
-        - "http://prometheus.monitoring.svc.cluster.local:9091"
+        - "http://prometheus-operator-prometheus.monitoring.svc.cluster.local:9090"
+      # Offset query should return number of messages that is not
+      # processed yet a.k.a lag per partitionLabel
       offset:
         query: ""
         partitionLabel: "partition"
+      # Production query should return number of messages is being
+      # produced per partitionLabel per unit of time (second)
       production:
-        query: ""
-        metricName: ""
+        query: "sum(rate(konsumerator_messages_produced_total[5m])) by (partition)"
         partitionLabel: "partition"
+      # Consumption query should return number of messages is being
+      # consumed per partitionLabel per unit of time (second)
       consumption:
-        query: ""
+        query: "sum(rate(kafka_consumption[1h])) by (partition)"
         partitionLabel: "partition"
   # partitionEnvKey - the name of the environment variable
   # containing partition number the deployment is responsible for

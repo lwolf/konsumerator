@@ -6,10 +6,11 @@ v0.1
 * [x] Adding or removing deployments based on CRD spec
 
 v0.2
-* [ ] Recreate deployments from scrath, if any of the immutable fields were changed in the deploymentSpec
+* [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
 * [ ] Initial resource allocation based on Kafka production rate (24h window)
 * [ ] Expose metrics about own health and behaviour
+* [ ] use `scale` as a way to pause/resume the consumer
 
 v0.3
 * [ ] Autoscaling based on Production/Consumption/Offset

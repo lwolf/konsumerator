@@ -17,15 +17,17 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"math"
 	"strconv"
 
 	"github.com/go-logr/logr"
+	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"github.com/mitchellh/hashstructure"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/apps/v1"
-	v12 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -43,6 +45,7 @@ var (
 	deploymentGeneration        = "konsumerator.lwolf.org/deployment-generation"
 	deployOwnerKey              = ".metadata.controller"
 	defaultPartitionEnvKey      = "KONSUMERATOR_PARTITION"
+	gomaxprocsEnvKey            = "GOMAXPROCS"
 	apiGVStr                    = konsumeratorv1alpha1.GroupVersion.String()
 )
 
@@ -55,16 +58,11 @@ func debugExtractNames(deploys []*appsv1.Deployment) (names []string) {
 
 func shouldUpdateLag(consumer *konsumeratorv1alpha1.Consumer) bool {
 	status := consumer.Status
-	if status.LastSyncTime == nil || status.PartitionsLag == "" {
+	if status.LastSyncTime == nil {
 		return true
 	}
 	timeToSync := metav1.Now().Sub(status.LastSyncTime.Time) > consumer.Spec.Autoscaler.Prometheus.MinSyncPeriod.Duration
-	var lag map[int32]float64
-	err := json.Unmarshal([]byte(status.PartitionsLag), &lag)
-	if err != nil {
-		return true
-	}
-	if len(lag) > 0 && timeToSync {
+	if timeToSync {
 		return true
 	}
 	return false
@@ -102,7 +100,6 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var err error
 	var lagProvider providers.LagSource
 	lagProvider = providers.NewLagSourceDummy(*consumer.Spec.NumPartitions)
-	// set lagProvider to dummy if disable-autoscaler-annotation is set
 	autoscalerDisabled := len(consumer.Annotations[disableAutoscalerAnnotation]) > 0
 	if !autoscalerDisabled && consumer.Spec.Autoscaler.Mode == konsumeratorv1alpha1.AutoscalerTypePrometheus {
 		lagProvider, err = providers.NewLagSourcePrometheus(consumer.Spec.Autoscaler.Prometheus)
@@ -114,14 +111,8 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			if err := lagProvider.EstimateLag(); err != nil {
 				log.Error(err, "failed to query lag provider")
 			}
-			lagLst, err := json.Marshal(lagProvider.GetLag())
-			if err != nil {
-				log.Error(err, "failed to serialize lag data")
-			} else {
-				tm := metav1.Now()
-				consumer.Status.LastSyncTime = &tm
-				consumer.Status.PartitionsLag = string(lagLst)
-			}
+			tm := metav1.Now()
+			consumer.Status.LastSyncTime = &tm
 		}
 	}
 
@@ -223,9 +214,16 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			log.Error(nil, "failed to parse annotation with partition number.")
 			continue
 		}
+		// update resources if needed
+		// update GOMAXPROCs if needed
 		for containerIndex := range deploy.Spec.Template.Spec.Containers {
+			name := deploy.Spec.Template.Spec.Containers[containerIndex].Name
+			resources := EstimateResources(name, &consumer.Spec, lagProvider, *partition)
+			deploy.Spec.Template.Spec.Containers[containerIndex].Resources = *resources
 			envs := setEnvVariable(deploy.Spec.Template.Spec.Containers[containerIndex].Env, partitionKey, strconv.Itoa(int(*partition)))
+			envs = setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromRequests(resources.Limits.Cpu()))
 			deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
+
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			log.Error(err, "unable to update deployment", "deployment", deploy)
@@ -235,14 +233,61 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return ctrl.Result{}, nil
 }
 
-func setEnvVariable(envVars []v12.EnvVar, key string, value string) []v12.EnvVar {
+func GetResourcePolicy(name string, spec *konsumeratorv1alpha1.ConsumerSpec) *autoscalev1.ContainerResourcePolicy {
+	for _, cp := range spec.ResourcePolicy.ContainerPolicies {
+		if cp.ContainerName == name {
+			return &cp
+		}
+	}
+	return nil
+
+}
+
+func EstimateResources(containerName string, spec *konsumeratorv1alpha1.ConsumerSpec, store providers.LagSource, partition int32) *corev1.ResourceRequirements {
+	promSpec := spec.Autoscaler.Prometheus
+	resourceLimits := GetResourcePolicy(containerName, spec)
+	production := store.GetProductionRate(partition)
+	// consumption := store.GetConsumptionRate(partition)
+	lagTime := store.GetLagByPartition(partition)
+	work := int64(lagTime.Seconds())*production + production*int64(promSpec.PreferableCatchupPeriod.Seconds())
+	expectedConsumption := work / int64(promSpec.PreferableCatchupPeriod.Seconds())
+	cpuRequests := float64(expectedConsumption) / float64(*promSpec.RatePerCore)
+	cpuReq := resource.NewMilliQuantity(int64(cpuRequests*1000), resource.DecimalSI)
+	cpuLimit := resource.NewQuantity(int64(math.Ceil(cpuRequests)), resource.DecimalSI)
+	if resourceLimits != nil {
+		if cpuReq.MilliValue() < resourceLimits.MinAllowed.Cpu().MilliValue() {
+			cpuReq = resourceLimits.MinAllowed.Cpu()
+		}
+		if cpuLimit.MilliValue() > resourceLimits.MaxAllowed.Cpu().MilliValue() {
+			cpuLimit = resourceLimits.MaxAllowed.Cpu()
+		}
+	}
+	// TODO: make proper memory estimation
+	// memory is currently being set to the same value as CPU: 1 core = 1G of memory
+	return &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    *cpuReq,
+			corev1.ResourceMemory: *cpuReq,
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    *cpuLimit,
+			corev1.ResourceMemory: *cpuLimit,
+		},
+	}
+}
+
+func goMaxProcsFromRequests(cpu *resource.Quantity) string {
+	return strconv.Itoa(int(cpu.Value()))
+}
+
+func setEnvVariable(envVars []corev1.EnvVar, key string, value string) []corev1.EnvVar {
 	for i, e := range envVars {
 		if e.Name == key {
 			envVars[i].Value = value
 			return envVars
 		}
 	}
-	envVars = append(envVars, v12.EnvVar{
+	envVars = append(envVars, corev1.EnvVar{
 		Name:  key,
 		Value: value,
 	})
