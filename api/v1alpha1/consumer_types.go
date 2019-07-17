@@ -18,6 +18,7 @@ package v1alpha1
 import (
 	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -63,10 +64,11 @@ type PrometheusAutoscalerSpec struct {
 	Production  ProductionQuerySpec  `json:"production"`
 	Consumption ConsumptionQuerySpec `json:"consumption"`
 
-	RatePerCore             *int64           `json:"ratePerCore"`
-	TolerableLag            *metav1.Duration `json:"tolerableLag"`
-	CriticalLag             *metav1.Duration `json:"criticalLag"`
-	PreferableCatchupPeriod *metav1.Duration `json:"preferableCatchupPeriod"`
+	RatePerCore             *int64            `json:"ratePerCore"`
+	RamPerCore              resource.Quantity `json:"ramPerCore"`
+	TolerableLag            *metav1.Duration  `json:"tolerableLag"`
+	CriticalLag             *metav1.Duration  `json:"criticalLag"`
+	PreferableCatchupPeriod *metav1.Duration  `json:"preferableCatchupPeriod"`
 }
 
 type OffsetQuerySpec struct {

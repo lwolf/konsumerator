@@ -112,7 +112,11 @@ func (in *ConsumerSpec) DeepCopyInto(out *ConsumerSpec) {
 		*out = new(int32)
 		**out = **in
 	}
-	in.Autoscaler.DeepCopyInto(&out.Autoscaler)
+	if in.Autoscaler != nil {
+		in, out := &in.Autoscaler, &out.Autoscaler
+		*out = new(AutoscalerSpec)
+		(*in).DeepCopyInto(*out)
+	}
 	in.DeploymentTemplate.DeepCopyInto(&out.DeploymentTemplate)
 	if in.ResourcePolicy != nil {
 		in, out := &in.ResourcePolicy, &out.ResourcePolicy
@@ -229,9 +233,20 @@ func (in *PrometheusAutoscalerSpec) DeepCopyInto(out *PrometheusAutoscalerSpec) 
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.MinSyncPeriod != nil {
+		in, out := &in.MinSyncPeriod, &out.MinSyncPeriod
+		*out = new(metav1.Duration)
+		**out = **in
+	}
 	out.Offset = in.Offset
 	out.Production = in.Production
 	out.Consumption = in.Consumption
+	if in.RatePerCore != nil {
+		in, out := &in.RatePerCore, &out.RatePerCore
+		*out = new(int64)
+		**out = **in
+	}
+	out.RamPerCore = in.RamPerCore.DeepCopy()
 	if in.TolerableLag != nil {
 		in, out := &in.TolerableLag, &out.TolerableLag
 		*out = new(metav1.Duration)
@@ -242,8 +257,8 @@ func (in *PrometheusAutoscalerSpec) DeepCopyInto(out *PrometheusAutoscalerSpec) 
 		*out = new(metav1.Duration)
 		**out = **in
 	}
-	if in.MinSyncPeriod != nil {
-		in, out := &in.MinSyncPeriod, &out.MinSyncPeriod
+	if in.PreferableCatchupPeriod != nil {
+		in, out := &in.PreferableCatchupPeriod, &out.PreferableCatchupPeriod
 		*out = new(metav1.Duration)
 		**out = **in
 	}

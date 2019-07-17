@@ -18,11 +18,10 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"math"
 	"strconv"
 
 	"github.com/go-logr/logr"
-	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
+
 	"github.com/mitchellh/hashstructure"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/apps/v1"
@@ -36,6 +35,7 @@ import (
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	"github.com/lwolf/konsumerator/pkg/errors"
 	"github.com/lwolf/konsumerator/pkg/helpers"
+	"github.com/lwolf/konsumerator/pkg/predictors"
 	"github.com/lwolf/konsumerator/pkg/providers"
 )
 
@@ -181,7 +181,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	for _, mp := range missingPartitions {
-		d, err := r.constructDeployment(consumer, mp)
+		d, err := r.constructDeployment(consumer, mp, lagProvider)
 		if err != nil {
 			log.Error(err, "failed to construct deployment from template")
 			continue
@@ -218,12 +218,14 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		// update GOMAXPROCs if needed
 		for containerIndex := range deploy.Spec.Template.Spec.Containers {
 			name := deploy.Spec.Template.Spec.Containers[containerIndex].Name
-			resources := EstimateResources(name, &consumer.Spec, lagProvider, *partition)
+			log.Info("calling estimate resources from main loop")
+			predictor := predictors.NewStaticEstimator(lagProvider, consumer.Spec.Autoscaler.Prometheus)
+			limits := predictors.GetResourcePolicy(name, &consumer.Spec)
+			resources := predictor.Estimate(name, limits, *partition)
 			deploy.Spec.Template.Spec.Containers[containerIndex].Resources = *resources
 			envs := setEnvVariable(deploy.Spec.Template.Spec.Containers[containerIndex].Env, partitionKey, strconv.Itoa(int(*partition)))
 			envs = setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromRequests(resources.Limits.Cpu()))
 			deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
-
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			log.Error(err, "unable to update deployment", "deployment", deploy)
@@ -231,49 +233,6 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 	}
 	return ctrl.Result{}, nil
-}
-
-func GetResourcePolicy(name string, spec *konsumeratorv1alpha1.ConsumerSpec) *autoscalev1.ContainerResourcePolicy {
-	for _, cp := range spec.ResourcePolicy.ContainerPolicies {
-		if cp.ContainerName == name {
-			return &cp
-		}
-	}
-	return nil
-
-}
-
-func EstimateResources(containerName string, spec *konsumeratorv1alpha1.ConsumerSpec, store providers.LagSource, partition int32) *corev1.ResourceRequirements {
-	promSpec := spec.Autoscaler.Prometheus
-	resourceLimits := GetResourcePolicy(containerName, spec)
-	production := store.GetProductionRate(partition)
-	// consumption := store.GetConsumptionRate(partition)
-	lagTime := store.GetLagByPartition(partition)
-	work := int64(lagTime.Seconds())*production + production*int64(promSpec.PreferableCatchupPeriod.Seconds())
-	expectedConsumption := work / int64(promSpec.PreferableCatchupPeriod.Seconds())
-	cpuRequests := float64(expectedConsumption) / float64(*promSpec.RatePerCore)
-	cpuReq := resource.NewMilliQuantity(int64(cpuRequests*1000), resource.DecimalSI)
-	cpuLimit := resource.NewQuantity(int64(math.Ceil(cpuRequests)), resource.DecimalSI)
-	if resourceLimits != nil {
-		if cpuReq.MilliValue() < resourceLimits.MinAllowed.Cpu().MilliValue() {
-			cpuReq = resourceLimits.MinAllowed.Cpu()
-		}
-		if cpuLimit.MilliValue() > resourceLimits.MaxAllowed.Cpu().MilliValue() {
-			cpuLimit = resourceLimits.MaxAllowed.Cpu()
-		}
-	}
-	// TODO: make proper memory estimation
-	// memory is currently being set to the same value as CPU: 1 core = 1G of memory
-	return &corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    *cpuReq,
-			corev1.ResourceMemory: *cpuReq,
-		},
-		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    *cpuLimit,
-			corev1.ResourceMemory: *cpuLimit,
-		},
-	}
 }
 
 func goMaxProcsFromRequests(cpu *resource.Quantity) string {
@@ -294,7 +253,7 @@ func setEnvVariable(envVars []corev1.EnvVar, key string, value string) []corev1.
 	return envVars
 }
 
-func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.Consumer, p int32) (*appsv1.Deployment, error) {
+func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.Consumer, p int32, store providers.LagSource) (*appsv1.Deployment, error) {
 	deployLabels := make(map[string]string)
 	deployAnnotations := make(map[string]string)
 	deploy := &appsv1.Deployment{
@@ -315,16 +274,16 @@ func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.C
 	} else {
 		partitionKey = defaultPartitionEnvKey
 	}
-	for i, _ := range deploy.Spec.Template.Spec.Containers {
-		name := deploy.Spec.Template.Spec.Containers[i].Name
-		envs := setEnvVariable(deploy.Spec.Template.Spec.Containers[i].Env, partitionKey, strconv.Itoa(int(p)))
-		deploy.Spec.Template.Spec.Containers[i].Env = envs
-		for _, cp := range consumer.Spec.ResourcePolicy.ContainerPolicies {
-			if cp.ContainerName == name {
-				deploy.Spec.Template.Spec.Containers[i].Resources.Requests = cp.MinAllowed
-				deploy.Spec.Template.Spec.Containers[i].Resources.Limits = cp.MaxAllowed
-			}
-		}
+	for containerIndex := range deploy.Spec.Template.Spec.Containers {
+		name := deploy.Spec.Template.Spec.Containers[containerIndex].Name
+		ctrl.Log.WithName("controllers").WithName("Consumer").Info("calling estimate resources from construct deploy")
+		predictor := predictors.NewStaticEstimator(store, consumer.Spec.Autoscaler.Prometheus)
+		limits := predictors.GetResourcePolicy(name, &consumer.Spec)
+		resources := predictor.Estimate(name, limits, p)
+		deploy.Spec.Template.Spec.Containers[containerIndex].Resources = *resources
+		envs := setEnvVariable(deploy.Spec.Template.Spec.Containers[containerIndex].Env, partitionKey, strconv.Itoa(int(p)))
+		envs = setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromRequests(resources.Limits.Cpu()))
+		deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
 	}
 	if err := ctrl.SetControllerReference(&consumer, deploy, r.Scheme); err != nil {
 		return nil, err

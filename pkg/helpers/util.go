@@ -1,6 +1,8 @@
 package helpers
 
-import "strconv"
+import (
+	"strconv"
+)
 
 func Ptr2Int32(i int32) *int32 {
 	return &i

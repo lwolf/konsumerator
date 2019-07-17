@@ -50,7 +50,9 @@ func NewLagSourcePrometheus(spec *konsumeratorv1alpha1.PrometheusAutoscalerSpec)
 }
 
 func (l *LagSourcePrometheus) GetProductionRate(partition int32) int64 {
+	log.Printf("GetProductionRate for partition %d", partition)
 	production, ok := l.productionRate[partition]
+	log.Printf("GetProductionRate value %v, %v", production, ok)
 	if !ok {
 		return 0
 	}
@@ -89,23 +91,27 @@ func (l *LagSourcePrometheus) GetLagByPartition(partition int32) time.Duration {
 func (l *LagSourcePrometheus) EstimateLag() error {
 	// do only production rate atm
 	var err error
-	l.productionRate, err = l.QueryConsumptionRate()
+	l.productionRate, err = l.QueryProductionRate()
 	if err != nil {
 		return err
 	}
+	log.Printf("productionRate %v", l.productionRate)
 	l.consumptionRate, err = l.QueryConsumptionRate()
 	if err != nil {
 		return err
 	}
+	log.Printf("consumptionRate %v", l.consumptionRate)
 	l.messagesBehind, err = l.QueryOffset()
 	if err != nil {
 		return err
 	}
+	log.Printf("messagesBehind %v", l.messagesBehind)
 	return nil
 }
 
 func (l *LagSourcePrometheus) QueryOffset() (MetricsMap, error) {
-	ctx, _ := context.WithTimeout(context.Background(), promCallTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
+	defer cancel()
 	value, warnings, err := l.api.Query(ctx, l.offsetQuery, time.Now())
 	if err != nil {
 		return nil, err
@@ -120,7 +126,8 @@ func (l *LagSourcePrometheus) QueryOffset() (MetricsMap, error) {
 
 // QueryProductionRate queries Prometheus for the current production rate
 func (l *LagSourcePrometheus) QueryProductionRate() (MetricsMap, error) {
-	ctx, _ := context.WithTimeout(context.Background(), promCallTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
+	defer cancel()
 	value, warnings, err := l.api.Query(ctx, l.productionQuery, time.Now())
 	if err != nil {
 		return nil, err
@@ -133,7 +140,8 @@ func (l *LagSourcePrometheus) QueryProductionRate() (MetricsMap, error) {
 }
 
 func (l *LagSourcePrometheus) QueryConsumptionRate() (MetricsMap, error) {
-	ctx, _ := context.WithTimeout(context.Background(), promCallTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
+	defer cancel()
 	value, warnings, err := l.api.Query(ctx, l.consumptinQuery, time.Now())
 	if err != nil {
 		return nil, err
@@ -146,14 +154,15 @@ func (l *LagSourcePrometheus) QueryConsumptionRate() (MetricsMap, error) {
 }
 
 func (l *LagSourcePrometheus) parseVector(v model.Value, lbl string) MetricsMap {
-	offsets := make(MetricsMap)
+	metrics := make(MetricsMap)
 	for _, v := range v.(model.Vector) {
 		partitionNumberStr := string(v.Metric[model.LabelName(l.productionPartitionLabel)])
 		partitionNumber, err := strconv.Atoi(partitionNumberStr)
 		if err != nil {
 			log.Printf("unable to parse partition number from the label %s", partitionNumberStr)
 		}
-		offsets[int32(partitionNumber)] = int64(v.Value)
+		metrics[int32(partitionNumber)] = int64(v.Value)
 	}
-	return nil
+	log.Printf("metrics %v", metrics)
+	return metrics
 }

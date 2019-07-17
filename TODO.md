@@ -8,13 +8,14 @@ v0.1
 v0.2
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
-* [ ] Initial resource allocation based on Kafka production rate (24h window)
+* [x] Update GOMAXPROCS based on number of CPUs
+* [ ] Initial resource allocation based current Kafka metrics + static multipliers
+* [ ] Autoscaling based on Production/Consumption/Offset
 * [ ] Expose metrics about own health and behaviour
 * [ ] use `scale` as a way to pause/resume the consumer
 
 v0.3
-* [ ] Autoscaling based on Production/Consumption/Offset
-* [ ] Update GOMAXPROCS based on number of CPUs
+* [ ] Fully dynamic resource allocations based on historic data
 
 v0.4
 * [ ] 
@@ -25,3 +26,4 @@ Unsorted
 * [ ] [Feature] post behaviour updates to Kubernetes events
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
 * [ ] [Feature] call webhooks on scaling events
+* [ ] [Feature] Vertical autoscalling of balanced workloads (single deployment) 
