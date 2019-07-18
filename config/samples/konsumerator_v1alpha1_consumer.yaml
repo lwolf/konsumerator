@@ -17,11 +17,11 @@ spec:
       # do not scale up if the lag is less than 5 minutes
       tolerableLag: "5m"
       # approximate consumption rate per CPU
-      ratePerCore: 10000
+      ratePerCore: 20000
       # approximate memory requirements per CPU
       # if ratePerCore is 10k ops, this value is amount of
       # RAM needed during the processing of this 10k ops
-      ramPerCore: "1G"
+      ramPerCore: "100M"
       # criticalLag is some value close to the SLO.
       # if lag has reached this point, autoscaler will
       # give maximum allowed resource to that deployment

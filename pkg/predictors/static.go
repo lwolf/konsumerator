@@ -37,9 +37,9 @@ func (s *StaticEstimator) estimateCpu(consumption int64, ratePerCore int64) (int
 	cpuReq := math.Ceil(float64(consumption)/float64(ratePerCore)*10) / 10
 	return int64(cpuReq * 1000), int64(math.Ceil(cpuReq)) * 1000
 }
-func (s *StaticEstimator) estimateMemory(consumption int64, ramPerCore int64, millicores int64) (int64, int64) {
-	requests := millicores * (ramPerCore / 1000)
-	limit := int64(math.Ceil(float64(requests)))
+func (s *StaticEstimator) estimateMemory(consumption int64, ramPerCore int64, cpuR int64, cpuL int64) (int64, int64) {
+	requests := cpuR * (ramPerCore / 1000)
+	limit := cpuL * (ramPerCore / 1000)
 	return requests, limit
 }
 
@@ -80,7 +80,7 @@ func (s *StaticEstimator) validateMemory(request int64, limit int64, policy *aut
 func (s *StaticEstimator) Estimate(containerName string, limits *autoscalev1.ContainerResourcePolicy, partition int32) *corev1.ResourceRequirements {
 	expectedConsumption := s.expectedConsumption(partition)
 	cpuReq, cpuLimit := s.estimateCpu(expectedConsumption, *s.promSpec.RatePerCore)
-	memoryReq, memoryLimit := s.estimateMemory(expectedConsumption, s.promSpec.RamPerCore.MilliValue(), cpuReq)
+	memoryReq, memoryLimit := s.estimateMemory(expectedConsumption, s.promSpec.RamPerCore.MilliValue(), cpuReq, cpuLimit)
 
 	if limits != nil {
 		cpuReq, cpuLimit = s.validateCpu(cpuReq, cpuLimit, limits)

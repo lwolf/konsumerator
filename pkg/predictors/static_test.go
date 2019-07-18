@@ -71,21 +71,23 @@ func TestEstimateMemory(t *testing.T) {
 	tests := map[string]struct {
 		consumption     int64
 		ramPerCore      int64
-		millicores      int64
+		cpuR            int64
+		cpuL            int64
 		expectedMemoryR int64
 		expectedMemoryL int64
 	}{
 		"simple case": {
 			consumption:     20000,
 			ramPerCore:      1000,
-			millicores:      2000,
-			expectedMemoryR: 2000000,
-			expectedMemoryL: 2000000,
+			cpuR:            2000,
+			cpuL:            2000,
+			expectedMemoryR: 2000,
+			expectedMemoryL: 2000,
 		},
 	}
 	for testName, tt := range tests {
 		estimator := StaticEstimator{}
-		memoryR, memoryL := estimator.estimateMemory(tt.consumption, tt.ramPerCore, tt.millicores)
+		memoryR, memoryL := estimator.estimateMemory(tt.consumption, tt.ramPerCore, tt.cpuR, tt.cpuL)
 		if memoryR != tt.expectedMemoryR {
 			t.Logf("%s: expected Request Memory %d, got %d", testName, tt.expectedMemoryR, memoryR)
 			t.Fail()
@@ -170,7 +172,7 @@ func TestEstimateResources(t *testing.T) {
 				},
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("1"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
+					corev1.ResourceMemory: resource.MustParse("1G"),
 				},
 			},
 		},
@@ -197,7 +199,7 @@ func TestEstimateResources(t *testing.T) {
 				},
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("250M"),
+					corev1.ResourceMemory: resource.MustParse("700M"),
 				},
 			},
 		},
