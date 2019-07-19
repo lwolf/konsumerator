@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"log"
+	"math/rand"
 	"strconv"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 )
 
 const promCallTimeout = time.Second * 30
+
+type MetricsMap map[int32]int64
 
 type LagSourcePrometheus struct {
 	api       v1.API
@@ -50,9 +53,7 @@ func NewLagSourcePrometheus(spec *konsumeratorv1alpha1.PrometheusAutoscalerSpec)
 }
 
 func (l *LagSourcePrometheus) GetProductionRate(partition int32) int64 {
-	log.Printf("GetProductionRate for partition %d", partition)
 	production, ok := l.productionRate[partition]
-	log.Printf("GetProductionRate value %v, %v", production, ok)
 	if !ok {
 		return 0
 	}
@@ -79,33 +80,29 @@ func (l *LagSourcePrometheus) GetMessagesBehind(partition int32) int64 {
 // the number of not processed messages for partition
 func (l *LagSourcePrometheus) GetLagByPartition(partition int32) time.Duration {
 	behind := l.GetMessagesBehind(partition)
-	consumption := l.GetConsumptionRate(partition)
 	production := l.GetProductionRate(partition)
-	if (consumption == production) || (consumption-production == 0) {
+	if production == 0 {
 		return 0
 	}
-	lag := behind / (consumption - production)
+	lag := behind / production
 	return time.Duration(lag) * time.Second
 }
 
-func (l *LagSourcePrometheus) EstimateLag() error {
+func (l *LagSourcePrometheus) Update() error {
 	// do only production rate atm
 	var err error
 	l.productionRate, err = l.QueryProductionRate()
 	if err != nil {
 		return err
 	}
-	log.Printf("productionRate %v", l.productionRate)
 	l.consumptionRate, err = l.QueryConsumptionRate()
 	if err != nil {
 		return err
 	}
-	log.Printf("consumptionRate %v", l.consumptionRate)
 	l.messagesBehind, err = l.QueryOffset()
 	if err != nil {
 		return err
 	}
-	log.Printf("messagesBehind %v", l.messagesBehind)
 	return nil
 }
 

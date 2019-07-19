@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/go-logr/logr"
 
@@ -46,6 +47,7 @@ var (
 	deployOwnerKey              = ".metadata.controller"
 	defaultPartitionEnvKey      = "KONSUMERATOR_PARTITION"
 	gomaxprocsEnvKey            = "GOMAXPROCS"
+	defaultMinSyncPeriod        = time.Minute
 	apiGVStr                    = konsumeratorv1alpha1.GroupVersion.String()
 )
 
@@ -54,6 +56,18 @@ func debugExtractNames(deploys []*appsv1.Deployment) (names []string) {
 		names = append(names, d.Name)
 	}
 	return
+}
+func debugPrettyResources(r *corev1.ResourceRequirements) string {
+	if r == nil {
+		return ""
+	}
+	return fmt.Sprintf(
+		"Req: cpu:%s, ram:%s \t Limit: cpu:%s, ram:%s",
+		r.Requests.Cpu().String(),
+		r.Requests.Memory().String(),
+		r.Limits.Cpu().String(),
+		r.Limits.Memory().String(),
+	)
 }
 
 func shouldUpdateLag(consumer *konsumeratorv1alpha1.Consumer) bool {
@@ -83,6 +97,7 @@ type ConsumerReconciler struct {
 func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("consumer", req.NamespacedName)
+	result := ctrl.Result{RequeueAfter: defaultMinSyncPeriod}
 
 	var consumer konsumeratorv1alpha1.Consumer
 	if err := r.Get(ctx, req.NamespacedName, &consumer); err != nil {
@@ -96,7 +111,6 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		log.Error(err, "unable to list managed deployments")
 		return ctrl.Result{}, err
 	}
-
 	var err error
 	var lagProvider providers.LagSource
 	lagProvider = providers.NewLagSourceDummy(*consumer.Spec.NumPartitions)
@@ -108,11 +122,13 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		if shouldUpdateLag(&consumer) {
 			log.Info("going to upgrade lag")
-			if err := lagProvider.EstimateLag(); err != nil {
+			if err := lagProvider.Update(); err != nil {
 				log.Error(err, "failed to query lag provider")
+			} else {
+				tm := metav1.Now()
+				consumer.Status.LastSyncTime = &tm
+				consumer.Status.LastSyncState = providers.DumpSyncState(*consumer.Spec.NumPartitions, lagProvider)
 			}
-			tm := metav1.Now()
-			consumer.Status.LastSyncTime = &tm
 		}
 	}
 
@@ -177,7 +193,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	if err := r.Status().Update(ctx, &consumer); errors.IgnoreConflict(err) != nil {
 		log.Error(err, "unable to update Consumer status")
-		return ctrl.Result{}, err
+		return result, err
 	}
 
 	for _, mp := range missingPartitions {
@@ -232,7 +248,31 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			continue
 		}
 	}
-	return ctrl.Result{}, nil
+	for _, deploy := range laggingInstances {
+		partition := helpers.ParsePartitionAnnotation(deploy.Annotations[managedPartitionAnnotation])
+		if partition == nil {
+			log.Error(nil, "failed to parse annotation with partition number.")
+			continue
+		}
+		for containerIndex := range deploy.Spec.Template.Spec.Containers {
+			name := deploy.Spec.Template.Spec.Containers[containerIndex].Name
+			log.Info("calling estimate resources from main loop", "name", name)
+			predictor := predictors.NewStaticEstimator(lagProvider, consumer.Spec.Autoscaler.Prometheus)
+			limits := predictors.GetResourcePolicy(name, &consumer.Spec)
+			resources := predictor.Estimate(name, limits, *partition)
+			log.Info("resource estimation", "name", name, "min", limits, "resources", debugPrettyResources(resources))
+			deploy.Spec.Template.Spec.Containers[containerIndex].Resources = *resources
+			envs := setEnvVariable(deploy.Spec.Template.Spec.Containers[containerIndex].Env, partitionKey, strconv.Itoa(int(*partition)))
+			envs = setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromRequests(resources.Limits.Cpu()))
+			deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
+		}
+		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
+			log.Error(err, "unable to update deployment", "deployment", deploy)
+			continue
+		}
+
+	}
+	return result, nil
 }
 
 func goMaxProcsFromRequests(cpu *resource.Quantity) string {

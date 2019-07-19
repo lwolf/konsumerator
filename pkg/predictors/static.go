@@ -1,6 +1,7 @@
 package predictors
 
 import (
+	"log"
 	"math"
 
 	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
@@ -48,15 +49,17 @@ func (s *StaticEstimator) validateCpu(request int64, limit int64, policy *autosc
 	l := limit
 	if request < policy.MinAllowed.Cpu().MilliValue() {
 		r = policy.MinAllowed.Cpu().MilliValue()
-		l = int64(math.Ceil(float64(policy.MinAllowed.Cpu().MilliValue())))
 	}
-	if request > policy.MaxAllowed.Cpu().MilliValue() {
-		r = policy.MaxAllowed.Cpu().MilliValue()
-		l = policy.MaxAllowed.Cpu().MilliValue()
+	if limit < policy.MinAllowed.Cpu().MilliValue() {
+		l = policy.MinAllowed.Cpu().MilliValue()
 	}
 	if limit > policy.MaxAllowed.Cpu().MilliValue() {
 		l = policy.MaxAllowed.Cpu().MilliValue()
 	}
+	if request > l {
+		r = l
+	}
+	log.Printf("validateCPU result: request=%v, limit=%v", r, l)
 	return r, l
 }
 
@@ -65,15 +68,17 @@ func (s *StaticEstimator) validateMemory(request int64, limit int64, policy *aut
 	l := limit
 	if request < policy.MinAllowed.Memory().MilliValue() {
 		r = policy.MinAllowed.Memory().MilliValue()
-		l = int64(math.Ceil(float64(policy.MinAllowed.Memory().MilliValue())))
 	}
-	if request > policy.MaxAllowed.Memory().MilliValue() {
-		r = policy.MaxAllowed.Memory().MilliValue()
-		l = policy.MaxAllowed.Memory().MilliValue()
+	if limit < policy.MinAllowed.Memory().MilliValue() {
+		l = policy.MinAllowed.Memory().MilliValue()
 	}
 	if limit > policy.MaxAllowed.Memory().MilliValue() {
 		l = policy.MaxAllowed.Memory().MilliValue()
 	}
+	if request > l {
+		r = l
+	}
+	log.Printf("validateMemory result: request=%v, limit=%v", r, l)
 	return r, l
 }
 

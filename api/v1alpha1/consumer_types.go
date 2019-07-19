@@ -102,7 +102,13 @@ type ConsumerStatus struct {
 	// +optional
 	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
 	// +optional
-	// PartitionsLag string `json:"partitionsLag,omitempty"`
+	LastSyncState map[int32]InstanceState `json:"lastSyncState,omitempty"`
+}
+
+type InstanceState struct {
+	ProductionRate  int64 `json:"productionRate"`
+	ConsumptionRate int64 `json:"consumptionRate"`
+	MessagesBehind  int64 `json:"messageBehind"`
 }
 
 // +kubebuilder:object:root=true

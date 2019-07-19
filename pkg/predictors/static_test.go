@@ -292,10 +292,7 @@ func (m *MockLagSource) GetLagByPartition(partition int32) time.Duration {
 	return time.Duration(behind/production) * time.Second
 
 }
-func (m *MockLagSource) QueryConsumptionRate() (providers.MetricsMap, error) { return nil, nil }
-func (m *MockLagSource) QueryProductionRate() (providers.MetricsMap, error)  { return nil, nil }
-func (m *MockLagSource) QueryOffset() (providers.MetricsMap, error)          { return nil, nil }
-func (m *MockLagSource) EstimateLag() error                                  { return nil }
+func (m *MockLagSource) Update() error { return nil }
 
 func NewMockLagSource(production, consumption, lag providers.MetricsMap) *MockLagSource {
 	return &MockLagSource{

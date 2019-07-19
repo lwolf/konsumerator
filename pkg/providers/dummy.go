@@ -16,24 +16,10 @@ func (l *DummyLagSource) GetLagByPartition(partition int32) time.Duration {
 	return time.Duration(l.lag[partition]) * time.Second
 }
 
-func (l *DummyLagSource) QueryConsumptionRate() (MetricsMap, error) {
-	return nil, nil
-}
-
-func (l *DummyLagSource) QueryProductionRate() (MetricsMap, error) {
+func (l *DummyLagSource) Update() error {
 	for i := 0; i < int(l.partitions); i++ {
 		l.lag[int32(i)] = int64(0)
 	}
-	return l.lag, nil
-}
-
-func (l *DummyLagSource) QueryOffset() (MetricsMap, error) {
-	return nil, nil
-}
-func (l *DummyLagSource) EstimateLag() error {
-	return nil
-}
-func (l *DummyLagSource) GetLag() MetricsMap {
 	return nil
 }
 
