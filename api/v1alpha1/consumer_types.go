@@ -18,6 +18,7 @@ package v1alpha1
 import (
 	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -39,7 +40,7 @@ type ConsumerSpec struct {
 	Name          string `json:"name"`          // Name of the deployments to run
 	Namespace     string `json:"namespace"`     // Namespace to run managed deployments
 	// +optional
-	Autoscaler AutoscalerSpec `json:"autoscaler,omitempty"`
+	Autoscaler *AutoscalerSpec `json:"autoscaler,omitempty"`
 
 	// +optional
 	PartitionEnvKey    string                         `json:"partitionEnvKey,omitempty"`
@@ -56,14 +57,18 @@ type AutoscalerSpec struct {
 type PrometheusAutoscalerSpec struct {
 	// TODO: needs to be extended to support protocol,address,tls,etc...
 	// for now just http://prometheus:9091/graph should work
-	Address     []string             `json:"address"`
+	Address       []string         `json:"address"`
+	MinSyncPeriod *metav1.Duration `json:"minSyncPeriod"`
+
 	Offset      OffsetQuerySpec      `json:"offset"`
 	Production  ProductionQuerySpec  `json:"production"`
 	Consumption ConsumptionQuerySpec `json:"consumption"`
 
-	TolerableLag  *metav1.Duration `json:"tolerableLag"`
-	CriticalLag   *metav1.Duration `json:"criticalLag"`
-	MinSyncPeriod *metav1.Duration `json:"minSyncPeriod"`
+	RatePerCore             *int64            `json:"ratePerCore"`
+	RamPerCore              resource.Quantity `json:"ramPerCore"`
+	TolerableLag            *metav1.Duration  `json:"tolerableLag"`
+	CriticalLag             *metav1.Duration  `json:"criticalLag"`
+	PreferableCatchupPeriod *metav1.Duration  `json:"preferableCatchupPeriod"`
 }
 
 type OffsetQuerySpec struct {
@@ -72,9 +77,7 @@ type OffsetQuerySpec struct {
 }
 
 type ProductionQuerySpec struct {
-	Query string `json:"query"`
-	// container_cpu_user_seconds_total{namespace="monitoring"}
-	MetricName     string `json:"metricName"`
+	Query          string `json:"query"`
 	PartitionLabel string `json:"partitionLabel"`
 }
 
@@ -99,7 +102,13 @@ type ConsumerStatus struct {
 	// +optional
 	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
 	// +optional
-	PartitionsLag string `json:"partitionsLag,omitempty"`
+	LastSyncState map[string]InstanceState `json:"lastSyncState,omitempty"`
+}
+
+type InstanceState struct {
+	ProductionRate  int64 `json:"productionRate"`
+	ConsumptionRate int64 `json:"consumptionRate"`
+	MessagesBehind  int64 `json:"messageBehind"`
 }
 
 // +kubebuilder:object:root=true

@@ -17,15 +17,17 @@ package controllers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/go-logr/logr"
+
 	"github.com/mitchellh/hashstructure"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/apps/v1"
-	v12 "k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -34,6 +36,7 @@ import (
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	"github.com/lwolf/konsumerator/pkg/errors"
 	"github.com/lwolf/konsumerator/pkg/helpers"
+	"github.com/lwolf/konsumerator/pkg/predictors"
 	"github.com/lwolf/konsumerator/pkg/providers"
 )
 
@@ -43,28 +46,18 @@ var (
 	deploymentGeneration        = "konsumerator.lwolf.org/deployment-generation"
 	deployOwnerKey              = ".metadata.controller"
 	defaultPartitionEnvKey      = "KONSUMERATOR_PARTITION"
+	gomaxprocsEnvKey            = "GOMAXPROCS"
+	defaultMinSyncPeriod        = time.Minute
 	apiGVStr                    = konsumeratorv1alpha1.GroupVersion.String()
 )
 
-func debugExtractNames(deploys []*appsv1.Deployment) (names []string) {
-	for _, d := range deploys {
-		names = append(names, d.Name)
-	}
-	return
-}
-
-func shouldUpdateLag(consumer *konsumeratorv1alpha1.Consumer) bool {
+func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) bool {
 	status := consumer.Status
-	if status.LastSyncTime == nil || status.PartitionsLag == "" {
+	if status.LastSyncTime == nil || status.LastSyncState == nil {
 		return true
 	}
 	timeToSync := metav1.Now().Sub(status.LastSyncTime.Time) > consumer.Spec.Autoscaler.Prometheus.MinSyncPeriod.Duration
-	var lag map[int32]float64
-	err := json.Unmarshal([]byte(status.PartitionsLag), &lag)
-	if err != nil {
-		return true
-	}
-	if len(lag) > 0 && timeToSync {
+	if timeToSync {
 		return true
 	}
 	return false
@@ -85,6 +78,7 @@ type ConsumerReconciler struct {
 func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("consumer", req.NamespacedName)
+	result := ctrl.Result{RequeueAfter: defaultMinSyncPeriod}
 
 	var consumer konsumeratorv1alpha1.Consumer
 	if err := r.Get(ctx, req.NamespacedName, &consumer); err != nil {
@@ -98,29 +92,23 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		log.Error(err, "unable to list managed deployments")
 		return ctrl.Result{}, err
 	}
-
 	var err error
-	var lagProvider providers.LagSource
-	lagProvider = providers.NewLagSourceDummy(*consumer.Spec.NumPartitions)
-	// set lagProvider to dummy if disable-autoscaler-annotation is set
+	var mp providers.MetricsProvider
+	mp = providers.NewDummyMP(*consumer.Spec.NumPartitions)
 	autoscalerDisabled := len(consumer.Annotations[disableAutoscalerAnnotation]) > 0
 	if !autoscalerDisabled && consumer.Spec.Autoscaler.Mode == konsumeratorv1alpha1.AutoscalerTypePrometheus {
-		lagProvider, err = providers.NewLagSourcePrometheus(consumer.Spec.Autoscaler.Prometheus)
+		mp, err = providers.NewPrometheusMP(log, consumer.Spec.Autoscaler.Prometheus)
 		if err != nil {
-			lagProvider = providers.NewLagSourceDummy(*consumer.Spec.NumPartitions)
+			mp = providers.NewDummyMP(*consumer.Spec.NumPartitions)
 		}
-		if shouldUpdateLag(&consumer) {
-			log.Info("going to upgrade lag")
-			if err := lagProvider.EstimateLag(); err != nil {
+		if shouldUpdateMetrics(&consumer) {
+			log.Info("going to update metrics info")
+			if err := mp.Update(); err != nil {
 				log.Error(err, "failed to query lag provider")
-			}
-			lagLst, err := json.Marshal(lagProvider.GetLag())
-			if err != nil {
-				log.Error(err, "failed to serialize lag data")
 			} else {
 				tm := metav1.Now()
 				consumer.Status.LastSyncTime = &tm
-				consumer.Status.PartitionsLag = string(lagLst)
+				consumer.Status.LastSyncState = providers.DumpSyncState(*consumer.Spec.NumPartitions, mp)
 			}
 		}
 	}
@@ -147,7 +135,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			continue
 		}
 		parts[*partition] = true
-		lag := lagProvider.GetLagByPartition(*partition)
+		lag := mp.GetLagByPartition(*partition)
 		runningInstances = append(runningInstances, &deploy)
 		if consumer.Spec.Autoscaler.Prometheus.TolerableLag != nil && lag >= consumer.Spec.Autoscaler.Prometheus.TolerableLag.Duration {
 			laggingInstances = append(laggingInstances, &deploy)
@@ -177,29 +165,23 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		"lagging", len(laggingInstances),
 		"outdated", len(outdatedInstances),
 	)
-	// log.V(2).Info(
-	// 	"deployments",
-	// 	"running", debugExtractNames(runningInstances),
-	// 	"lagging", debugExtractNames(laggingInstances),
-	// 	"outdated", debugExtractNames(outdatedInstances),
-	// )
 
 	if err := r.Status().Update(ctx, &consumer); errors.IgnoreConflict(err) != nil {
 		log.Error(err, "unable to update Consumer status")
-		return ctrl.Result{}, err
+		return result, err
 	}
 
-	for _, mp := range missingPartitions {
-		d, err := r.constructDeployment(consumer, mp)
+	for _, part := range missingPartitions {
+		d, err := r.constructDeployment(consumer, part, mp)
 		if err != nil {
 			log.Error(err, "failed to construct deployment from template")
 			continue
 		}
 		if err := r.Create(ctx, d); errors.IgnoreAlreadyExists(err) != nil {
-			log.Error(err, "unable to create new Deployment", "deployment", d, "partition", mp)
+			log.Error(err, "unable to create new Deployment", "deployment", d, "partition", part)
 			continue
 		}
-		log.V(1).Info("created new Deployment", "deployment", d, "partition", mp)
+		log.V(1).Info("created new Deployment", "deployment", d, "partition", part)
 	}
 
 	for _, deploy := range redundantInstances {
@@ -224,7 +206,13 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			continue
 		}
 		for containerIndex := range deploy.Spec.Template.Spec.Containers {
+			name := deploy.Spec.Template.Spec.Containers[containerIndex].Name
+			predictor := predictors.NewNaivePredictor(log, mp, consumer.Spec.Autoscaler.Prometheus)
+			limits := predictors.GetResourcePolicy(name, &consumer.Spec)
+			resources := predictor.Estimate(name, limits, *partition)
+			deploy.Spec.Template.Spec.Containers[containerIndex].Resources = *resources
 			envs := setEnvVariable(deploy.Spec.Template.Spec.Containers[containerIndex].Env, partitionKey, strconv.Itoa(int(*partition)))
+			envs = setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromRequests(resources.Limits.Cpu()))
 			deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
@@ -232,24 +220,50 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			continue
 		}
 	}
-	return ctrl.Result{}, nil
+	for _, deploy := range laggingInstances {
+		partition := helpers.ParsePartitionAnnotation(deploy.Annotations[managedPartitionAnnotation])
+		if partition == nil {
+			log.Error(nil, "failed to parse annotation with partition number.")
+			continue
+		}
+		for containerIndex := range deploy.Spec.Template.Spec.Containers {
+			name := deploy.Spec.Template.Spec.Containers[containerIndex].Name
+			predictor := predictors.NewNaivePredictor(log, mp, consumer.Spec.Autoscaler.Prometheus)
+			limits := predictors.GetResourcePolicy(name, &consumer.Spec)
+			resources := predictor.Estimate(name, limits, *partition)
+			deploy.Spec.Template.Spec.Containers[containerIndex].Resources = *resources
+			envs := setEnvVariable(deploy.Spec.Template.Spec.Containers[containerIndex].Env, partitionKey, strconv.Itoa(int(*partition)))
+			envs = setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromRequests(resources.Limits.Cpu()))
+			deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
+		}
+		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
+			log.Error(err, "unable to update deployment", "deployment", deploy)
+			continue
+		}
+
+	}
+	return result, nil
 }
 
-func setEnvVariable(envVars []v12.EnvVar, key string, value string) []v12.EnvVar {
+func goMaxProcsFromRequests(cpu *resource.Quantity) string {
+	return strconv.Itoa(int(cpu.Value()))
+}
+
+func setEnvVariable(envVars []corev1.EnvVar, key string, value string) []corev1.EnvVar {
 	for i, e := range envVars {
 		if e.Name == key {
 			envVars[i].Value = value
 			return envVars
 		}
 	}
-	envVars = append(envVars, v12.EnvVar{
+	envVars = append(envVars, corev1.EnvVar{
 		Name:  key,
 		Value: value,
 	})
 	return envVars
 }
 
-func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.Consumer, p int32) (*appsv1.Deployment, error) {
+func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.Consumer, partition int32, store providers.MetricsProvider) (*appsv1.Deployment, error) {
 	deployLabels := make(map[string]string)
 	deployAnnotations := make(map[string]string)
 	deploy := &appsv1.Deployment{
@@ -257,12 +271,12 @@ func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.C
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      deployLabels,
 			Annotations: deployAnnotations,
-			Name:        fmt.Sprintf("%s-%d", consumer.Spec.Name, p),
+			Name:        fmt.Sprintf("%s-%d", consumer.Spec.Name, partition),
 			Namespace:   consumer.Spec.Namespace,
 		},
 		Spec: consumer.Spec.DeploymentTemplate,
 	}
-	deploy.Annotations[managedPartitionAnnotation] = strconv.Itoa(int(p))
+	deploy.Annotations[managedPartitionAnnotation] = strconv.Itoa(int(partition))
 	deploy.Annotations[deploymentGeneration] = strconv.Itoa(int(*consumer.Status.ObservedGeneration))
 	var partitionKey string
 	if consumer.Spec.PartitionEnvKey != "" {
@@ -270,16 +284,15 @@ func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.C
 	} else {
 		partitionKey = defaultPartitionEnvKey
 	}
-	for i, _ := range deploy.Spec.Template.Spec.Containers {
-		name := deploy.Spec.Template.Spec.Containers[i].Name
-		envs := setEnvVariable(deploy.Spec.Template.Spec.Containers[i].Env, partitionKey, strconv.Itoa(int(p)))
-		deploy.Spec.Template.Spec.Containers[i].Env = envs
-		for _, cp := range consumer.Spec.ResourcePolicy.ContainerPolicies {
-			if cp.ContainerName == name {
-				deploy.Spec.Template.Spec.Containers[i].Resources.Requests = cp.MinAllowed
-				deploy.Spec.Template.Spec.Containers[i].Resources.Limits = cp.MaxAllowed
-			}
-		}
+	for containerIndex := range deploy.Spec.Template.Spec.Containers {
+		name := deploy.Spec.Template.Spec.Containers[containerIndex].Name
+		predictor := predictors.NewNaivePredictor(r.Log, store, consumer.Spec.Autoscaler.Prometheus)
+		limits := predictors.GetResourcePolicy(name, &consumer.Spec)
+		resources := predictor.Estimate(name, limits, partition)
+		deploy.Spec.Template.Spec.Containers[containerIndex].Resources = *resources
+		envs := setEnvVariable(deploy.Spec.Template.Spec.Containers[containerIndex].Env, partitionKey, strconv.Itoa(int(partition)))
+		envs = setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromRequests(resources.Limits.Cpu()))
+		deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
 	}
 	if err := ctrl.SetControllerReference(&consumer, deploy, r.Scheme); err != nil {
 		return nil, err

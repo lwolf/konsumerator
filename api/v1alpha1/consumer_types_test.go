@@ -17,6 +17,7 @@ package v1alpha1
 
 import (
 	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
+	"github.com/lwolf/konsumerator/pkg/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"golang.org/x/net/context"
@@ -24,8 +25,6 @@ import (
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-
-	"github.com/lwolf/konsumerator/pkg/helpers"
 )
 
 // These tests are written in BDD-style using Ginkgo framework. Refer to
