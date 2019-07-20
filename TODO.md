@@ -7,12 +7,11 @@ v0.1
 
 v0.2
 * [x] Update GOMAXPROCS based on number of CPUs
-* [x] Initial resource allocation based current Kafka metrics + static multipliers
+* [x] Initial resource allocation based on current Kafka metrics + static multipliers
 * [x] Autoscaling based on Production/Consumption/Offset
 * [x] Store MetricsMap from the last query in consumer object status
 * [x] Rename static predictor to `naive`
 * [ ] Load metricsProvider from the status
-* [ ] Add ignore list of container names (do not do anything with sidecars)
 
 v0.3
 * [ ] Use `scale` as a way to pause/resume the consumer
@@ -28,6 +27,8 @@ v0.4 - observability
 v0.5
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
+* [ ] Add ignore list of container names (do not do anything with sidecars)
+      Current workaround - set resource policy for those containers with min=max resources
 * [ ] Scale down after period X of normal operations 
 
 -------
