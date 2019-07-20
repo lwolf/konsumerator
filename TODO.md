@@ -8,28 +8,36 @@ v0.1
 v0.2
 * [x] Update GOMAXPROCS based on number of CPUs
 * [x] Initial resource allocation based current Kafka metrics + static multipliers
-* [ ] Autoscaling based on Production/Consumption/Offset
-* [ ] Expose metrics about own health and behaviour
-* [ ] use `scale` as a way to pause/resume the consumer
-* [ ] add ignore list of container names (do not do anything with sidecars)
-* [ ] Scale down after period X of normal operations
+* [x] Autoscaling based on Production/Consumption/Offset
+* [x] Store MetricsMap from the last query in consumer object status
+* [x] Rename static predictor to `naive`
+* [ ] Load metricsProvider from the status
+* [ ] Add ignore list of container names (do not do anything with sidecars)
 
 v0.3
+* [ ] Use `scale` as a way to pause/resume the consumer
+* [ ] Query multiple prometheus for metrics
+* [ ] Setup travic-ci + goreleaser
+* [ ] Write readme
+
+v0.4 - observability
+* [ ] Cleanup logging
+* [ ] Post behaviour updates to Kubernetes events
 * [ ] Expose metrics about own health and behaviour
+
+v0.5
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
-
-
-v0.4
-* [ ] 
+* [ ] Scale down after period X of normal operations 
 
 -------
 Unsorted
-* [ ] [Feature] consider storing MetricsMap from the last query in consumer object status
+* [ ] Setup and add integration tests 
 * [ ] [Feature] build simple service to produce pseudo-data to local kafka/prometheus
-* [ ] [Feature] post behaviour updates to Kubernetes events
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
 * [ ] [Feature] call webhooks on scaling events
+
 * [ ] [Feature] Vertical autoscalling of balanced workloads (single deployment)
 * [ ] [Feature] Fully dynamic resource allocations based on historic data
+* [ ] [Feature] consider adding support for VPA/HPA 
  

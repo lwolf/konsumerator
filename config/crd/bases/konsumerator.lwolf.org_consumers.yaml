@@ -5222,6 +5222,24 @@ spec:
             lagging:
               format: int32
               type: integer
+            lastSyncState:
+              additionalProperties:
+                properties:
+                  consumptionRate:
+                    format: int64
+                    type: integer
+                  messageBehind:
+                    format: int64
+                    type: integer
+                  productionRate:
+                    format: int64
+                    type: integer
+                required:
+                - productionRate
+                - consumptionRate
+                - messageBehind
+                type: object
+              type: object
             lastSyncTime:
               format: date-time
               type: string

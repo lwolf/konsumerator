@@ -54,7 +54,7 @@ func TestEstimateCpu(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := StaticEstimator{}
+		estimator := NaivePredictor{}
 		cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore)
 		if cpuR != tt.expectedCpuR {
 			t.Logf("%s: expected Request CPU %d, got %d", testName, tt.expectedCpuR, cpuR)
@@ -86,7 +86,7 @@ func TestEstimateMemory(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := StaticEstimator{}
+		estimator := NaivePredictor{}
 		memoryR, memoryL := estimator.estimateMemory(tt.consumption, tt.ramPerCore, tt.cpuR, tt.cpuL)
 		if memoryR != tt.expectedMemoryR {
 			t.Logf("%s: expected Request Memory %d, got %d", testName, tt.expectedMemoryR, memoryR)
@@ -103,7 +103,7 @@ func TestEstimateMemory(t *testing.T) {
 func TestExpectedConsumption(t *testing.T) {
 	tests := map[string]struct {
 		promSpec            konsumeratorv1alpha1.PrometheusAutoscalerSpec
-		lagStore            providers.LagSource
+		lagStore            providers.MetricsProvider
 		partition           int32
 		expectedConsumption int64
 	}{
@@ -121,7 +121,7 @@ func TestExpectedConsumption(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := StaticEstimator{
+		estimator := NaivePredictor{
 			lagSource: tt.lagStore,
 			promSpec:  &tt.promSpec,
 		}
@@ -137,7 +137,7 @@ func TestEstimateResources(t *testing.T) {
 	tests := map[string]struct {
 		containerName     string
 		promSpec          konsumeratorv1alpha1.PrometheusAutoscalerSpec
-		lagStore          providers.LagSource
+		lagStore          providers.MetricsProvider
 		partition         int32
 		limits            *autoscalev1.ContainerResourcePolicy
 		expectedResources corev1.ResourceRequirements
@@ -232,7 +232,7 @@ func TestEstimateResources(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := StaticEstimator{
+		estimator := NaivePredictor{
 			lagSource: tt.lagStore,
 			promSpec:  &tt.promSpec,
 		}

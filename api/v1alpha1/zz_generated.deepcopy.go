@@ -170,7 +170,7 @@ func (in *ConsumerStatus) DeepCopyInto(out *ConsumerStatus) {
 	}
 	if in.LastSyncState != nil {
 		in, out := &in.LastSyncState, &out.LastSyncState
-		*out = make(map[int32]InstanceState, len(*in))
+		*out = make(map[string]InstanceState, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
 		}

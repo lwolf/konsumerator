@@ -32,8 +32,7 @@ spec:
       preferableCatchupPeriod: "30m"
       # prometheus addresses to query
       address:
-#        - "http://prometheus-operator-prometheus.monitoring.svc.cluster.local:9090"
-        - "https://prometheus.srvho.me/"
+        - "http://prometheus-operator-prometheus.monitoring.svc.cluster.local:9090"
       # Offset query should return number of messages that is not
       # processed yet a.k.a lag per partitionLabel
       offset:

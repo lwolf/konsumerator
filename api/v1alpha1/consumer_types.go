@@ -102,7 +102,7 @@ type ConsumerStatus struct {
 	// +optional
 	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
 	// +optional
-	LastSyncState map[int32]InstanceState `json:"lastSyncState,omitempty"`
+	LastSyncState map[string]InstanceState `json:"lastSyncState,omitempty"`
 }
 
 type InstanceState struct {
