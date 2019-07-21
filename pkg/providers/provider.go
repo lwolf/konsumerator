@@ -13,6 +13,7 @@ type MetricsProvider interface {
 	GetMessagesBehind(int32) int64
 	GetLagByPartition(int32) time.Duration
 	Update() error
+	Load(map[int32]int64, map[int32]int64, map[int32]int64)
 }
 
 func DumpSyncState(n int32, prov MetricsProvider) map[string]konsumeratorv1alpha1.InstanceState {
@@ -25,4 +26,24 @@ func DumpSyncState(n int32, prov MetricsProvider) map[string]konsumeratorv1alpha
 		}
 	}
 	return state
+}
+
+func LoadSyncState(mp MetricsProvider, status konsumeratorv1alpha1.ConsumerStatus) {
+	if status.LastSyncState == nil {
+		return
+	}
+	productionMap := make(map[int32]int64)
+	consumptionMap := make(map[int32]int64)
+	offsetsMap := make(map[int32]int64)
+	for iStr, state := range status.LastSyncState {
+		p, err := strconv.Atoi(iStr)
+		if err == nil {
+			continue
+		}
+		partition := int32(p)
+		productionMap[partition] = state.ProductionRate
+		consumptionMap[partition] = state.ConsumptionRate
+		offsetsMap[partition] = state.MessagesBehind
+	}
+	mp.Load(productionMap, consumptionMap, offsetsMap)
 }

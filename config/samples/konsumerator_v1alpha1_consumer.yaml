@@ -54,6 +54,8 @@ spec:
   # DeploymentSpec to run the consumer
   deploymentTemplate:
     replicas: 1
+    strategy:
+      type: Recreate
     selector:
       matchLabels:
         app: my-dep
@@ -80,14 +82,14 @@ spec:
     - containerName: busybox
       minAllowed:
         cpu: "100m"
-        memory: "100Mi"
+        memory: "100M"
       maxAllowed:
         cpu: "1"
-        memory: "1Gi"
+        memory: "1G"
     - containerName: busybox-info
       minAllowed:
         cpu: "100m"
-        memory: "100Mi"
+        memory: "100M"
       maxAllowed:
         cpu: "100m"
-        memory: "100Mi"
+        memory: "100M"

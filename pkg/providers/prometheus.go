@@ -8,7 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/prometheus/client_golang/api"
-	"github.com/prometheus/client_golang/api/prometheus/v1"
+	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
 
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
@@ -19,7 +19,7 @@ const promCallTimeout = time.Second * 30
 type MetricsMap map[int32]int64
 
 type PrometheusMP struct {
-	api       v1.API
+	api       promv1.API
 	addresses []string
 	log       logr.Logger
 
@@ -43,7 +43,7 @@ func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutos
 	}
 
 	return &PrometheusMP{
-		api:                       v1.NewAPI(c),
+		api:                       promv1.NewAPI(c),
 		log:                       ctrlLogger,
 		productionQuery:           spec.Production.Query,
 		productionPartitionLabel:  spec.Production.PartitionLabel,
@@ -93,22 +93,28 @@ func (l *PrometheusMP) GetLagByPartition(partition int32) time.Duration {
 
 func (l *PrometheusMP) Update() error {
 	var err error
-	l.productionRate, err = l.QueryProductionRate()
+	l.productionRate, err = l.queryProductionRate()
 	if err != nil {
 		return err
 	}
-	l.consumptionRate, err = l.QueryConsumptionRate()
+	l.consumptionRate, err = l.queryConsumptionRate()
 	if err != nil {
 		return err
 	}
-	l.messagesBehind, err = l.QueryOffset()
+	l.messagesBehind, err = l.queryOffset()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (l *PrometheusMP) QueryOffset() (MetricsMap, error) {
+func (l *PrometheusMP) Load(production map[int32]int64, consumption map[int32]int64, offset map[int32]int64) {
+	l.productionRate = production
+	l.consumptionRate = consumption
+	l.messagesBehind = offset
+}
+
+func (l *PrometheusMP) queryOffset() (MetricsMap, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
 	defer cancel()
 	value, warnings, err := l.api.Query(ctx, l.offsetQuery, time.Now())
@@ -123,8 +129,8 @@ func (l *PrometheusMP) QueryOffset() (MetricsMap, error) {
 
 }
 
-// QueryProductionRate queries Prometheus for the current production rate
-func (l *PrometheusMP) QueryProductionRate() (MetricsMap, error) {
+// queryProductionRate queries Prometheus for the current production rate
+func (l *PrometheusMP) queryProductionRate() (MetricsMap, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
 	defer cancel()
 	value, warnings, err := l.api.Query(ctx, l.productionQuery, time.Now())
@@ -138,7 +144,7 @@ func (l *PrometheusMP) QueryProductionRate() (MetricsMap, error) {
 	return offsets, nil
 }
 
-func (l *PrometheusMP) QueryConsumptionRate() (MetricsMap, error) {
+func (l *PrometheusMP) queryConsumptionRate() (MetricsMap, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
 	defer cancel()
 	value, warnings, err := l.api.Query(ctx, l.consumptinQuery, time.Now())

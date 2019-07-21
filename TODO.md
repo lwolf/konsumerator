@@ -11,7 +11,7 @@ v0.2
 * [x] Autoscaling based on Production/Consumption/Offset
 * [x] Store MetricsMap from the last query in consumer object status
 * [x] Rename static predictor to `naive`
-* [ ] Load metricsProvider from the status
+* [x] Load metricsProvider from the status
 
 v0.3
 * [ ] Use `scale` as a way to pause/resume the consumer

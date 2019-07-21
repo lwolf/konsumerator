@@ -109,13 +109,13 @@ func TestExpectedConsumption(t *testing.T) {
 	}{
 		"expected consumption = production rate without any lag": {
 			promSpec:            *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:            NewMockLagSource(map[int32]int64{0: 20001}, map[int32]int64{0: 20000}, map[int32]int64{0: 0}),
+			lagStore:            NewMockProvider(map[int32]int64{0: 20001}, map[int32]int64{0: 20000}, map[int32]int64{0: 0}),
 			partition:           0,
 			expectedConsumption: 20001,
 		},
 		"account for 10 minutes lag": {
 			promSpec:            *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:            NewMockLagSource(map[int32]int64{0: 20001}, map[int32]int64{0: 20002}, map[int32]int64{0: 10 * 60 * 20000}),
+			lagStore:            NewMockProvider(map[int32]int64{0: 20001}, map[int32]int64{0: 20002}, map[int32]int64{0: 10 * 60 * 20000}),
 			partition:           0,
 			expectedConsumption: 26656,
 		},
@@ -145,7 +145,7 @@ func TestEstimateResources(t *testing.T) {
 		"base estimation without limits": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:      NewMockLagSource(map[int32]int64{0: 20000}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
+			lagStore:      NewMockProvider(map[int32]int64{0: 20000}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
 			partition:     0,
 			limits:        nil,
 			expectedResources: corev1.ResourceRequirements{
@@ -162,7 +162,7 @@ func TestEstimateResources(t *testing.T) {
 		"low production rate without limits": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:      NewMockLagSource(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
+			lagStore:      NewMockProvider(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
 			partition:     0,
 			limits:        nil,
 			expectedResources: corev1.ResourceRequirements{
@@ -179,7 +179,7 @@ func TestEstimateResources(t *testing.T) {
 		"low production rate with limits": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:      NewMockLagSource(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
+			lagStore:      NewMockProvider(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
 			partition:     0,
 			limits: &autoscalev1.ContainerResourcePolicy{
 				ContainerName: "test",
@@ -206,7 +206,7 @@ func TestEstimateResources(t *testing.T) {
 		"base estimation over the limits": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:      NewMockLagSource(map[int32]int64{0: 20000}, map[int32]int64{0: 20000}, map[int32]int64{0: 0}),
+			lagStore:      NewMockProvider(map[int32]int64{0: 20000}, map[int32]int64{0: 20000}, map[int32]int64{0: 0}),
 			partition:     0,
 			limits: &autoscalev1.ContainerResourcePolicy{
 				ContainerName: "test",
@@ -256,34 +256,34 @@ func TestEstimateResources(t *testing.T) {
 	}
 }
 
-type MockLagSource struct {
-	messagesBehind  providers.MetricsMap
-	productionRate  providers.MetricsMap
-	consumptionRate providers.MetricsMap
+type MockProvider struct {
+	messagesBehind  map[int32]int64
+	productionRate  map[int32]int64
+	consumptionRate map[int32]int64
 }
 
-func (m *MockLagSource) GetProductionRate(partition int32) int64 {
+func (m *MockProvider) GetProductionRate(partition int32) int64 {
 	production, ok := m.productionRate[partition]
 	if !ok {
 		return 0
 	}
 	return production
 }
-func (m *MockLagSource) GetConsumptionRate(partition int32) int64 {
+func (m *MockProvider) GetConsumptionRate(partition int32) int64 {
 	consumption, ok := m.consumptionRate[partition]
 	if !ok {
 		return 0
 	}
 	return consumption
 }
-func (m *MockLagSource) GetMessagesBehind(partition int32) int64 {
+func (m *MockProvider) GetMessagesBehind(partition int32) int64 {
 	behind, ok := m.messagesBehind[partition]
 	if !ok {
 		return 0
 	}
 	return behind
 }
-func (m *MockLagSource) GetLagByPartition(partition int32) time.Duration {
+func (m *MockProvider) GetLagByPartition(partition int32) time.Duration {
 	behind := m.GetMessagesBehind(partition)
 	production := m.GetProductionRate(partition)
 	if production == 0 {
@@ -292,10 +292,15 @@ func (m *MockLagSource) GetLagByPartition(partition int32) time.Duration {
 	return time.Duration(behind/production) * time.Second
 
 }
-func (m *MockLagSource) Update() error { return nil }
+func (m *MockProvider) Update() error { return nil }
+func (m *MockProvider) Load(production, consumption, lag map[int32]int64) {
+	m.productionRate = production
+	m.consumptionRate = consumption
+	m.messagesBehind = lag
+}
 
-func NewMockLagSource(production, consumption, lag providers.MetricsMap) *MockLagSource {
-	return &MockLagSource{
+func NewMockProvider(production, consumption, lag map[int32]int64) *MockProvider {
+	return &MockProvider{
 		messagesBehind:  lag,
 		productionRate:  production,
 		consumptionRate: consumption,
