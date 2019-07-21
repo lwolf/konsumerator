@@ -75,6 +75,9 @@ func (l *PrometheusMP) GetMessagesBehind(partition int32) int64 {
 	if !ok {
 		return 0
 	}
+	// XXX: remove this test randomizer
+	// r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// behind = behind + (100000 * r.Int63n(250))
 	return behind
 }
 

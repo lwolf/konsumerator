@@ -14,9 +14,9 @@ v0.2
 * [x] Load metricsProvider from the status
 
 v0.3
+* [x] Setup travis-ci
 * [ ] Use `scale` as a way to pause/resume the consumer
 * [ ] Query multiple prometheus for metrics
-* [ ] Setup travic-ci with KIND
 * [ ] Write readme
 
 v0.4 - observability
@@ -34,7 +34,7 @@ v0.5
 
 -------
 Unsorted
-* [ ] Setup and add integration tests 
+* [ ] Add more integration tests 
 * [ ] [Feature] build simple service to produce pseudo-data to local kafka/prometheus
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
 * [ ] [Feature] call webhooks on scaling events
