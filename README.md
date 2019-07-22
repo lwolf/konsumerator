@@ -2,11 +2,11 @@
 
 [![Docker Repository on Quay](https://quay.io/repository/lwolf/konsumerator/status "Docker Repository on Quay")](https://quay.io/repository/lwolf/konsumerator)
 
-h2. Motivations
+## Motivations
 
-h2. Operations
+## Operations
 
-h2. Development
+## Development
 
-h2. Contributions
+## Contributions
 
