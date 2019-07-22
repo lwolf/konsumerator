@@ -16,13 +16,14 @@ v0.2
 v0.3
 * [ ] Use `scale` as a way to pause/resume the consumer
 * [ ] Query multiple prometheus for metrics
-* [ ] Setup travic-ci + goreleaser
+* [ ] Setup travic-ci with KIND
 * [ ] Write readme
 
 v0.4 - observability
 * [ ] Cleanup logging
 * [ ] Post behaviour updates to Kubernetes events
 * [ ] Expose metrics about own health and behaviour
+* [ ] Grafana dasboard
 
 v0.5
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec

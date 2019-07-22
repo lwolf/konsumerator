@@ -1,16 +1,28 @@
 package predictors
 
 import (
+	"testing"
+	"time"
+
+	"github.com/go-logr/logr"
 	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"testing"
-	"time"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	"github.com/lwolf/konsumerator/pkg/providers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var tLogger logr.Logger
+
+func testLogger() logr.Logger {
+	if tLogger != nil {
+		return tLogger
+	}
+	return ctrl.Log.WithName("naive_test")
+}
 
 func genPromSpec(ratePerCode int64, ramPerCode resource.Quantity) *konsumeratorv1alpha1.PrometheusAutoscalerSpec {
 	return &konsumeratorv1alpha1.PrometheusAutoscalerSpec{
@@ -54,7 +66,7 @@ func TestEstimateCpu(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{}
+		estimator := NaivePredictor{log: testLogger()}
 		cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore)
 		if cpuR != tt.expectedCpuR {
 			t.Logf("%s: expected Request CPU %d, got %d", testName, tt.expectedCpuR, cpuR)
@@ -86,7 +98,7 @@ func TestEstimateMemory(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{}
+		estimator := NaivePredictor{log: testLogger()}
 		memoryR, memoryL := estimator.estimateMemory(tt.consumption, tt.ramPerCore, tt.cpuR, tt.cpuL)
 		if memoryR != tt.expectedMemoryR {
 			t.Logf("%s: expected Request Memory %d, got %d", testName, tt.expectedMemoryR, memoryR)
@@ -124,6 +136,7 @@ func TestExpectedConsumption(t *testing.T) {
 		estimator := NaivePredictor{
 			lagSource: tt.lagStore,
 			promSpec:  &tt.promSpec,
+			log:       testLogger(),
 		}
 		actual := estimator.expectedConsumption(tt.partition)
 		if actual != tt.expectedConsumption {
@@ -235,6 +248,7 @@ func TestEstimateResources(t *testing.T) {
 		estimator := NaivePredictor{
 			lagSource: tt.lagStore,
 			promSpec:  &tt.promSpec,
+			log:       testLogger(),
 		}
 		resources := estimator.Estimate(tt.containerName, tt.limits, tt.partition)
 		if resources.Requests.Cpu().MilliValue() != tt.expectedResources.Requests.Cpu().MilliValue() {
