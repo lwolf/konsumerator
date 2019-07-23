@@ -34,7 +34,5 @@ dockers:
     binaries:
       - konsumerator
     image_templates:
-      - "docker.io/lwolf/konsumerator:{{ .Tag }}"
-      - "docker.io/lwolf/konsumerator:latest"
       - "quay.io/lwolf/konsumerator:{{ .Tag }}"
       - "quay.io/lwolf/konsumerator:latest"
