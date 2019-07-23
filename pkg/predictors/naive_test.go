@@ -243,6 +243,41 @@ func TestEstimateResources(t *testing.T) {
 				},
 			},
 		},
+		"allocate minimum resources if no metrics data provided (dummy provider)": {
+			containerName: "test",
+			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
+			lagStore:      NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
+			partition:     0,
+			limits: &autoscalev1.ContainerResourcePolicy{
+				ContainerName: "test",
+				MinAllowed: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("100M"),
+				},
+				MaxAllowed: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("600m"),
+					corev1.ResourceMemory: resource.MustParse("700M"),
+				},
+			},
+			expectedResources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("100M"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("100m"),
+					corev1.ResourceMemory: resource.MustParse("100M"),
+				},
+			},
+		},
+		"no resource allocation if no metrics data provided and no limits are set (dummy provider)": {
+			containerName:     "test",
+			promSpec:          *genPromSpec(10000, resource.MustParse("1G")),
+			lagStore:          NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
+			partition:         0,
+			limits:            nil,
+			expectedResources: corev1.ResourceRequirements{},
+		},
 	}
 	for testName, tt := range tests {
 		estimator := NaivePredictor{
