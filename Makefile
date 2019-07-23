@@ -4,7 +4,10 @@ IMG ?= quay.io/lwolf/konsumerator:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
-all: manager
+all:
+	@echo "disabling default target make"
+
+build: manager
 
 # Run tests
 test: generate fmt vet manifests
