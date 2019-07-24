@@ -20,7 +20,7 @@ v0.3
 
 v0.4 - observability
 * [ ] Cleanup logging
-* [ ] Post behaviour updates to Kubernetes events
+* [x] Post behaviour updates to Kubernetes events
 * [ ] Expose metrics about own health and behaviour
 * [ ] Grafana dasboard
 

@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -66,8 +67,9 @@ func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) bool {
 // ConsumerReconciler reconciles a Consumer object
 type ConsumerReconciler struct {
 	client.Client
-	Log    logr.Logger
-	Scheme *runtime.Scheme
+	Log      logr.Logger
+	recorder record.EventRecorder
+	Scheme   *runtime.Scheme
 }
 
 // +kubebuilder:rbac:groups=konsumerator.lwolf.org,resources=consumers,verbs=get;list;watch;create;update;patch;delete
@@ -89,7 +91,9 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	var managedDeploys v1.DeploymentList
 	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(deployOwnerKey, req.Name)); err != nil {
-		log.Error(err, "unable to list managed deployments")
+		eMsg := "unable to list managed deployments"
+		log.Error(err, eMsg)
+		r.recorder.Event(&consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)
 		return ctrl.Result{}, err
 	}
 	var err error
@@ -183,7 +187,9 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	)
 
 	if err := r.Status().Update(ctx, &consumer); errors.IgnoreConflict(err) != nil {
-		log.Error(err, "unable to update Consumer status")
+		eMsg := "unable to update Consumer status"
+		log.Error(err, eMsg)
+		r.recorder.Event(&consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
 		return result, err
 	}
 
@@ -197,13 +203,25 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			log.Error(err, "unable to create new Deployment", "deployment", d, "partition", part)
 			continue
 		}
-		log.V(1).Info("created new Deployment", "deployment", d, "partition", part)
+		log.V(1).Info("created new deployment", "deployment", d, "partition", part)
+		r.recorder.Eventf(
+			&consumer,
+			corev1.EventTypeNormal,
+			"DeployCreate",
+			"deployment for partition was created %d", part,
+		)
 	}
 
 	for _, deploy := range redundantInstances {
 		if err := r.Delete(ctx, deploy); errors.IgnoreNotFound(err) != nil {
 			log.Error(err, "unable to delete deployment", "deployment", deploy)
 		}
+		r.recorder.Eventf(
+			&consumer,
+			corev1.EventTypeNormal,
+			"DeployDelete",
+			"deployment %s was deleted", deploy.Name,
+		)
 	}
 
 	var partitionKey string
@@ -233,11 +251,31 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			setEnvVariable(envs, partitionKey, strconv.Itoa(int(*partition)))
 			setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromResource(resources.Limits.Cpu()))
 			deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
+			r.recorder.Eventf(
+				&consumer,
+				corev1.EventTypeNormal,
+				"DeployUpdate",
+				"deployment=%s, container=%s, CpuReq=%d, CpuLimit=%d",
+				deploy.Name, name, resources.Requests.Cpu().MilliValue(), resources.Limits.Cpu().MilliValue(),
+			)
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			log.Error(err, "unable to update deployment", "deployment", deploy)
+			r.recorder.Eventf(
+				&consumer,
+				corev1.EventTypeWarning,
+				"DeployUpdate",
+				"deployment %s: update failed", deploy.Name,
+			)
 			continue
 		}
+		r.recorder.Eventf(
+			&consumer,
+			corev1.EventTypeNormal,
+			"DeployUpdate",
+			"deployment %s: updated", deploy.Name,
+		)
+
 	}
 	return result, nil
 }
@@ -317,6 +355,7 @@ func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}); err != nil {
 		return err
 	}
+	r.recorder = mgr.GetEventRecorderFor("konsumerator")
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konsumeratorv1alpha1.Consumer{}).
 		Owns(&appsv1.Deployment{}).
