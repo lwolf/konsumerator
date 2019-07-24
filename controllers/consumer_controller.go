@@ -95,7 +95,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	var err error
 	var mp providers.MetricsProvider
 
-	autoscalerDisabled := len(consumer.Annotations[disableAutoscalerAnnotation]) > 0
+	_, autoscalerDisabled := consumer.Annotations[disableAutoscalerAnnotation]
 	if !autoscalerDisabled && consumer.Spec.Autoscaler != nil {
 		switch consumer.Spec.Autoscaler.Mode {
 		case konsumeratorv1alpha1.AutoscalerTypePrometheus:
