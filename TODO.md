@@ -15,7 +15,6 @@ v0.2
 
 v0.3
 * [x] Setup travis-ci
-* [ ] Use `scale` as a way to pause/resume the consumer
 * [ ] Query multiple prometheus for metrics
 * [ ] Write readme
 
@@ -41,5 +40,7 @@ Unsorted
 
 * [ ] [Feature] Vertical autoscalling of balanced workloads (single deployment)
 * [ ] [Feature] Fully dynamic resource allocations based on historic data
-* [ ] [Feature] consider adding support for VPA/HPA 
+* [ ] [Feature] ? consider adding support for VPA/HPA 
+* [ ] [Feature] ? Use `scale` as a way to pause/resume the consumer
+* [ ] [Feature] ? Tool for operations `consumerctl stop/start consumer`
  

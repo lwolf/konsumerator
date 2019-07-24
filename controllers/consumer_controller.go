@@ -223,6 +223,8 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		for containerIndex := range deploy.Spec.Template.Spec.Containers {
 			name := deploy.Spec.Template.Spec.Containers[containerIndex].Name
+			// TODO: do not call predictors at all if providers.DummyMP is used
+			// TODO: make predictors configurable
 			predictor := predictors.NewNaivePredictor(log, mp, consumer.Spec.Autoscaler.Prometheus)
 			limits := predictors.GetResourcePolicy(name, &consumer.Spec)
 			resources := predictor.Estimate(name, limits, *partition)
