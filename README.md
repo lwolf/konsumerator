@@ -8,7 +8,7 @@
 **Konsumerator** is a Kubernetes operator intended to automate management and resource allocations for 
 kafka consumers. 
 
-> This software is active development phase, logic and CRD structure could change between versions.
+> This software is in active development phase, any logic and CRD structure could change between versions.
 > Use on your own risk. 
 
 Operator creates and manages `Consumer` CRD.  
