@@ -37,7 +37,7 @@ func LoadSyncState(mp MetricsProvider, status konsumeratorv1alpha1.ConsumerStatu
 	offsetsMap := make(map[int32]int64)
 	for iStr, state := range status.LastSyncState {
 		p, err := strconv.Atoi(iStr)
-		if err == nil {
+		if err != nil {
 			continue
 		}
 		partition := int32(p)

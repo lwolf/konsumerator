@@ -248,8 +248,8 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			resources := predictor.Estimate(name, limits, *partition)
 			deploy.Spec.Template.Spec.Containers[containerIndex].Resources = *resources
 			envs := deploy.Spec.Template.Spec.Containers[containerIndex].Env
-			setEnvVariable(envs, partitionKey, strconv.Itoa(int(*partition)))
-			setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromResource(resources.Limits.Cpu()))
+			envs = setEnvVariable(envs, partitionKey, strconv.Itoa(int(*partition)))
+			envs = setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromResource(resources.Limits.Cpu()))
 			deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
 			r.recorder.Eventf(
 				&consumer,
@@ -288,18 +288,20 @@ func goMaxProcsFromResource(cpu *resource.Quantity) string {
 	return strconv.Itoa(value)
 }
 
-func setEnvVariable(envVars []corev1.EnvVar, key string, value string) {
-	for i, e := range envVars {
+func setEnvVariable(envVars []corev1.EnvVar, key string, value string) []corev1.EnvVar {
+	envs := make([]corev1.EnvVar, len(envVars))
+	copy(envs, envVars)
+	for i, e := range envs {
 		if e.Name == key {
-			envVars[i].Value = value
-			return
+			envs[i].Value = value
+			return envs
 		}
 	}
-	envVars = append(envVars, corev1.EnvVar{
+	envs = append(envs, corev1.EnvVar{
 		Name:  key,
 		Value: value,
 	})
-	return
+	return envs
 }
 
 func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.Consumer, partition int32, store providers.MetricsProvider) (*appsv1.Deployment, error) {
@@ -330,8 +332,8 @@ func (r *ConsumerReconciler) constructDeployment(consumer konsumeratorv1alpha1.C
 		resources := predictor.Estimate(name, limits, partition)
 		deploy.Spec.Template.Spec.Containers[containerIndex].Resources = *resources
 		envs := deploy.Spec.Template.Spec.Containers[containerIndex].Env
-		setEnvVariable(envs, partitionKey, strconv.Itoa(int(partition)))
-		setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromResource(resources.Limits.Cpu()))
+		envs = setEnvVariable(envs, partitionKey, strconv.Itoa(int(partition)))
+		envs = setEnvVariable(envs, gomaxprocsEnvKey, goMaxProcsFromResource(resources.Limits.Cpu()))
 		deploy.Spec.Template.Spec.Containers[containerIndex].Env = envs
 	}
 	if err := ctrl.SetControllerReference(&consumer, deploy, r.Scheme); err != nil {

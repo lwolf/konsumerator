@@ -34,6 +34,10 @@ v0.5
 -------
 Unsorted
 * [ ] Add more integration tests 
+* [ ] [TEST] add test to verify that env variables are always set 
+* [ ] [BUG] update of the autoscaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
+* [ ] [???] lag is not detected at the moment
+
 * [ ] [Feature] build simple service to produce pseudo-data to local kafka/prometheus
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
 * [ ] [Feature] call webhooks on scaling events
@@ -43,4 +47,3 @@ Unsorted
 * [ ] [Feature] ? consider adding support for VPA/HPA 
 * [ ] [Feature] ? Use `scale` as a way to pause/resume the consumer
 * [ ] [Feature] ? Tool for operations `consumerctl stop/start consumer`
- 
