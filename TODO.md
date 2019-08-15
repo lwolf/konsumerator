@@ -15,7 +15,7 @@ v0.2
 
 v0.3
 * [x] Setup travis-ci
-* [ ] Query multiple prometheus for metrics
+* [x] Query multiple prometheus for metrics
 * [ ] Write readme
 
 v0.4 - observability
@@ -36,7 +36,6 @@ Unsorted
 * [ ] Add more integration tests 
 * [ ] [TEST] add test to verify that env variables are always set 
 * [ ] [BUG] update of the autoscaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
-* [ ] [???] lag is not detected at the moment
 
 * [ ] [Feature] build simple service to produce pseudo-data to local kafka/prometheus
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
