@@ -1,0 +1,878 @@
+apiVersion: v1
+items:
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "0"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-0
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990380"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-0
+    uid: 8a647a58-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "0"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    availableReplicas: 1
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:43Z
+      lastUpdateTime: 2019-08-15T17:31:43Z
+      message: Deployment has minimum availability.
+      reason: MinimumReplicasAvailable
+      status: "True"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:43Z
+      message: ReplicaSet "test-consumer-0-594d6dfcd4" has successfully progressed.
+      reason: NewReplicaSetAvailable
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    readyReplicas: 1
+    replicas: 1
+    updatedReplicas: 1
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "1"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-1
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990374"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-1
+    uid: 8a66b557-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "1"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    availableReplicas: 1
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:42Z
+      lastUpdateTime: 2019-08-15T17:31:42Z
+      message: Deployment has minimum availability.
+      reason: MinimumReplicasAvailable
+      status: "True"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:42Z
+      message: ReplicaSet "test-consumer-1-6bb94dcfd9" has successfully progressed.
+      reason: NewReplicaSetAvailable
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    readyReplicas: 1
+    replicas: 1
+    updatedReplicas: 1
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "2"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-2
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990267"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-2
+    uid: 8a6c4249-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "2"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: Deployment does not have minimum availability.
+      reason: MinimumReplicasUnavailable
+      status: "False"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: ReplicaSet "test-consumer-2-6c49ccd78b" is progressing.
+      reason: ReplicaSetUpdated
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    replicas: 1
+    unavailableReplicas: 1
+    updatedReplicas: 1
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "3"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-3
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990303"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-3
+    uid: 8a6f9b1b-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "3"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: Deployment does not have minimum availability.
+      reason: MinimumReplicasUnavailable
+      status: "False"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: ReplicaSet "test-consumer-3-86d4c6cf" is progressing.
+      reason: ReplicaSetUpdated
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    replicas: 1
+    unavailableReplicas: 1
+    updatedReplicas: 1
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "4"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-4
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990320"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-4
+    uid: 8a73821a-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "4"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: Deployment does not have minimum availability.
+      reason: MinimumReplicasUnavailable
+      status: "False"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: ReplicaSet "test-consumer-4-64f6f44f96" is progressing.
+      reason: ReplicaSetUpdated
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    replicas: 1
+    unavailableReplicas: 1
+    updatedReplicas: 1
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "5"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-5
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990333"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-5
+    uid: 8a766853-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "5"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: Deployment does not have minimum availability.
+      reason: MinimumReplicasUnavailable
+      status: "False"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: ReplicaSet "test-consumer-5-b6bf4759c" is progressing.
+      reason: ReplicaSetUpdated
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    replicas: 1
+    unavailableReplicas: 1
+    updatedReplicas: 1
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "6"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-6
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990335"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-6
+    uid: 8a78fc86-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "6"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: Deployment does not have minimum availability.
+      reason: MinimumReplicasUnavailable
+      status: "False"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: ReplicaSet "test-consumer-6-7c86c8ff94" is progressing.
+      reason: ReplicaSetUpdated
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    replicas: 1
+    unavailableReplicas: 1
+    updatedReplicas: 1
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "7"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-7
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990342"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-7
+    uid: 8a7c6b53-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "7"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: Deployment does not have minimum availability.
+      reason: MinimumReplicasUnavailable
+      status: "False"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: ReplicaSet "test-consumer-7-58f477f487" is progressing.
+      reason: ReplicaSetUpdated
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    replicas: 1
+    unavailableReplicas: 1
+    updatedReplicas: 1
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "8"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-8
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990347"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-8
+    uid: 8a7ed028-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "8"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:40Z
+      message: Deployment does not have minimum availability.
+      reason: MinimumReplicasUnavailable
+      status: "False"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:41Z
+      message: ReplicaSet "test-consumer-8-58cdfcc5b8" is progressing.
+      reason: ReplicaSetUpdated
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    replicas: 1
+    unavailableReplicas: 1
+    updatedReplicas: 1
+- apiVersion: extensions/v1beta1
+  kind: Deployment
+  metadata:
+    annotations:
+      deployment.kubernetes.io/revision: "1"
+      konsumerator.lwolf.org/deployment-generation: "3775011840531490418"
+      konsumerator.lwolf.org/partition: "9"
+    creationTimestamp: 2019-08-15T17:31:40Z
+    generation: 1
+    name: test-consumer-9
+    namespace: default
+    ownerReferences:
+    - apiVersion: konsumerator.lwolf.org/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: Consumer
+      name: consumer-sample
+      uid: 8a583062-bf82-11e9-9927-000c29769173
+    resourceVersion: "62990348"
+    selfLink: /apis/extensions/v1beta1/namespaces/default/deployments/test-consumer-9
+    uid: 8a818649-bf82-11e9-9927-000c29769173
+  spec:
+    progressDeadlineSeconds: 600
+    replicas: 1
+    revisionHistoryLimit: 10
+    selector:
+      matchLabels:
+        app: fake-consumer
+    strategy:
+      type: Recreate
+    template:
+      metadata:
+        creationTimestamp: null
+        labels:
+          app: fake-consumer
+      spec:
+        containers:
+        - args:
+          - partitions=10
+          - rate-per-core=40000
+          - port=9000
+          env:
+          - name: TEST_KEY
+            value: test-value
+          - name: KONSUMERATOR_PARTITION
+            value: "9"
+          - name: GOMAXPROCS
+            value: "2"
+          image: lwolf/fakecons:0.4
+          imagePullPolicy: IfNotPresent
+          name: consumer
+          ports:
+          - containerPort: 9000
+            name: metrics
+            protocol: TCP
+          resources:
+            limits:
+              cpu: "2"
+              memory: 1G
+            requests:
+              cpu: "2"
+              memory: 1G
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+  status:
+    conditions:
+    - lastTransitionTime: 2019-08-15T17:31:41Z
+      lastUpdateTime: 2019-08-15T17:31:41Z
+      message: Deployment does not have minimum availability.
+      reason: MinimumReplicasUnavailable
+      status: "False"
+      type: Available
+    - lastTransitionTime: 2019-08-15T17:31:40Z
+      lastUpdateTime: 2019-08-15T17:31:41Z
+      message: ReplicaSet "test-consumer-9-77858f5fcc" is progressing.
+      reason: ReplicaSetUpdated
+      status: "True"
+      type: Progressing
+    observedGeneration: 1
+    replicas: 1
+    unavailableReplicas: 1
+    updatedReplicas: 1
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""

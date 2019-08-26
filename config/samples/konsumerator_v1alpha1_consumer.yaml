@@ -17,11 +17,11 @@ spec:
       # do not scale up if the lag is less than 5 minutes
       tolerableLag: "5m"
       # approximate consumption rate per CPU
-      ratePerCore: 20000
+      ratePerCore: 50000
       # approximate memory requirements per CPU
       # if ratePerCore is 10k ops, this value is amount of
       # RAM needed during the processing of this 10k ops
-      ramPerCore: "100M"
+      ramPerCore: "300M"
       # criticalLag is some value close to the SLO.
       # if lag has reached this point, autoscaler will
       # give maximum allowed resource to that deployment
@@ -32,11 +32,12 @@ spec:
       preferableCatchupPeriod: "30m"
       # prometheus addresses to query
       address:
-        - "http://prometheus-operator-prometheus.monitoring.svc.cluster.local:9090"
+#        - "http://prometheus-operator-prometheus.monitoring.svc.cluster.local:9090"
+        - "https://prometheus.srvho.me"
       # Offset query should return number of messages that is not
       # processed yet a.k.a lag per partitionLabel
       offset:
-        query: "sum(rate(konsumerator_messages_produced_total[5m])) by (partition)"
+        query: "sum(rate(konsumerator_messages_produced_total{}[30s])) by (partition) - sum(rate(konsumerator_messages_consumed_total[30s])) by (partition)"
         partitionLabel: "partition"
       # Production query should return number of messages is being
       # produced per partitionLabel per unit of time (second)
@@ -46,7 +47,7 @@ spec:
       # Consumption query should return number of messages is being
       # consumed per partitionLabel per unit of time (second)
       consumption:
-        query: "sum(rate(konsumerator_messages_produced_total[5m])) by (partition)"
+        query: "sum(rate(konsumerator_messages_consumed_total[5m])) by (partition)"
         partitionLabel: "partition"
   # partitionEnvKey - the name of the environment variable
   # containing partition number the deployment is responsible for
@@ -58,19 +59,23 @@ spec:
       type: Recreate
     selector:
       matchLabels:
-        app: my-dep
+        app: fake-consumer
     template:
       metadata:
         labels:
-          app: my-dep
+          app: fake-consumer
       spec:
         containers:
-          - image: busybox
-            name: busybox-info
-            command: ["/bin/sh", "-ec", "env && sleep 3000"]
-          - image: busybox
-            name: busybox
-            command: ["/bin/sh", "-ec", "sleep 2000"]
+          - image: lwolf/fakecons:0.4
+            name: consumer
+            args:
+             - partitions=10
+             - rate-per-core=40000
+             - port=9000
+            ports:
+              - containerPort: 9000
+                name: metrics
+                protocol: TCP
             env:
               - name: "TEST_KEY"
                 value: "test-value"
@@ -79,12 +84,12 @@ spec:
   # of incidents
   resourcePolicy:
     containerPolicies:
-    - containerName: busybox
+    - containerName: consumer
       minAllowed:
         cpu: "100m"
         memory: "100M"
       maxAllowed:
-        cpu: "1"
+        cpu: "2"
         memory: "1G"
     - containerName: busybox-info
       minAllowed:

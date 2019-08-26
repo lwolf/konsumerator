@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: faker
+    tier: generator
+  name: faker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: faker
+      tier: generator
+  template:
+    metadata:
+      labels:
+        app: fakegen
+        tier: generator
+    spec:
+      containers:
+      - image: lwolf/faker:0.1
+        imagePullPolicy: IfNotPresent
+        name: faker
+        ports:
+        - containerPort: 9000
+          name: metrics
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 100m
+            memory: 100Mi
