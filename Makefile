@@ -76,7 +76,7 @@ endif
 kind-destroy:
 	-kind delete cluster --name "konsumerator"
 
-kind-create: kind-destroy
+kind-create: docker-build kind-destroy
 	kind create cluster --name "konsumerator" --config ./hack/ci/kind.yaml
 	make kind-load-image
 	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make kind-apply

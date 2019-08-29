@@ -3,7 +3,6 @@ package providers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -96,7 +95,6 @@ func (l *PrometheusMP) GetMessagesBehind(partition int32) int64 {
 func (l *PrometheusMP) GetLagByPartition(partition int32) time.Duration {
 	behind := l.GetMessagesBehind(partition)
 	production := l.GetProductionRate(partition)
-	fmt.Printf("partition=%d, behind=%d, production=%d\n", partition, behind, production)
 	if production == 0 {
 		l.log.V(2).Info("production rate is 0", "partition", partition)
 		return 0
