@@ -9,6 +9,9 @@ all:
 
 build: manager
 
+render: docker-build
+	kustomize build config/default > release.yaml
+
 # Run tests
 test: generate fmt vet manifests
 	go test -race ./api/... ./controllers/... ./pkg/... -coverprofile=coverage.txt -covermode=atomic
@@ -16,7 +19,7 @@ test: generate fmt vet manifests
 
 # Build manager binary
 manager: generate fmt vet
-	go build -o bin/manager main.go
+	go build -o bin/konsumerator main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
@@ -45,10 +48,10 @@ vet:
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./api/...
+	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt,year=2019 paths=./api/...
 
 # Build the docker image
-docker-build: test
+docker-build: build test
 	docker build . -t ${IMG}
 	@echo "updating kustomize image patch file for manager resource"
 	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml

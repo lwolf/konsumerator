@@ -3,7 +3,7 @@ module github.com/lwolf/konsumerator
 go 1.12
 
 require (
-	github.com/alexflint/go-arg v1.1.0 // indirect
+	github.com/alexflint/go-arg v1.1.0
 	github.com/go-logr/logr v0.1.0
 	github.com/go-redis/redis v6.15.2+incompatible
 	github.com/gogo/protobuf v1.2.1 // indirect
