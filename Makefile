@@ -4,8 +4,13 @@ IMG ?= quay.io/lwolf/konsumerator:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
+# for some reason travis-ci calls `make` on each step which triggers download
+# of all packages. This check disables it.
+ifeq ($(CI),true)
 all:
 	@echo "disabling default target make"
+endif
+
 
 build: manager
 
@@ -69,3 +74,15 @@ CONTROLLER_GEN=$(shell go env GOPATH)/bin/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+kind-destroy:
+	-kind delete cluster --name "konsumerator"
+
+kind-create: kind-destroy
+	kind create cluster --name "konsumerator" --config ./hack/ci/kind.yaml
+	kind load docker-image --name "konsumerator" quay.io/lwolf/konsumerator:latest
+	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make kind-apply
+	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make deploy
+
+kind-apply:
+	kubectl apply -f ./hack/ci/prom.yaml -n kube-system
