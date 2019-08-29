@@ -1,6 +1,7 @@
 
+VERSION=$(shell git rev-list --count HEAD)-$(shell git rev-parse --short=7 HEAD)
 # Image URL to use all building/pushing image targets
-IMG ?= quay.io/lwolf/konsumerator:latest
+IMG ?= quay.io/lwolf/konsumerator:$(VERSION)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
@@ -14,9 +15,6 @@ endif
 
 build: manager
 
-render: docker-build
-	kustomize build config/default > release.yaml
-
 # Run tests
 test: generate fmt vet manifests
 	go test -race ./api/... ./controllers/... ./pkg/... -coverprofile=coverage.txt -covermode=atomic
@@ -24,7 +22,7 @@ test: generate fmt vet manifests
 
 # Build manager binary
 manager: generate fmt vet
-	go build -o bin/konsumerator main.go
+	CGO_ENABLED=0 go build -o bin/konsumerator main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
@@ -80,9 +78,12 @@ kind-destroy:
 
 kind-create: kind-destroy
 	kind create cluster --name "konsumerator" --config ./hack/ci/kind.yaml
-	kind load docker-image --name "konsumerator" quay.io/lwolf/konsumerator:latest
+	make kind-load-image
 	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make kind-apply
 	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make deploy
+
+kind-load-image:
+	kind load docker-image --name "konsumerator" ${IMG}
 
 kind-apply:
 	kubectl apply -f ./hack/ci/prom.yaml -n kube-system
