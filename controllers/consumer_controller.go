@@ -153,7 +153,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		lag := mp.GetLagByPartition(*partition)
 		r.Log.Info("lag per partition", "partition", *partition, "lag", lag)
 		observedIds = append(observedIds, *partition)
-		if *partition > *consumer.Spec.NumPartitions {
+		if *partition >= *consumer.Spec.NumPartitions {
 			redundantInstances = append(redundantInstances, deploy)
 			continue
 		}
