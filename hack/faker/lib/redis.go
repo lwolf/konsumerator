@@ -19,8 +19,8 @@ func NewRedisClient(addr string) (*redis.Client, error) {
 	return client, err
 }
 
-func GetOffset(client *redis.Client, key string, defaultValue int) (int, error) {
-	dbValue, err := client.Get(key).Result()
+func GetOffset(client *redis.Client, key string, partition int, defaultValue int) (int, error) {
+	dbValue, err := client.HGet(key, strconv.Itoa(partition)).Result()
 	if err == redis.Nil {
 		return defaultValue, nil
 	} else if err != nil {
@@ -28,4 +28,8 @@ func GetOffset(client *redis.Client, key string, defaultValue int) (int, error) 
 	} else {
 		return strconv.Atoi(dbValue)
 	}
+}
+
+func SetOffset(client *redis.Client, key string, partition int, value int) error {
+	return client.HSet(key, strconv.Itoa(partition), strconv.Itoa(value)).Err()
 }

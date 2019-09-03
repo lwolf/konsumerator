@@ -26,14 +26,17 @@ const (
 	// limit => `/sys/fs/cgroup/cpu/cpu.cfs_quota_us`
 	sysCpuLimitFile = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
 
-	PartitionPrefixConsumer = "konsumerator_consumption"
+	ConsumptionOffsetKey = "konsumerator_consumption_offsets"
+	messagesKey          = "konsumerator_messages"
 )
 
-var consumptionMetric = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Namespace: "konsumerator",
-	Name:      "messages_consumed_total",
-	Help:      "Total number of messages consumed per partition",
-}, []string{"partition"})
+var (
+	consumptionOffsetMetric = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "konsumerator",
+		Name:      "messages_consumption_offset",
+		Help:      "Last seen offset per partition",
+	}, []string{"partition"})
+)
 
 func runServer(port int) {
 	log.Printf("starting web server on port %d", port)
@@ -74,21 +77,29 @@ func consume(partition int, ratePerCore int) float64 {
 
 func runConsumer(client *redis.Client, partition int, ratePerCore int) {
 	log.Printf("starting consumer for partition %d", partition)
-	key := fmt.Sprintf("%s_%d", PartitionPrefixConsumer, partition)
-	currentState, err := lib.GetOffset(client, key, 0)
+	state, err := lib.GetOffset(client, ConsumptionOffsetKey, partition, 0)
 	if err != nil {
 		log.Fatalf("unable to load state from redis %v", err)
 	}
 	ticker := time.NewTicker(time.Second)
-	for _ = range ticker.C {
-		value := consume(partition, ratePerCore)
-		consumptionMetric.WithLabelValues(strconv.Itoa(partition)).Add(value)
-		err = client.Set(key, strconv.Itoa(currentState+int(value)), 0).Err()
+	for range ticker.C {
+		batchSize := consume(partition, ratePerCore)
+		state = state + int(batchSize)
+		err = client.LRem(messagesKey, int64(batchSize), byte(1)).Err()
+		if err != nil {
+			log.Fatalf("failed to get %d messages: %v", int(batchSize), err)
+		}
+		err = lib.SetOffset(client, ConsumptionOffsetKey, partition, state)
+		if err != nil {
+			log.Fatalf("unable to set offset %v", err)
+		}
+		consumptionOffsetMetric.WithLabelValues(strconv.Itoa(partition)).Set(float64(state))
+		log.Printf("processed %d messages from partition %d, new offset=%d", int(batchSize), partition, state)
 	}
 }
 
 func RunConsumer(redisClient *redis.Client, partition int, ratePerCore int, port int) {
-	prometheus.MustRegister(consumptionMetric)
+	prometheus.MustRegister(consumptionOffsetMetric)
 	wg := sync.WaitGroup{}
 	wg.Add(1)
 	go func() {

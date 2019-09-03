@@ -4,6 +4,14 @@ nodes:
   - role: control-plane
   - role: worker
     extraPortMappings:
+      - containerPort: 3000
+        hostPort: 30777
+        protocol: tcp # Optional, defaults to tcp
       - containerPort: 9090
         hostPort: 30666
         protocol: tcp # Optional, defaults to tcp
+#    extraMounts:
+#      # readonly bind mount the kind source code at /kind-source
+#      containerPath: /mnt/grafana
+#      hostPath: ./hack/grafana
+#      readOnly: true

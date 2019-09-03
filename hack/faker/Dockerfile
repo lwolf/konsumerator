@@ -1,3 +1,3 @@
 FROM scratch
-ADD bin/app /faker
+ADD ./bin/faker /faker
 ENTRYPOINT ["/faker"]

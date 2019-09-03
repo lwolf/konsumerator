@@ -81,6 +81,7 @@ kind-create: docker-build kind-destroy
 	make kind-load-image
 	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make kind-apply
 	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make deploy
+	@echo "Node IP address is $(kubectl get nodes konsumerator-worker -o jsonpath='{ $.status.addresses[?(@.type=="InternalIP")].address }')"
 
 kind-load-image:
 	kind load docker-image --name "konsumerator" ${IMG}

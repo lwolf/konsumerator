@@ -14,12 +14,21 @@ spec:
   template:
     metadata:
       labels:
-        app: fakegen
+        app: faker
         tier: generator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9000"
     spec:
       containers:
-      - image: lwolf/faker:0.1
+      - image: lwolf/faker:v0.22
         imagePullPolicy: IfNotPresent
+        command:
+          - /faker
+          - producer
+          - --redisAddr=redis.default:6379
+          - --port=9000
+          - --num-partitions=2
         name: faker
         ports:
         - containerPort: 9000

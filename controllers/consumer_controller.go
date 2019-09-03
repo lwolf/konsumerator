@@ -128,6 +128,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	var missingIds []int32
+	var pausedIds []int32
 	var observedIds []int32
 	var laggingIds []int32
 	var outdatedIds []int32
@@ -152,7 +153,11 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		trackedPartitions[*partition] = true
 		lag := mp.GetLagByPartition(*partition)
 		r.Log.Info("lag per partition", "partition", *partition, "lag", lag)
-		observedIds = append(observedIds, *partition)
+		if deploy.Status.Replicas > 0 {
+			observedIds = append(observedIds, *partition)
+		} else {
+			pausedIds = append(pausedIds, *partition)
+		}
 		if *partition >= *consumer.Spec.NumPartitions {
 			redundantInstances = append(redundantInstances, deploy)
 			continue
@@ -182,6 +187,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		"deployments count",
 		"expected", consumer.Spec.NumPartitions,
 		"running", len(observedIds),
+		"paused", len(pausedIds),
 		"missing", len(missingIds),
 		"lagging", len(laggingIds),
 		"outdated", len(outdatedInstances),

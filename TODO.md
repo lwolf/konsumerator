@@ -16,13 +16,14 @@ v0.2
 v0.3
 * [x] Setup travis-ci
 * [x] Query multiple prometheus for metrics
-* [ ] Write readme
+* [x] Write readme
 
 v0.4 - observability
 * [ ] Cleanup logging
+* [ ] Validate/Fix RBAC permissions
 * [x] Post behaviour updates to Kubernetes events
 * [ ] Expose metrics about own health and behaviour
-* [ ] Grafana dasboard
+* [ ] Grafana dashboard
 
 v0.5
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
