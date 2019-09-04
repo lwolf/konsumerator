@@ -4,7 +4,9 @@ run: redis
 	docker build -t lwolf/faker:${VERSION} .
 	kind load docker-image --name "konsumerator" lwolf/faker:${VERSION}
 	sed 's/faker:latest/faker:${VERSION}/g' deploy/deploy.yaml | kubectl apply -f -
-	sed 's/faker:latest/faker:${VERSION}/g' ../ci/consumer-test.yaml | kubectl apply -f -
 
 redis:
 	kubectl apply -f deploy/redis.yaml
+
+consumer:
+	sed 's/faker:latest/faker:${VERSION}/g' ../ci/consumer-test.yaml | kubectl apply -f -

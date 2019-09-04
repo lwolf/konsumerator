@@ -84,19 +84,21 @@ func runConsumer(client *redis.Client, partition int, ratePerCore int) {
 	}
 	ticker := time.NewTicker(time.Second)
 	for range ticker.C {
-		batchSize := consume(partition, ratePerCore)
-		recordsCmd := client.LRem(messagesKey, int64(batchSize), byte(1))
-		if recordsCmd.Err() != nil {
-			log.Printf("failed to get %d messages: %v", int(batchSize), err)
+		proposedBatch := consume(partition, ratePerCore)
+		records, err := client.LRem(fmt.Sprintf("%s_%d", messagesKey, partition), int64(proposedBatch), byte(1)).Result()
+		if err != nil {
+			log.Printf("failed to get %d messages: %v", int(proposedBatch), err)
 			continue
 		}
-		state = state + int(math.Min(batchSize, float64(recordsCmd.Val())))
+		actualBatch := math.Min(proposedBatch, float64(records))
+		state = state + int(actualBatch)
 		err = lib.SetOffset(client, ConsumptionOffsetKey, partition, state)
 		if err != nil {
-			log.Fatalf("unable to set offset %v", err)
+			log.Printf("unable to set offset %v", err)
+			continue
 		}
 		consumptionOffsetMetric.WithLabelValues(strconv.Itoa(partition)).Set(float64(state))
-		log.Printf("processed %d messages from partition %d, new offset=%d", int(batchSize), partition, state)
+		log.Printf("processed %d(%d) messages from partition %d, new offset=%d", int(actualBatch), int(proposedBatch), partition, state)
 	}
 }
 

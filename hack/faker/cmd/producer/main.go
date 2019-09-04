@@ -19,9 +19,9 @@ import (
 
 const (
 	ProductionOffsetKey = "konsumerator_production_offsets"
-	messageKey          = "konsumerator_messages"
+	messagesKey         = "konsumerator_messages"
 
-	baseProductionRate = 10000
+	baseProductionRate = 30000
 )
 
 func initRedisKeys(client *redis.Client) error {
@@ -29,7 +29,7 @@ func initRedisKeys(client *redis.Client) error {
 	if err = client.Exists(ProductionOffsetKey).Err(); err != nil {
 		return err
 	}
-	if err = client.Exists(messageKey).Err(); err != nil {
+	if err = client.Exists(messagesKey).Err(); err != nil {
 		return err
 	}
 	return nil
@@ -52,14 +52,16 @@ func runGenerator(client *redis.Client, partition int) {
 	ticker := time.NewTicker(time.Second)
 	for range ticker.C {
 		batchSize := generatePoint(float64(time.Now().Unix()), partition, 7200)
-		values := make([]byte, int(batchSize))
+		log.Printf("going to create batch %v", batchSize)
+		values := make([]interface{}, int(batchSize))
 		for i := range values {
 			values[i] = byte(1)
 		}
 		state = state + int(batchSize)
-		err = client.LPush(messageKey, values).Err()
+		err = client.LPush(fmt.Sprintf("%s_%d", messagesKey, partition), values...).Err()
 		if err != nil {
-			log.Fatalf("unable to push messages to redis %v", err)
+			log.Printf("unable to push messages to redis %v", err)
+			continue
 		}
 		err = lib.SetOffset(client, ProductionOffsetKey, partition, state)
 		if err != nil {
@@ -80,7 +82,7 @@ func generatePoint(i float64, partition int, resolution float64) float64 {
 	rand.Seed(int64(partition))
 	offset := float64(baseProductionRate + (partition * 1000))
 	fuzz := rand.Float64() * offset * 0.1
-	return offset + fuzz + (15000 * math.Sin(i*(math.Pi*2/resolution)))
+	return offset + fuzz + (baseProductionRate * math.Sin(i*(math.Pi*2/resolution)))
 
 }
 func RunProducer(client *redis.Client, numPartitions int, port int) {
