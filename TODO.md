@@ -24,26 +24,29 @@ v0.4 - observability
 * [x] Post behaviour updates to Kubernetes events
 * [ ] Expose metrics about own health and behaviour
 * [ ] Grafana dashboard
+* [ ] Scale down only when no lag present
+* [ ] Scale down after X periods of no lag
 
 v0.5
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
 * [ ] Add ignore list of container names (do not do anything with sidecars)
       Current workaround - set resource policy for those containers with min=max resources
-* [ ] Scale down after period X of normal operations 
 
 -------
 Unsorted
-* [ ] Add more integration tests 
+* [ ] [TEST] Add more integration tests 
 * [ ] [TEST] add test to verify that env variables are always set 
 * [ ] [BUG] update of the autoscaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
-
+* [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive)
 * [ ] [Feature] build simple service to produce pseudo-data to local kafka/prometheus
-* [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
-* [ ] [Feature] call webhooks on scaling events
 
+* [ ] [Feature] call webhooks on scaling events
 * [ ] [Feature] Vertical autoscalling of balanced workloads (single deployment)
 * [ ] [Feature] Fully dynamic resource allocations based on historic data
+* [ ] [Feature] ? Add totalMaxAllowed which will limit total number of cores available for the consumer
 * [ ] [Feature] ? consider adding support for VPA/HPA 
 * [ ] [Feature] ? Use `scale` as a way to pause/resume the consumer
 * [ ] [Feature] ? Tool for operations `consumerctl stop/start consumer`
+* [ ] [Feature] ? Ability to set additional deployment-level annotations/labels ?
+* [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
