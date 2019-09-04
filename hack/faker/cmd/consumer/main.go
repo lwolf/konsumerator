@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"net/http"
 	"os"
@@ -84,11 +85,12 @@ func runConsumer(client *redis.Client, partition int, ratePerCore int) {
 	ticker := time.NewTicker(time.Second)
 	for range ticker.C {
 		batchSize := consume(partition, ratePerCore)
-		state = state + int(batchSize)
-		err = client.LRem(messagesKey, int64(batchSize), byte(1)).Err()
-		if err != nil {
-			log.Fatalf("failed to get %d messages: %v", int(batchSize), err)
+		recordsCmd := client.LRem(messagesKey, int64(batchSize), byte(1))
+		if recordsCmd.Err() != nil {
+			log.Printf("failed to get %d messages: %v", int(batchSize), err)
+			continue
 		}
+		state = state + int(math.Min(batchSize, float64(recordsCmd.Val())))
 		err = lib.SetOffset(client, ConsumptionOffsetKey, partition, state)
 		if err != nil {
 			log.Fatalf("unable to set offset %v", err)

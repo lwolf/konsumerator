@@ -26,27 +26,27 @@ spec:
       # if lag has reached this point, autoscaler will
       # give maximum allowed resource to that deployment
       criticalLag: "60m"
-      # preferable catchup time. During lag, if resources are
-      # available, consumer will be scaled up to catchup during
+      # preferable recovery time. During lag, if resources are
+      # available, consumer will be scaled up to recover during
       # during this time.
-      preferableCatchupPeriod: "30m"
+      recoveryTime: "30m"
       # prometheus addresses to query
       address:
         - "http://prometheus-server.kube-system:9090"
       # Offset query should return number of messages that is not
       # processed yet a.k.a lag per partitionLabel
       offset:
-        query: "sum(rate(konsumerator_messages_produced_total{}[30s])) by (partition) - sum(rate(konsumerator_messages_consumed_total[30s])) by (partition)"
+        query: "max(konsumerator_messages_production_offset) by (partition) - max(konsumerator_messages_consumption_offset) by (partition)"
         partitionLabel: "partition"
       # Production query should return number of messages is being
       # produced per partitionLabel per unit of time (second)
       production:
-        query: "sum(rate(konsumerator_messages_produced_total[5m])) by (partition)"
+        query: "sum(rate(konsumerator_messages_production_offset[5m])) by (partition)"
         partitionLabel: "partition"
       # Consumption query should return number of messages is being
       # consumed per partitionLabel per unit of time (second)
       consumption:
-        query: "sum(rate(konsumerator_messages_consumed_total[5m])) by (partition)"
+        query: "sum(rate(konsumerator_messages_consumption_offset[5m])) by (partition)"
         partitionLabel: "partition"
   # partitionEnvKey - the name of the environment variable
   # containing partition number the deployment is responsible for
@@ -65,12 +65,14 @@ spec:
           app: fake-consumer
       spec:
         containers:
-          - image: lwolf/fakecons:0.4
+          - image: lwolf/faker:latest
             name: consumer
-            args:
-             - partitions=10
-             - rate-per-core=40000
-             - port=9000
+            command:
+              - /faker
+              - consumer
+              - --rpc=50000
+              - --redisAddr=redis.default:6379
+              - --port=9000
             ports:
               - containerPort: 9000
                 name: metrics
@@ -88,7 +90,7 @@ spec:
         cpu: "100m"
         memory: "100M"
       maxAllowed:
-        cpu: "2"
+        cpu: "1"
         memory: "1G"
     - containerName: busybox-info
       minAllowed:

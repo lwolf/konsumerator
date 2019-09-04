@@ -51,7 +51,7 @@ func runGenerator(client *redis.Client, partition int) {
 	}
 	ticker := time.NewTicker(time.Second)
 	for range ticker.C {
-		batchSize := generatePoint(float64(time.Now().Unix()), partition, 3600)
+		batchSize := generatePoint(float64(time.Now().Unix()), partition, 7200)
 		values := make([]byte, int(batchSize))
 		for i := range values {
 			values[i] = byte(1)

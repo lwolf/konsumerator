@@ -44,7 +44,7 @@ spec:
       criticalLag: "60m"
       # preferable recovery time. During lag, Consumer will try to allocate 
       # as much resources as possible to recover from lag during this period
-      preferableCatchupPeriod: "30m"
+      recoveryTime: "30m"
       # prometheus addresses to query
       address:
         - "http://prometheus-operator-prometheus.monitoring.svc.cluster.local:9090"
@@ -171,8 +171,8 @@ provider.
 * `ramPerCore` - approximate amount of RAM required for the amount of messages process by a core. Sometimes you don't have
 such dependency between cpu and memory and want to allocate fixed amount of memory, in this case, put here any value and set resourcePolicy
 for the container with minAllowed.memory = maxAllowed.memory.
-* `preferableCatchupPeriod` - if there is a lag of the partition, predictor will try to give consumer
-as much resources as possible to catchup during this period.
+* `recoveryTime` - if there is a lag of the partition, predictor will try to give consumer
+as much resources as possible to recover during this period.
 It also require `production` and `offset` metrics from the Prometheus. 
 
 

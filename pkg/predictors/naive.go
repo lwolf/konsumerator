@@ -31,8 +31,8 @@ func (s *NaivePredictor) expectedConsumption(partition int32) int64 {
 	production := s.lagSource.GetProductionRate(partition)
 	lagTime := s.lagSource.GetLagByPartition(partition)
 	if lagTime > 0 {
-		work := int64(lagTime.Seconds())*production + production*int64(s.promSpec.PreferableCatchupPeriod.Seconds())
-		return work / int64(s.promSpec.PreferableCatchupPeriod.Seconds())
+		work := int64(lagTime.Seconds())*production + production*int64(s.promSpec.RecoveryTime.Seconds())
+		return work / int64(s.promSpec.RecoveryTime.Seconds())
 	}
 	return production
 }

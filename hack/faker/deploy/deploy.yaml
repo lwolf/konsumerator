@@ -21,7 +21,7 @@ spec:
         prometheus.io/port: "9000"
     spec:
       containers:
-      - image: lwolf/faker:v0.22
+      - image: lwolf/faker:latest
         imagePullPolicy: IfNotPresent
         command:
           - /faker

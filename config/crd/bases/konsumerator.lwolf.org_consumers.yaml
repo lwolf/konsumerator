@@ -441,8 +441,6 @@ spec:
                       - query
                       - partitionLabel
                       type: object
-                    preferableCatchupPeriod:
-                      type: string
                     production:
                       properties:
                         partitionLabel:
@@ -458,6 +456,8 @@ spec:
                     ratePerCore:
                       format: int64
                       type: integer
+                    recoveryTime:
+                      type: string
                     tolerableLag:
                       type: string
                   required:
@@ -470,7 +470,7 @@ spec:
                   - ramPerCore
                   - tolerableLag
                   - criticalLag
-                  - preferableCatchupPeriod
+                  - recoveryTime
                   type: object
               required:
               - mode

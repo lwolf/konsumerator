@@ -64,11 +64,11 @@ type PrometheusAutoscalerSpec struct {
 	Production  ProductionQuerySpec  `json:"production"`
 	Consumption ConsumptionQuerySpec `json:"consumption"`
 
-	RatePerCore             *int64            `json:"ratePerCore"`
-	RamPerCore              resource.Quantity `json:"ramPerCore"`
-	TolerableLag            *metav1.Duration  `json:"tolerableLag"`
-	CriticalLag             *metav1.Duration  `json:"criticalLag"`
-	PreferableCatchupPeriod *metav1.Duration  `json:"preferableCatchupPeriod"`
+	RatePerCore  *int64            `json:"ratePerCore"`
+	RamPerCore   resource.Quantity `json:"ramPerCore"`
+	TolerableLag *metav1.Duration  `json:"tolerableLag"`
+	CriticalLag  *metav1.Duration  `json:"criticalLag"`
+	RecoveryTime *metav1.Duration  `json:"recoveryTime"`
 }
 
 type OffsetQuerySpec struct {

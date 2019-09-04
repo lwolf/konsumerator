@@ -26,10 +26,10 @@ spec:
       # if lag has reached this point, autoscaler will
       # give maximum allowed resource to that deployment
       criticalLag: "60m"
-      # preferable catchup time. During lag, if resources are
-      # available, consumer will be scaled up to catchup during
+      # preferable recovery time. During lag, if resources are
+      # available, consumer will be scaled up to recover during
       # during this time.
-      preferableCatchupPeriod: "30m"
+      recoveryTime: "30m"
       # prometheus addresses to query
       address:
 #        - "http://prometheus-server.kube-system:9090"
