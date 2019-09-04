@@ -114,6 +114,7 @@ type InstanceState struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=watch;create
+// +kubebuilder:rbac:groups="",resources=events,verbs=patch
 // +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.numPartitions",description="Number of replicas"
 // +kubebuilder:printcolumn:name="Autoscaler",type="string",JSONPath=".spec.autoscaler.mode",description="Autoscaler in use"
 // +kubebuilder:printcolumn:name="Lagging",type="integer",JSONPath=".status.lagging"
