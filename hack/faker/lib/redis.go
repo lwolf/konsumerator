@@ -7,6 +7,11 @@ import (
 	"github.com/go-redis/redis"
 )
 
+const (
+	ConsumptionOffsetKey = "konsumerator_consumption_offsets"
+	ProductionOffsetKey  = "konsumerator_production_offsets"
+)
+
 func NewRedisClient(addr string) (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     addr,
@@ -19,8 +24,8 @@ func NewRedisClient(addr string) (*redis.Client, error) {
 	return client, err
 }
 
-func GetOffset(client *redis.Client, key string, partition int, defaultValue int) (int, error) {
-	dbValue, err := client.HGet(key, strconv.Itoa(partition)).Result()
+func GetOffset(client *redis.Client, key string, defaultValue int) (int, error) {
+	dbValue, err := client.Get(key).Result()
 	if err == redis.Nil {
 		return defaultValue, nil
 	} else if err != nil {
@@ -30,6 +35,6 @@ func GetOffset(client *redis.Client, key string, partition int, defaultValue int
 	}
 }
 
-func SetOffset(client *redis.Client, key string, partition int, value int) error {
-	return client.HSet(key, strconv.Itoa(partition), strconv.Itoa(value)).Err()
+func SetOffset(client *redis.Client, key string, value int) error {
+	return client.Set(key, strconv.Itoa(value), 0).Err()
 }

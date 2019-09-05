@@ -15,6 +15,7 @@ type ConsumerCmd struct {
 }
 type ProducerCmd struct {
 	NumPartitions int `arg:"--num-partitions"`
+	BaseRate      int `arg:"--base-rate"`
 }
 
 var args struct {
@@ -37,6 +38,11 @@ func main() {
 		consumer.RunConsumer(redisClient, args.Consumer.Partition, args.Consumer.RatePerCore, args.Port)
 	case args.Producer != nil:
 		log.Info("running producer")
-		producer.RunProducer(redisClient, args.Producer.NumPartitions, args.Port)
+		producer.RunProducer(
+			redisClient,
+			args.Producer.NumPartitions,
+			args.Producer.BaseRate,
+			args.Port,
+		)
 	}
 }

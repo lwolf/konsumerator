@@ -29,6 +29,7 @@ spec:
           - --redisAddr=redis.default:6379
           - --port=9000
           - --num-partitions=2
+          - --base-rate=40000
         name: faker
         ports:
         - containerPort: 9000

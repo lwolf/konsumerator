@@ -28,6 +28,7 @@ v0.4 - observability
 * [ ] Scale down after X periods of no lag
 
 v0.5
+* [ ] Try replacing Deployment with ReplicaSet for simplicity 
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
 * [ ] Add ignore list of container names (do not do anything with sidecars)

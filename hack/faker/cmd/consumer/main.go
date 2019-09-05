@@ -26,9 +26,6 @@ const (
 	sysCpuRequestFile = "/sys/fs/cgroup/cpu/cpu.shares"
 	// limit => `/sys/fs/cgroup/cpu/cpu.cfs_quota_us`
 	sysCpuLimitFile = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
-
-	ConsumptionOffsetKey = "konsumerator_consumption_offsets"
-	messagesKey          = "konsumerator_messages"
 )
 
 var (
@@ -78,21 +75,22 @@ func consume(partition int, ratePerCore int) float64 {
 
 func runConsumer(client *redis.Client, partition int, ratePerCore int) {
 	log.Printf("starting consumer for partition %d", partition)
-	state, err := lib.GetOffset(client, ConsumptionOffsetKey, partition, 0)
-	if err != nil {
-		log.Fatalf("unable to load state from redis %v", err)
-	}
+	productionOffsetKey := fmt.Sprintf("%s-%d", lib.ProductionOffsetKey, partition)
+	consumptionOffsetKey := fmt.Sprintf("%s-%d", lib.ConsumptionOffsetKey, partition)
 	ticker := time.NewTicker(time.Second)
 	for range ticker.C {
-		proposedBatch := consume(partition, ratePerCore)
-		records, err := client.LRem(fmt.Sprintf("%s_%d", messagesKey, partition), int64(proposedBatch), byte(1)).Result()
+		cOffset, err := lib.GetOffset(client, consumptionOffsetKey, 0)
 		if err != nil {
-			log.Printf("failed to get %d messages: %v", int(proposedBatch), err)
-			continue
+			log.Fatalf("unable to load state from redis %v", err)
 		}
-		actualBatch := math.Min(proposedBatch, float64(records))
-		state = state + int(actualBatch)
-		err = lib.SetOffset(client, ConsumptionOffsetKey, partition, state)
+		pOffset, err := lib.GetOffset(client, productionOffsetKey, 0)
+		if err != nil {
+			log.Fatalf("unable to get prod offset from redis %v", err)
+		}
+		proposedBatch := consume(partition, ratePerCore)
+		actualBatch := math.Max(0, math.Min(proposedBatch, float64(pOffset-cOffset)))
+		state := cOffset + int(actualBatch)
+		err = lib.SetOffset(client, consumptionOffsetKey, state)
 		if err != nil {
 			log.Printf("unable to set offset %v", err)
 			continue
