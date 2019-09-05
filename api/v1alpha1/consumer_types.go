@@ -64,11 +64,11 @@ type PrometheusAutoscalerSpec struct {
 	Production  ProductionQuerySpec  `json:"production"`
 	Consumption ConsumptionQuerySpec `json:"consumption"`
 
-	RatePerCore             *int64            `json:"ratePerCore"`
-	RamPerCore              resource.Quantity `json:"ramPerCore"`
-	TolerableLag            *metav1.Duration  `json:"tolerableLag"`
-	CriticalLag             *metav1.Duration  `json:"criticalLag"`
-	PreferableCatchupPeriod *metav1.Duration  `json:"preferableCatchupPeriod"`
+	RatePerCore  *int64            `json:"ratePerCore"`
+	RamPerCore   resource.Quantity `json:"ramPerCore"`
+	TolerableLag *metav1.Duration  `json:"tolerableLag"`
+	CriticalLag  *metav1.Duration  `json:"criticalLag"`
+	RecoveryTime *metav1.Duration  `json:"recoveryTime"`
 }
 
 type OffsetQuerySpec struct {
@@ -113,6 +113,8 @@ type InstanceState struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=watch;create
+// +kubebuilder:rbac:groups="",resources=events,verbs=patch
 // +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.numPartitions",description="Number of replicas"
 // +kubebuilder:printcolumn:name="Autoscaler",type="string",JSONPath=".spec.autoscaler.mode",description="Autoscaler in use"
 // +kubebuilder:printcolumn:name="Lagging",type="integer",JSONPath=".status.lagging"

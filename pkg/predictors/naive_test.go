@@ -26,16 +26,16 @@ func testLogger() logr.Logger {
 
 func genPromSpec(ratePerCode int64, ramPerCode resource.Quantity) *konsumeratorv1alpha1.PrometheusAutoscalerSpec {
 	return &konsumeratorv1alpha1.PrometheusAutoscalerSpec{
-		Address:                 nil,
-		MinSyncPeriod:           nil,
-		Offset:                  konsumeratorv1alpha1.OffsetQuerySpec{},
-		Production:              konsumeratorv1alpha1.ProductionQuerySpec{},
-		Consumption:             konsumeratorv1alpha1.ConsumptionQuerySpec{},
-		RatePerCore:             &ratePerCode,
-		RamPerCore:              ramPerCode,
-		TolerableLag:            nil,
-		CriticalLag:             nil,
-		PreferableCatchupPeriod: &metav1.Duration{Duration: time.Minute * 30},
+		Address:       nil,
+		MinSyncPeriod: nil,
+		Offset:        konsumeratorv1alpha1.OffsetQuerySpec{},
+		Production:    konsumeratorv1alpha1.ProductionQuerySpec{},
+		Consumption:   konsumeratorv1alpha1.ConsumptionQuerySpec{},
+		RatePerCore:   &ratePerCode,
+		RamPerCore:    ramPerCode,
+		TolerableLag:  nil,
+		CriticalLag:   nil,
+		RecoveryTime:  &metav1.Duration{Duration: time.Minute * 30},
 	}
 }
 

@@ -1,11 +1,17 @@
 
+VERSION=$(shell git rev-list --count HEAD)-$(shell git rev-parse --short=7 HEAD)
 # Image URL to use all building/pushing image targets
-IMG ?= quay.io/lwolf/konsumerator:latest
+IMG ?= quay.io/lwolf/konsumerator:$(VERSION)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
 
+# for some reason travis-ci calls `make` on each step which triggers download
+# of all packages. This check disables it.
+ifeq ($(CI),true)
 all:
 	@echo "disabling default target make"
+endif
+
 
 build: manager
 
@@ -16,7 +22,7 @@ test: generate fmt vet manifests
 
 # Build manager binary
 manager: generate fmt vet
-	go build -o bin/manager main.go
+	CGO_ENABLED=0 go build -o bin/konsumerator main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
@@ -45,10 +51,10 @@ vet:
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt paths=./api/...
+	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt,year=2019 paths=./api/...
 
 # Build the docker image
-docker-build: test
+docker-build: build test
 	docker build . -t ${IMG}
 	@echo "updating kustomize image patch file for manager resource"
 	sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml
@@ -66,3 +72,26 @@ CONTROLLER_GEN=$(shell go env GOPATH)/bin/controller-gen
 else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
+
+kind-destroy:
+	-kind delete cluster --name "konsumerator"
+
+kind-create: docker-build kind-destroy
+	kind create cluster --name "konsumerator" --config ./hack/ci/kind.yaml
+	make kind-load-image
+	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make kind-apply
+	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make deploy
+
+kind-load-image:
+	kind load docker-image --name "konsumerator" ${IMG}
+
+kind-apply:
+	kubectl apply -f ./hack/ci/prom.yaml -n kube-system
+	kubectl apply -f ./hack/ci/konsumerator-dashboard.yaml -n kube-system
+	kubectl apply -f ./hack/ci/grafana.yaml -n kube-system
+
+# to get IP address of the kind node, run:
+# `kubectl get nodes konsumerator-worker -o jsonpath='{ $.status.addresses[?(@.type=="InternalIP")].address }'`"
+# exposed ports:
+# 30666 - prometheus
+# 30777 - grafana (admin/admin)

@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: faker-monitor
+  labels:
+    monitoring: services
+    release: prometheus-operator
+spec:
+  selector:
+    matchLabels:
+      app: faker
+  namespaceSelector:
+    matchNames:
+      - "default"
+  jobLabel: faker
+  endpoints:
+    - port: metrics
+      path: "/metrics"
+      interval: 5s

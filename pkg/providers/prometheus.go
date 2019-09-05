@@ -74,6 +74,7 @@ func (l *PrometheusMP) GetProductionRate(partition int32) int64 {
 func (l *PrometheusMP) GetConsumptionRate(partition int32) int64 {
 	consumption, ok := l.consumptionRate[partition]
 	if !ok {
+		l.log.V(2).Info("consumption value not found", "partition", partition)
 		return 0
 	}
 	return consumption
@@ -82,11 +83,10 @@ func (l *PrometheusMP) GetConsumptionRate(partition int32) int64 {
 func (l *PrometheusMP) GetMessagesBehind(partition int32) int64 {
 	behind, ok := l.messagesBehind[partition]
 	if !ok {
+		l.log.V(2).Info("lag value not found", "partition", partition)
 		return 0
 	}
-	// XXX: remove this test randomizer
-	// r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	// behind = behind + (100000 * r.Int63n(250))
+	l.log.V(2).Info("current lag", "partition", partition, "messagesBehind", behind)
 	return behind
 }
 
@@ -95,10 +95,13 @@ func (l *PrometheusMP) GetMessagesBehind(partition int32) int64 {
 func (l *PrometheusMP) GetLagByPartition(partition int32) time.Duration {
 	behind := l.GetMessagesBehind(partition)
 	production := l.GetProductionRate(partition)
+	l.log.V(2).Info("lag estimation", "production", production, "behind", behind)
 	if production == 0 {
+		l.log.V(2).Info("production rate is 0", "partition", partition)
 		return 0
 	}
-	lag := behind / production
+	lag := float64(behind) / float64(production)
+	l.log.V(2).Info("lag per partition", "partition", partition, "lag", lag, "lagSec", time.Duration(lag)*time.Second)
 	return time.Duration(lag) * time.Second
 }
 

@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: faker
+    tier: generator
+  name: faker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: faker
+      tier: generator
+  template:
+    metadata:
+      labels:
+        app: faker
+        tier: generator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9000"
+    spec:
+      containers:
+      - image: lwolf/faker:latest
+        imagePullPolicy: IfNotPresent
+        command:
+          - /faker
+          - producer
+          - --redisAddr=redis.default:6379
+          - --port=9000
+          - --num-partitions=2
+          - --base-rate=40000
+        name: faker
+        ports:
+        - containerPort: 9000
+          name: metrics
+          protocol: TCP
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 100m
+            memory: 100Mi

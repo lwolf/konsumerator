@@ -5,7 +5,7 @@ resources:
 - bases/konsumerator.lwolf.org_consumers.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
-patches:
+#patches:
 # [WEBHOOK] patches here are for enabling the conversion webhook for each CRD
 #- patches/webhook_in_consumers.yaml
 # +kubebuilder:scaffold:crdkustomizewebhookpatch

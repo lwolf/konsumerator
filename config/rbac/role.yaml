@@ -7,6 +7,19 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - apps
+  resources:
+  - deployments
+  verbs:
+  - watch
+  - create
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - patch
+- apiGroups:
   - konsumerator.lwolf.org
   resources:
   - consumers

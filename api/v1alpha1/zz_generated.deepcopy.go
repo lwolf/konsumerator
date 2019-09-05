@@ -279,8 +279,8 @@ func (in *PrometheusAutoscalerSpec) DeepCopyInto(out *PrometheusAutoscalerSpec) 
 		*out = new(metav1.Duration)
 		**out = **in
 	}
-	if in.PreferableCatchupPeriod != nil {
-		in, out := &in.PreferableCatchupPeriod, &out.PreferableCatchupPeriod
+	if in.RecoveryTime != nil {
+		in, out := &in.RecoveryTime, &out.RecoveryTime
 		*out = new(metav1.Duration)
 		**out = **in
 	}
