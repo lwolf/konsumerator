@@ -18,17 +18,21 @@ v0.3
 * [x] Query multiple prometheus for metrics
 * [x] Write readme
 
-v0.4 - observability
-* [ ] Cleanup logging
+v0.4
 * [ ] Validate/Fix RBAC permissions
-* [x] Post behaviour updates to Kubernetes events
-* [ ] Expose metrics about own health and behaviour
-* [ ] Grafana dashboard
 * [ ] Scale down only when no lag present
 * [ ] Scale down after X periods of no lag
-
-v0.5
 * [ ] Try replacing Deployment with ReplicaSet for simplicity 
+* [x] build simple service to produce pseudo-data to local kafka/prometheus
+
+v0.5  - observability
+* [x] Post behaviour updates to Kubernetes events
+* [ ] Cleanup logging
+* [ ] Expose metrics about own health and behaviour
+* [ ] Grafana dashboard
+
+v0.6
+* [ ] Verify that HA mode works
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
 * [ ] Add ignore list of container names (do not do anything with sidecars)
@@ -40,7 +44,6 @@ Unsorted
 * [ ] [TEST] add test to verify that env variables are always set 
 * [ ] [BUG] update of the autoscaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
 * [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive)
-* [ ] [Feature] build simple service to produce pseudo-data to local kafka/prometheus
 
 * [ ] [Feature] call webhooks on scaling events
 * [ ] [Feature] Vertical autoscalling of balanced workloads (single deployment)
