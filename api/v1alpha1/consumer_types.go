@@ -37,8 +37,8 @@ const (
 type ConsumerSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	NumPartitions *int32 `json:"numPartitions"` // Number of partitions
-	Name          string `json:"name"`          // Name of the deployments to run
-	Namespace     string `json:"namespace"`     // Namespace to run managed deployments
+	Name          string `json:"name"`          // Name of the instance to run
+	Namespace     string `json:"namespace"`     // Namespace to run managed instances
 	// +optional
 	Autoscaler *AutoscalerSpec `json:"autoscaler,omitempty"`
 
@@ -96,7 +96,11 @@ type ConsumerStatus struct {
 	// +optional
 	Running *int32 `json:"running,omitempty"`
 	// +optional
+	Paused *int32 `json:"paused,omitempty"`
+	// +optional
 	Lagging *int32 `json:"lagging,omitempty"`
+	// +optional
+	Missing *int32 `json:"missing,omitempty"`
 	// +optional
 	Outdated *int32 `json:"outdated,omitempty"`
 	// +optional
@@ -106,6 +110,7 @@ type ConsumerStatus struct {
 }
 
 type InstanceState struct {
+	// LastScaleEvent  *metav1.Time `json:"lastScaleEvent,omitempty"`
 	ProductionRate  int64 `json:"productionRate"`
 	ConsumptionRate int64 `json:"consumptionRate"`
 	MessagesBehind  int64 `json:"messageBehind"`
@@ -113,12 +118,14 @@ type InstanceState struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=watch;create
-// +kubebuilder:rbac:groups="",resources=events,verbs=patch
-// +kubebuilder:printcolumn:name="Replicas",type="integer",JSONPath=".spec.numPartitions",description="Number of replicas"
-// +kubebuilder:printcolumn:name="Autoscaler",type="string",JSONPath=".spec.autoscaler.mode",description="Autoscaler in use"
+// +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:printcolumn:name="Expected",type="integer",JSONPath=".status.expected",description="Number of replicas supposed to run"
+// +kubebuilder:printcolumn:name="Running",type="integer",JSONPath=".status.running"
+// +kubebuilder:printcolumn:name="Paused",type="integer",JSONPath=".status.paused"
+// +kubebuilder:printcolumn:name="Missing",type="integer",JSONPath=".status.missing"
 // +kubebuilder:printcolumn:name="Lagging",type="integer",JSONPath=".status.lagging"
-// +kubebuilder:printcolumn:name="Available",type="integer",JSONPath=".status.running"
+// +kubebuilder:printcolumn:name="Outdated",type="integer",JSONPath=".status.outdated"
+// +kubebuilder:printcolumn:name="Autoscaler",type="string",JSONPath=".spec.autoscaler.mode",description="Autoscaler in use"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Consumer is the Schema for the consumers API

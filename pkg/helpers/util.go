@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -26,13 +25,6 @@ func ParsePartitionAnnotation(partition string) *int32 {
 	}
 	p32 := int32(p)
 	return &p32
-}
-
-func DebugExtractNames(deploys []*appsv1.Deployment) (names []string) {
-	for _, d := range deploys {
-		names = append(names, d.Name)
-	}
-	return
 }
 
 func DebugPrettyResources(r *corev1.ResourceRequirements) string {
