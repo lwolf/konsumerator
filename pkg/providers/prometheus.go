@@ -16,7 +16,7 @@ import (
 
 const promCallTimeout = time.Second * 30
 
-type MetricsMap map[int32]int64
+type metricsMap map[int32]int64
 
 type PrometheusMP struct {
 	apis      []promv1.API
@@ -30,9 +30,9 @@ type PrometheusMP struct {
 	offsetQuery               string
 	offsetPartitionLabel      string
 
-	messagesBehind  MetricsMap
-	productionRate  MetricsMap
-	consumptionRate MetricsMap
+	messagesBehind  metricsMap
+	productionRate  metricsMap
+	consumptionRate metricsMap
 }
 
 func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutoscalerSpec) (*PrometheusMP, error) {
@@ -153,7 +153,7 @@ func (l *PrometheusMP) Load(production map[int32]int64, consumption map[int32]in
 	l.messagesBehind = offset
 }
 
-func (l *PrometheusMP) queryOffset() (MetricsMap, error) {
+func (l *PrometheusMP) queryOffset() (metricsMap, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
 	defer cancel()
 	ch := make(chan model.Value)
@@ -167,7 +167,7 @@ func (l *PrometheusMP) queryOffset() (MetricsMap, error) {
 }
 
 // queryProductionRate queries Prometheus for the current production rate
-func (l *PrometheusMP) queryProductionRate() (MetricsMap, error) {
+func (l *PrometheusMP) queryProductionRate() (metricsMap, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
 	defer cancel()
 	ch := make(chan model.Value)
@@ -179,7 +179,7 @@ func (l *PrometheusMP) queryProductionRate() (MetricsMap, error) {
 	return metrics, nil
 }
 
-func (l *PrometheusMP) queryConsumptionRate() (MetricsMap, error) {
+func (l *PrometheusMP) queryConsumptionRate() (metricsMap, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
 	defer cancel()
 	ch := make(chan model.Value)
@@ -191,8 +191,8 @@ func (l *PrometheusMP) queryConsumptionRate() (MetricsMap, error) {
 	return metrics, nil
 }
 
-func (l *PrometheusMP) parseVector(v model.Value, lbl string) MetricsMap {
-	metrics := make(MetricsMap)
+func (l *PrometheusMP) parseVector(v model.Value, lbl string) metricsMap {
+	metrics := make(metricsMap)
 	// TODO: cover cases when value is not a vector
 	for _, v := range v.(model.Vector) {
 		partitionNumberStr := string(v.Metric[model.LabelName(l.productionPartitionLabel)])
