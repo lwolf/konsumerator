@@ -166,9 +166,10 @@ func (l *PrometheusMP) queryAll(query string) model.Value {
 	var wg sync.WaitGroup
 	for i := range l.apis {
 		wg.Add(1)
+		api := l.apis[i]
 		go func() {
 			defer wg.Done()
-			v, err := l.query(l.apis[i], ctx, query)
+			v, err := l.query(api, ctx, query)
 			if err != nil {
 				l.log.Error(err, "failed to query prometheus")
 				return
