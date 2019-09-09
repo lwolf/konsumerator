@@ -3,7 +3,6 @@ package providers
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -229,7 +228,8 @@ func (l *PrometheusMP) parse(value model.Value, label model.LabelName) metricsMa
 	case model.ValMatrix:
 		return l.parseMatrix(value.(model.Matrix), label)
 	default:
-		panic(fmt.Sprintf("unsupported prometheus response type %q", value.Type()))
+		l.log.Error(nil, "unsupported prometheus response", "type", value.Type())
+		return nil
 	}
 }
 
