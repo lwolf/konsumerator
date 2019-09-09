@@ -24,7 +24,7 @@ spec:
       ramPerCore: "300M"
       # criticalLag is some value close to the SLO.
       # if lag has reached this point, autoscaler will
-      # give maximum allowed resource to that deployment
+      # give maximum allowed resource to that instance of consumer
       criticalLag: "60m"
       # preferable recovery time. During lag, if resources are
       # available, consumer will be scaled up to recover during
@@ -49,7 +49,7 @@ spec:
         query: "sum(rate(konsumerator_messages_consumption_offset[5m])) by (partition)"
         partitionLabel: "partition"
   # partitionEnvKey - the name of the environment variable
-  # containing partition number the deployment is responsible for
+  # containing partition number the instance is responsible for
   # partitionEnvKey: "PARTITION"
   # DeploymentSpec to run the consumer
   deploymentTemplate:

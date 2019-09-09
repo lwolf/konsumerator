@@ -22,7 +22,7 @@ test: generate fmt vet manifests
 
 # Build manager binary
 manager: generate fmt vet
-	CGO_ENABLED=0 go build -o bin/konsumerator main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/konsumerator main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
@@ -90,8 +90,3 @@ kind-apply:
 	kubectl apply -f ./hack/ci/konsumerator-dashboard.yaml -n kube-system
 	kubectl apply -f ./hack/ci/grafana.yaml -n kube-system
 
-# to get IP address of the kind node, run:
-# `kubectl get nodes konsumerator-worker -o jsonpath='{ $.status.addresses[?(@.type=="InternalIP")].address }'`"
-# exposed ports:
-# 30666 - prometheus
-# 30777 - grafana (admin/admin)

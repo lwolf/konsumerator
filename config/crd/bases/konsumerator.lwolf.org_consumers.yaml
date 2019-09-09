@@ -7,20 +7,29 @@ metadata:
   name: consumers.konsumerator.lwolf.org
 spec:
   additionalPrinterColumns:
-  - JSONPath: .spec.numPartitions
-    description: Number of replicas
-    name: Replicas
+  - JSONPath: .status.expected
+    description: Number of replicas supposed to run
+    name: Expected
+    type: integer
+  - JSONPath: .status.running
+    name: Running
+    type: integer
+  - JSONPath: .status.paused
+    name: Paused
+    type: integer
+  - JSONPath: .status.missing
+    name: Missing
+    type: integer
+  - JSONPath: .status.lagging
+    name: Lagging
+    type: integer
+  - JSONPath: .status.outdated
+    name: Outdated
     type: integer
   - JSONPath: .spec.autoscaler.mode
     description: Autoscaler in use
     name: Autoscaler
     type: string
-  - JSONPath: .status.lagging
-    name: Lagging
-    type: integer
-  - JSONPath: .status.running
-    name: Available
-    type: integer
   - JSONPath: .metadata.creationTimestamp
     name: Age
     type: date
@@ -413,7 +422,7 @@ spec:
                   properties:
                     address:
                       description: 'TODO: needs to be extended to support protocol,address,tls,etc...
-                        for now just http://prometheus:9091/graph should work'
+                        for now just http://prometheus:9091 should work'
                       items:
                         type: string
                       type: array
@@ -5212,7 +5221,6 @@ spec:
           - name
           - namespace
           - deploymentTemplate
-          - resourcePolicy
           type: object
         status:
           properties:
@@ -5243,12 +5251,18 @@ spec:
             lastSyncTime:
               format: date-time
               type: string
+            missing:
+              format: int32
+              type: integer
             observedGeneration:
               description: 'Important: Run "make" to regenerate code after modifying
                 this file'
               format: int64
               type: integer
             outdated:
+              format: int32
+              type: integer
+            paused:
               format: int32
               type: integer
             running:

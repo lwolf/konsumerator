@@ -153,8 +153,18 @@ func (in *ConsumerStatus) DeepCopyInto(out *ConsumerStatus) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.Paused != nil {
+		in, out := &in.Paused, &out.Paused
+		*out = new(int32)
+		**out = **in
+	}
 	if in.Lagging != nil {
 		in, out := &in.Lagging, &out.Lagging
+		*out = new(int32)
+		**out = **in
+	}
+	if in.Missing != nil {
+		in, out := &in.Missing, &out.Missing
 		*out = new(int32)
 		**out = **in
 	}
