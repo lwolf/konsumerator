@@ -19,9 +19,8 @@ const promCallTimeout = time.Second * 30
 type metricsMap map[int32]int64
 
 type PrometheusMP struct {
-	apis      []promv1.API
-	addresses []string
-	log       logr.Logger
+	apis []promv1.API
+	log  logr.Logger
 
 	productionQuery           string
 	productionPartitionLabel  string
@@ -59,7 +58,6 @@ func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutos
 		consumptionPartitionLabel: spec.Consumption.PartitionLabel,
 		offsetQuery:               spec.Offset.Query,
 		offsetPartitionLabel:      spec.Offset.PartitionLabel,
-		addresses:                 spec.Address,
 	}, nil
 }
 
