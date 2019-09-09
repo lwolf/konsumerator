@@ -46,7 +46,7 @@ type ConsumerSpec struct {
 	PartitionEnvKey    string                `json:"partitionEnvKey,omitempty"`
 	DeploymentTemplate appsv1.DeploymentSpec `json:"deploymentTemplate"`
 	// +optional
-	ResourcePolicy *autoscalev1.PodResourcePolicy `json:"resourcePolicy"`
+	ResourcePolicy *autoscalev1.PodResourcePolicy `json:"resourcePolicy,omitempty"`
 }
 
 type AutoscalerSpec struct {
@@ -111,7 +111,6 @@ type ConsumerStatus struct {
 }
 
 type InstanceState struct {
-	// LastScaleEvent  *metav1.Time `json:"lastScaleEvent,omitempty"`
 	ProductionRate  int64 `json:"productionRate"`
 	ConsumptionRate int64 `json:"consumptionRate"`
 	MessagesBehind  int64 `json:"messageBehind"`
