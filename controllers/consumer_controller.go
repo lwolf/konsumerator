@@ -65,7 +65,7 @@ func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) bool {
 type ConsumerReconciler struct {
 	client.Client
 	Log      logr.Logger
-	recorder record.EventRecorder
+	Recorder record.EventRecorder
 	Scheme   *runtime.Scheme
 }
 
@@ -90,7 +90,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(ownerKey, req.Name)); err != nil {
 		eMsg := "unable to list managed deployments"
 		log.Error(err, eMsg)
-		r.recorder.Event(&consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)
+		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)
 		return ctrl.Result{}, err
 	}
 	var err error
@@ -193,7 +193,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	if err := r.Status().Update(ctx, &consumer); errors.IgnoreConflict(err) != nil {
 		eMsg := "unable to update Consumer status"
 		log.Error(err, eMsg)
-		r.recorder.Event(&consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
+		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
 		return result, err
 	}
 
@@ -214,7 +214,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			continue
 		}
 		log.V(1).Info("created new deployment", "deployment", newD, "partition", partition)
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			&consumer,
 			corev1.EventTypeNormal,
 			"DeployCreate",
@@ -226,7 +226,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if err := r.Delete(ctx, deploy); errors.IgnoreNotFound(err) != nil {
 			log.Error(err, "unable to delete deployment", "deployment", deploy)
 		}
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			&consumer,
 			corev1.EventTypeNormal,
 			"DeployDelete",
@@ -250,7 +250,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			log.Error(err, "unable to update deployment", "deployment", deploy)
-			r.recorder.Eventf(
+			r.Recorder.Eventf(
 				&consumer,
 				corev1.EventTypeWarning,
 				"DeployUpdate",
@@ -258,7 +258,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			)
 			continue
 		}
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			&consumer,
 			corev1.EventTypeNormal,
 			"DeployUpdate",
@@ -279,7 +279,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			log.Error(err, "unable to update deployment", "deployment", deploy)
-			r.recorder.Eventf(
+			r.Recorder.Eventf(
 				&consumer,
 				corev1.EventTypeWarning,
 				"DeployUpdate",
@@ -287,7 +287,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			)
 			continue
 		}
-		r.recorder.Eventf(
+		r.Recorder.Eventf(
 			&consumer,
 			corev1.EventTypeNormal,
 			"DeployUpdate",
@@ -337,7 +337,7 @@ func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}); err != nil {
 		return err
 	}
-	r.recorder = mgr.GetEventRecorderFor("konsumerator")
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&konsumeratorv1alpha1.Consumer{}).
 		Owns(&appsv1.Deployment{}).
