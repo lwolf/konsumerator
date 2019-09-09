@@ -5221,7 +5221,6 @@ spec:
           - name
           - namespace
           - deploymentTemplate
-          - resourcePolicy
           type: object
         status:
           properties:
@@ -5241,7 +5240,6 @@ spec:
                     format: int64
                     type: integer
                   productionRate:
-                    description: LastScaleEvent  *metav1.Time `json:"lastScaleEvent,omitempty"`
                     format: int64
                     type: integer
                 required:

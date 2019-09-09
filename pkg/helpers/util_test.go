@@ -135,7 +135,7 @@ func TestSetOrUpdateEnv(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := SetOrUpdateEnv(tt.initialEnv, tt.envKey, tt.envValue)
+			got := SetEnv(tt.initialEnv, tt.envKey, tt.envValue)
 			if diff := cmp.Diff(tt.expEnv, got); diff != "" {
 				t.Errorf("%s PopulateEnv() mismatch (-tt.expEnv +got):\n%s", testName, diff)
 			}

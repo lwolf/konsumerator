@@ -312,7 +312,7 @@ func constructDeploy(consumer konsumeratorv1alpha1.Consumer, partition int32) *a
 	return deploy
 }
 
-func estimateResources(predictor *predictors.NaivePredictor, containerName string, consumerSpec *konsumeratorv1alpha1.ConsumerSpec, partition int32) corev1.ResourceRequirements {
+func estimateResources(predictor predictors.Predictor, containerName string, consumerSpec *konsumeratorv1alpha1.ConsumerSpec, partition int32) corev1.ResourceRequirements {
 	limits := predictors.GetResourcePolicy(containerName, consumerSpec)
 	resources := predictor.Estimate(containerName, limits, partition)
 	return *resources

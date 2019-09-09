@@ -40,7 +40,7 @@ func GomaxprocsFromResource(cpu *resource.Quantity) string {
 	return strconv.Itoa(value)
 }
 
-func SetOrUpdateEnv(env []corev1.EnvVar, key string, value string) []corev1.EnvVar {
+func SetEnv(env []corev1.EnvVar, key string, value string) []corev1.EnvVar {
 	for i, e := range env {
 		if e.Name == key {
 			env[i].Value = value
@@ -63,8 +63,8 @@ func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequireme
 	}
 	env := make([]corev1.EnvVar, len(currentEnv))
 	copy(env, currentEnv)
-	env = SetOrUpdateEnv(env, partitionKey, strconv.Itoa(partition))
-	env = SetOrUpdateEnv(env, gomaxprocsEnvKey, GomaxprocsFromResource(resources.Limits.Cpu()))
+	env = SetEnv(env, partitionKey, strconv.Itoa(partition))
+	env = SetEnv(env, gomaxprocsEnvKey, GomaxprocsFromResource(resources.Limits.Cpu()))
 
 	return env
 }
