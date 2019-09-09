@@ -36,6 +36,8 @@ type PrometheusMP struct {
 	consumptionRate metricsMap
 }
 
+var allConsFailedErr = errors.New("unable to reach any prometheus address")
+
 // TODO: make spec passed by value
 func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutoscalerSpec) (*PrometheusMP, error) {
 	ctrlLogger := log.WithName("prometheusMP")
@@ -49,7 +51,7 @@ func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutos
 		apis = append(apis, promv1.NewAPI(c))
 	}
 	if len(apis) == 0 {
-		return nil, errors.New("unable to reach any prometheus address")
+		return nil, allConsFailedErr
 	}
 
 	return &PrometheusMP{
@@ -157,16 +159,18 @@ func (l *PrometheusMP) queryAll(query string) model.Value {
 	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
 	defer cancel()
 
-	var wg sync.WaitGroup
 	valueCh := make(chan model.Value)
 	doneCh := make(chan interface{})
+	defer close(doneCh)
+
+	var wg sync.WaitGroup
 	for i := range l.apis {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			v, err := l.query(l.apis[i], ctx, query)
 			if err != nil {
-				l.log.Error(err, "failed to query prometheus", "address", l.apis[i])
+				l.log.Error(err, "failed to query prometheus")
 				return
 			}
 			select {
@@ -175,16 +179,17 @@ func (l *PrometheusMP) queryAll(query string) model.Value {
 			}
 		}()
 	}
+	go func() {
+		wg.Wait()
+		close(valueCh)
+	}()
 
 	var v model.Value
 	select {
 	case v = <-valueCh:
-		close(doneCh)
 	case <-ctx.Done():
+		l.log.Error(nil, "all requests failed")
 	}
-
-	wg.Wait()
-	close(valueCh)
 	return v
 }
 
@@ -238,7 +243,7 @@ func (l *PrometheusMP) parseMatrix(matrix model.Matrix, label model.LabelName) m
 		}
 
 		// grab the last value only
-		sample := ss.Values[len(ss.Values)]
+		sample := ss.Values[len(ss.Values)-1]
 		metrics[int32(partitionNumber)] = int64(sample.Value)
 	}
 	return metrics
