@@ -205,6 +205,10 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			container.Resources = estimateResources(predictor, container.Name, &consumer.Spec, partition)
 			container.Env = helpers.PopulateEnv(container.Env, &container.Resources, consumer.Spec.PartitionEnvKey, int(partition))
 		}
+		if err := ctrl.SetControllerReference(&consumer, newD, r.Scheme); err != nil {
+			log.Error(err, "unable to set ownder reference for the new Deployment", "deployment", newD, "partition", partition)
+			continue
+		}
 		if err := r.Create(ctx, newD); errors.IgnoreAlreadyExists(err) != nil {
 			log.Error(err, "unable to create new Deployment", "deployment", newD, "partition", partition)
 			continue
