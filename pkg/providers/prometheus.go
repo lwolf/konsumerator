@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -24,7 +25,7 @@ type PrometheusMP struct {
 
 	productionQuery           string
 	productionPartitionLabel  string
-	consumptinQuery           string
+	consumptionQuery          string
 	consumptionPartitionLabel string
 	offsetQuery               string
 	offsetPartitionLabel      string
@@ -54,7 +55,7 @@ func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutos
 		log:                       ctrlLogger,
 		productionQuery:           spec.Production.Query,
 		productionPartitionLabel:  spec.Production.PartitionLabel,
-		consumptinQuery:           spec.Consumption.Query,
+		consumptionQuery:          spec.Consumption.Query,
 		consumptionPartitionLabel: spec.Consumption.PartitionLabel,
 		offsetQuery:               spec.Offset.Query,
 		offsetPartitionLabel:      spec.Offset.PartitionLabel,
@@ -120,56 +121,70 @@ func (l *PrometheusMP) Update() error {
 	return nil
 }
 
-func (l *PrometheusMP) query(prom promv1.API, ctx context.Context, query string, ch chan model.Value) {
-	value, warnings, err := prom.Query(ctx, query, time.Now())
-	if err != nil {
-		l.log.Error(err, "failed to query prometheus", "address", prom)
-		return
-	}
-	for _, w := range warnings {
-		l.log.Info("querying prometheus", "warning", w, "query", query)
-	}
-	ch <- value
-}
-
-func (l *PrometheusMP) queryAll(ctx context.Context, query string, ch chan model.Value, cancelFunc context.CancelFunc) model.Value {
-	for i := range l.apis {
-		go l.query(l.apis[i], ctx, query, ch)
-	}
-	select {
-	case value := <-ch:
-		cancelFunc()
-		return value
-	case <-ctx.Done():
-		return nil
-	}
-}
-
-func (l *PrometheusMP) Load(production map[int32]int64, consumption map[int32]int64, offset map[int32]int64) {
+func (l *PrometheusMP) Load(production, consumption, offset map[int32]int64) {
 	l.productionRate = production
 	l.consumptionRate = consumption
 	l.messagesBehind = offset
 }
 
-func (l *PrometheusMP) queryOffset() (metricsMap, error) {
+func (l *PrometheusMP) query(prom promv1.API, ctx context.Context, query string) (model.Value, error) {
+	value, warnings, err := prom.Query(ctx, query, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	for _, w := range warnings {
+		l.log.Info("querying prometheus", "warning", w, "query", query)
+	}
+	return value, nil
+}
+
+func (l *PrometheusMP) queryAll(query string) model.Value {
 	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
 	defer cancel()
-	ch := make(chan model.Value)
-	value := l.queryAll(ctx, l.offsetQuery, ch, cancel)
+
+	var wg sync.WaitGroup
+	valueCh := make(chan model.Value)
+	doneCh := make(chan interface{})
+	for i := range l.apis {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			v, err := l.query(l.apis[i], ctx, query)
+			if err != nil {
+				l.log.Error(err, "failed to query prometheus", "address", l.apis[i])
+				return
+			}
+			select {
+			case <-doneCh:
+			case valueCh <- v:
+			}
+		}()
+	}
+
+	var v model.Value
+	select {
+	case v = <-valueCh:
+		close(doneCh)
+	case <-ctx.Done():
+	}
+
+	wg.Wait()
+	close(valueCh)
+	return v
+}
+
+func (l *PrometheusMP) queryOffset() (metricsMap, error) {
+	value := l.queryAll(l.offsetQuery)
 	if value == nil {
 		return nil, errors.New("failed to get offset metrics from prometheus")
 	}
 	metrics := l.parseVector(value, l.offsetPartitionLabel)
 	return metrics, nil
-
 }
 
 // queryProductionRate queries Prometheus for the current production rate
 func (l *PrometheusMP) queryProductionRate() (metricsMap, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
-	defer cancel()
-	ch := make(chan model.Value)
-	value := l.queryAll(ctx, l.productionQuery, ch, cancel)
+	value := l.queryAll(l.productionQuery)
 	if value == nil {
 		return nil, errors.New("failed to get production metrics from prometheus")
 	}
@@ -178,12 +193,9 @@ func (l *PrometheusMP) queryProductionRate() (metricsMap, error) {
 }
 
 func (l *PrometheusMP) queryConsumptionRate() (metricsMap, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), promCallTimeout)
-	defer cancel()
-	ch := make(chan model.Value)
-	value := l.queryAll(ctx, l.consumptinQuery, ch, cancel)
+	value := l.queryAll(l.consumptionQuery)
 	if value == nil {
-		return nil, errors.New("failed to get production metrics from prometheus")
+		return nil, errors.New("failed to get consumption metrics from prometheus")
 	}
 	metrics := l.parseVector(value, l.consumptionPartitionLabel)
 	return metrics, nil
