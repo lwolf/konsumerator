@@ -36,6 +36,7 @@ type PrometheusMP struct {
 	consumptionRate metricsMap
 }
 
+// TODO: make spec passed by value
 func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutoscalerSpec) (*PrometheusMP, error) {
 	ctrlLogger := log.WithName("prometheusMP")
 	var apis []promv1.API
@@ -63,6 +64,8 @@ func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutos
 	}, nil
 }
 
+// GetProductionRate returns production rate.
+// not thread-safe
 func (l *PrometheusMP) GetProductionRate(partition int32) int64 {
 	production, ok := l.productionRate[partition]
 	if !ok {
@@ -71,6 +74,8 @@ func (l *PrometheusMP) GetProductionRate(partition int32) int64 {
 	return production
 }
 
+// GetConsumptionRate returns consumption rate.
+// not thread-safe
 func (l *PrometheusMP) GetConsumptionRate(partition int32) int64 {
 	consumption, ok := l.consumptionRate[partition]
 	if !ok {
@@ -80,6 +85,8 @@ func (l *PrometheusMP) GetConsumptionRate(partition int32) int64 {
 	return consumption
 }
 
+// GetMessagesBehind returns how many messages we're behind.
+// not thread-safe
 func (l *PrometheusMP) GetMessagesBehind(partition int32) int64 {
 	behind, ok := l.messagesBehind[partition]
 	if !ok {
@@ -92,6 +99,7 @@ func (l *PrometheusMP) GetMessagesBehind(partition int32) int64 {
 
 // GetLagByPartition calculates lag based on ProductionRate, ConsumptionRate and
 // the number of not processed messages for partition
+// not thread-safe
 func (l *PrometheusMP) GetLagByPartition(partition int32) time.Duration {
 	behind := l.GetMessagesBehind(partition)
 	production := l.GetProductionRate(partition)
@@ -105,6 +113,10 @@ func (l *PrometheusMP) GetLagByPartition(partition int32) time.Duration {
 	return time.Duration(lag) * time.Second
 }
 
+// Update updates metrics values by querying Prometheus
+// not thread-safe
+// TODO: may lead to partial update
+// TODO: might be queried in parallel
 func (l *PrometheusMP) Update() error {
 	var err error
 	l.productionRate, err = l.queryProductionRate()
@@ -122,6 +134,8 @@ func (l *PrometheusMP) Update() error {
 	return nil
 }
 
+// Load loads given metrics into object
+// not thread-safe
 func (l *PrometheusMP) Load(production, consumption, offset map[int32]int64) {
 	l.productionRate = production
 	l.consumptionRate = consumption
