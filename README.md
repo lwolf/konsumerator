@@ -205,6 +205,35 @@ If there is no such policy set, no resource request/limit will be set.
 
 ## Development
 
+Requirements
+
+* https://github.com/kubernetes-sigs/kind - is used to spin-up dev cluster
+* https://github.com/etcd-io/etcd - etcd needs to be present in the system path. Kubebuilder is a using it to run integration tests locally
+* https://github.com/kubernetes-sigs/kustomize - needs to be preset in the system path to render generated manifests 
+
+### Dev k8s cluster
+
+To spin up dev k8s cluster run the following:
+
+```
+make kind-create
+```
+
+This will create 2 node cluster (1 master and 1 node) with pre-installed Prometheus and Grafana.
+
+#### Access cluster resources (Linux):
+KIND is configured to expose 2 ports.
+To get IP address of the KIND worker node, run:
+
+```
+kubectl get nodes konsumerator-worker -o jsonpath='{ $.status.addresses[?(@.type=="InternalIP")].address }'
+```
+then, you can access grafana and prometheus on the following ports of that IP address: 
+
+* 30666 - prometheus
+* 30777 - grafana (admin/admin)
+
+
 `make build`
 
 `make test`
