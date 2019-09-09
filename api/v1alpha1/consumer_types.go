@@ -43,9 +43,10 @@ type ConsumerSpec struct {
 	Autoscaler *AutoscalerSpec `json:"autoscaler,omitempty"`
 
 	// +optional
-	PartitionEnvKey    string                         `json:"partitionEnvKey,omitempty"`
-	DeploymentTemplate appsv1.DeploymentSpec          `json:"deploymentTemplate"`
-	ResourcePolicy     *autoscalev1.PodResourcePolicy `json:"resourcePolicy"`
+	PartitionEnvKey    string                `json:"partitionEnvKey,omitempty"`
+	DeploymentTemplate appsv1.DeploymentSpec `json:"deploymentTemplate"`
+	// +optional
+	ResourcePolicy *autoscalev1.PodResourcePolicy `json:"resourcePolicy"`
 }
 
 type AutoscalerSpec struct {
@@ -56,7 +57,7 @@ type AutoscalerSpec struct {
 
 type PrometheusAutoscalerSpec struct {
 	// TODO: needs to be extended to support protocol,address,tls,etc...
-	// for now just http://prometheus:9091/graph should work
+	// for now just http://prometheus:9091 should work
 	Address       []string         `json:"address"`
 	MinSyncPeriod *metav1.Duration `json:"minSyncPeriod"`
 

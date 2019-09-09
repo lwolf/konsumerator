@@ -1,10 +1,15 @@
 package helpers
 
 import (
-	"fmt"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+)
+
+const (
+	defaultPartitionEnvKey = "KONSUMERATOR_PARTITION"
+	gomaxprocsEnvKey       = "GOMAXPROCS"
 )
 
 func Ptr2Int32(i int32) *int32 {
@@ -27,15 +32,38 @@ func ParsePartitionAnnotation(partition string) *int32 {
 	return &p32
 }
 
-func DebugPrettyResources(r *corev1.ResourceRequirements) string {
-	if r == nil {
-		return ""
+func GomaxprocsFromResource(cpu *resource.Quantity) string {
+	value := int(cpu.Value())
+	if value < 1 {
+		value = 1
 	}
-	return fmt.Sprintf(
-		"Req: cpu:%s, ram:%s; Limit: cpu:%s, ram:%s",
-		r.Requests.Cpu().String(),
-		r.Requests.Memory().String(),
-		r.Limits.Cpu().String(),
-		r.Limits.Memory().String(),
-	)
+	return strconv.Itoa(value)
+}
+
+func SetOrUpdateEnv(env *[]corev1.EnvVar, key string, value string) []corev1.EnvVar {
+	for i, e := range *env {
+		if e.Name == key {
+			(*env)[i].Value = value
+			return *env
+		}
+	}
+	*env = append(*env, corev1.EnvVar{
+		Name:  key,
+		Value: value,
+	})
+	return *env
+}
+
+func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequirements, envKey string, partition int) []corev1.EnvVar {
+	var partitionKey string
+	if envKey != "" {
+		partitionKey = envKey
+	} else {
+		partitionKey = defaultPartitionEnvKey
+	}
+	env := append(currentEnv[:0:0], currentEnv...) // copy original env
+	env = SetOrUpdateEnv(&env, partitionKey, strconv.Itoa(partition))
+	env = SetOrUpdateEnv(&env, gomaxprocsEnvKey, GomaxprocsFromResource(resources.Limits.Cpu()))
+
+	return env
 }
