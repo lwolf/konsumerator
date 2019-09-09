@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -24,11 +25,11 @@ type PrometheusMP struct {
 	log  logr.Logger
 
 	productionQuery           string
-	productionPartitionLabel  string
+	productionPartitionLabel  model.LabelName
 	consumptionQuery          string
-	consumptionPartitionLabel string
+	consumptionPartitionLabel model.LabelName
 	offsetQuery               string
-	offsetPartitionLabel      string
+	offsetPartitionLabel      model.LabelName
 
 	messagesBehind  metricsMap
 	productionRate  metricsMap
@@ -54,11 +55,11 @@ func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutos
 		apis:                      apis,
 		log:                       ctrlLogger,
 		productionQuery:           spec.Production.Query,
-		productionPartitionLabel:  spec.Production.PartitionLabel,
+		productionPartitionLabel:  model.LabelName(spec.Production.PartitionLabel),
 		consumptionQuery:          spec.Consumption.Query,
-		consumptionPartitionLabel: spec.Consumption.PartitionLabel,
+		consumptionPartitionLabel: model.LabelName(spec.Consumption.PartitionLabel),
 		offsetQuery:               spec.Offset.Query,
-		offsetPartitionLabel:      spec.Offset.PartitionLabel,
+		offsetPartitionLabel:      model.LabelName(spec.Offset.PartitionLabel),
 	}, nil
 }
 
@@ -178,7 +179,7 @@ func (l *PrometheusMP) queryOffset() (metricsMap, error) {
 	if value == nil {
 		return nil, errors.New("failed to get offset metrics from prometheus")
 	}
-	metrics := l.parseVector(value, l.offsetPartitionLabel)
+	metrics := l.parse(value, l.offsetPartitionLabel)
 	return metrics, nil
 }
 
@@ -188,7 +189,7 @@ func (l *PrometheusMP) queryProductionRate() (metricsMap, error) {
 	if value == nil {
 		return nil, errors.New("failed to get production metrics from prometheus")
 	}
-	metrics := l.parseVector(value, l.productionPartitionLabel)
+	metrics := l.parse(value, l.productionPartitionLabel)
 	return metrics, nil
 }
 
@@ -197,15 +198,42 @@ func (l *PrometheusMP) queryConsumptionRate() (metricsMap, error) {
 	if value == nil {
 		return nil, errors.New("failed to get consumption metrics from prometheus")
 	}
-	metrics := l.parseVector(value, l.consumptionPartitionLabel)
+	metrics := l.parse(value, l.consumptionPartitionLabel)
 	return metrics, nil
 }
 
-func (l *PrometheusMP) parseVector(v model.Value, lbl string) metricsMap {
+func (l *PrometheusMP) parse(value model.Value, label model.LabelName) metricsMap {
+	switch value.Type() {
+	case model.ValVector:
+		return l.parseVector(value.(model.Vector), label)
+	case model.ValMatrix:
+		return l.parseMatrix(value.(model.Matrix), label)
+	default:
+		panic(fmt.Sprintf("unsupported prometheus response type %q", value.Type()))
+	}
+}
+
+func (l *PrometheusMP) parseMatrix(matrix model.Matrix, label model.LabelName) metricsMap {
 	metrics := make(metricsMap)
-	// TODO: cover cases when value is not a vector
-	for _, v := range v.(model.Vector) {
-		partitionNumberStr := string(v.Metric[model.LabelName(l.productionPartitionLabel)])
+	for _, ss := range matrix {
+		partitionNumberStr := string(ss.Metric[label])
+		partitionNumber, err := strconv.Atoi(partitionNumberStr)
+		if err != nil {
+			l.log.Info("unable to parse partition number from the label", "label", partitionNumberStr)
+			continue
+		}
+
+		// grab the last value only
+		sample := ss.Values[len(ss.Values)]
+		metrics[int32(partitionNumber)] = int64(sample.Value)
+	}
+	return metrics
+}
+
+func (l *PrometheusMP) parseVector(vector model.Vector, label model.LabelName) metricsMap {
+	metrics := make(metricsMap)
+	for _, v := range vector {
+		partitionNumberStr := string(v.Metric[label])
 		partitionNumber, err := strconv.Atoi(partitionNumberStr)
 		if err != nil {
 			l.log.Info("unable to parse partition number from the label", "label", partitionNumberStr)
