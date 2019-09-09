@@ -12,9 +12,9 @@ func PrettyPrintResources(r *corev1.ResourceRequirements) string {
 	}
 	return fmt.Sprintf(
 		"Req: cpu:%s, ram:%s; Limit: cpu:%s, ram:%s",
-		r.Requests.Cpu().String(),
-		r.Requests.Memory().String(),
-		r.Limits.Cpu().String(),
-		r.Limits.Memory().String(),
+		r.Requests.Cpu(),
+		r.Requests.Memory(),
+		r.Limits.Cpu(),
+		r.Limits.Memory(),
 	)
 }

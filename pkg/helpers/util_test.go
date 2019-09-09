@@ -135,13 +135,9 @@ func TestSetOrUpdateEnv(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			got := SetOrUpdateEnv(&tt.initialEnv, tt.envKey, tt.envValue)
+			got := SetOrUpdateEnv(tt.initialEnv, tt.envKey, tt.envValue)
 			if diff := cmp.Diff(tt.expEnv, got); diff != "" {
 				t.Errorf("%s PopulateEnv() mismatch (-tt.expEnv +got):\n%s", testName, diff)
-			}
-			// make sure we're updating the slice in place
-			if diff := cmp.Diff(tt.initialEnv, tt.expEnv); diff != "" {
-				t.Errorf("%s PopulateEnv() original env should be modified (-tt.initialEnv +tt.expEnv):\n%s", testName, diff)
 			}
 		})
 	}

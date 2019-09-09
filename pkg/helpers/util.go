@@ -40,18 +40,18 @@ func GomaxprocsFromResource(cpu *resource.Quantity) string {
 	return strconv.Itoa(value)
 }
 
-func SetOrUpdateEnv(env *[]corev1.EnvVar, key string, value string) []corev1.EnvVar {
-	for i, e := range *env {
+func SetOrUpdateEnv(env []corev1.EnvVar, key string, value string) []corev1.EnvVar {
+	for i, e := range env {
 		if e.Name == key {
-			(*env)[i].Value = value
-			return *env
+			env[i].Value = value
+			return env
 		}
 	}
-	*env = append(*env, corev1.EnvVar{
+	env = append(env, corev1.EnvVar{
 		Name:  key,
 		Value: value,
 	})
-	return *env
+	return env
 }
 
 func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequirements, envKey string, partition int) []corev1.EnvVar {
@@ -61,9 +61,10 @@ func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequireme
 	} else {
 		partitionKey = defaultPartitionEnvKey
 	}
-	env := append(currentEnv[:0:0], currentEnv...) // copy original env
-	env = SetOrUpdateEnv(&env, partitionKey, strconv.Itoa(partition))
-	env = SetOrUpdateEnv(&env, gomaxprocsEnvKey, GomaxprocsFromResource(resources.Limits.Cpu()))
+	env := make([]corev1.EnvVar, len(currentEnv))
+	copy(env, currentEnv)
+	env = SetOrUpdateEnv(env, partitionKey, strconv.Itoa(partition))
+	env = SetOrUpdateEnv(env, gomaxprocsEnvKey, GomaxprocsFromResource(resources.Limits.Cpu()))
 
 	return env
 }
