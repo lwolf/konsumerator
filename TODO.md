@@ -19,9 +19,9 @@ v0.3
 * [x] Write readme
 
 v0.4
-* [ ] Validate/Fix RBAC permissions
+* [x] Validate/Fix RBAC permissions
 * [x] build simple service to produce pseudo-data to local kafka/prometheus
-* [ ] Update readme with the steps to configure dev env in linux/macos
+* [x] Update readme with the steps to configure dev env in linux/macos
 
 v0.5 scaling
 * [ ] Scale down only when no lag present

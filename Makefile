@@ -90,8 +90,3 @@ kind-apply:
 	kubectl apply -f ./hack/ci/konsumerator-dashboard.yaml -n kube-system
 	kubectl apply -f ./hack/ci/grafana.yaml -n kube-system
 
-# to get IP address of the kind node, run:
-# 	kubectl get nodes konsumerator-worker -o jsonpath='{ $.status.addresses[?(@.type=="InternalIP")].address }'
-# exposed ports:
-# 30666 - prometheus
-# 30777 - grafana (admin/admin)
