@@ -202,6 +202,28 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	return result, nil
 }
 
+func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(&appsv1.Deployment{}, ownerKey, func(rawObj runtime.Object) []string {
+		// grab the object, extract the owner...
+		d := rawObj.(*appsv1.Deployment)
+		owner := metav1.GetControllerOf(d)
+		if owner == nil {
+			return nil
+		}
+		if owner.APIVersion != apiGVStr || owner.Kind != "Consumer" {
+			return nil
+		}
+		return []string{owner.Name}
+	}); err != nil {
+		return err
+	}
+
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&konsumeratorv1alpha1.Consumer{}).
+		Owns(&appsv1.Deployment{}).
+		Complete(r)
+}
+
 type consumerOperator struct {
 	consumer *konsumeratorv1alpha1.Consumer
 	mp       providers.MetricsProvider
@@ -315,7 +337,8 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 			co.missingIds = append(co.missingIds, i)
 		}
 	}
-	status := co.consumer.Status
+
+	status := &co.consumer.Status
 	status.Running = helpers.Ptr2Int32(int32(len(co.runningIds)))
 	status.Paused = helpers.Ptr2Int32(int32(len(co.pausedIds)))
 	status.Lagging = helpers.Ptr2Int32(int32(len(co.laggingIds)))
@@ -366,26 +389,4 @@ func estimateResources(predictor predictors.Predictor, containerName string, con
 	limits := predictors.GetResourcePolicy(containerName, consumerSpec)
 	resources := predictor.Estimate(containerName, limits, partition)
 	return *resources
-}
-
-func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(&appsv1.Deployment{}, ownerKey, func(rawObj runtime.Object) []string {
-		// grab the object, extract the owner...
-		d := rawObj.(*appsv1.Deployment)
-		owner := metav1.GetControllerOf(d)
-		if owner == nil {
-			return nil
-		}
-		if owner.APIVersion != apiGVStr || owner.Kind != "Consumer" {
-			return nil
-		}
-		return []string{owner.Name}
-	}); err != nil {
-		return err
-	}
-
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&konsumeratorv1alpha1.Consumer{}).
-		Owns(&appsv1.Deployment{}).
-		Complete(r)
 }
