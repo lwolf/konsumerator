@@ -20,7 +20,7 @@ const promCallTimeout = time.Second * 30
 type metricsMap map[int32]int64
 
 type PrometheusMP struct {
-	apis []promv1.API
+	apis []*promAPI
 	log  logr.Logger
 
 	productionQuery           string
@@ -35,19 +35,31 @@ type PrometheusMP struct {
 	consumptionRate metricsMap
 }
 
+type promAPI struct {
+	addr   string
+	client promv1.API
+}
+
 var allConsFailedErr = errors.New("unable to reach any prometheus address")
+
+var once sync.Once
 
 // TODO: make spec passed by value
 func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1alpha1.PrometheusAutoscalerSpec) (*PrometheusMP, error) {
+	once.Do(initMetrics)
+
 	ctrlLogger := log.WithName("prometheusMP")
-	var apis []promv1.API
-	for a := range spec.Address {
-		c, err := api.NewClient(api.Config{Address: spec.Address[0]})
+	var apis []*promAPI
+	for _, addr := range spec.Address {
+		c, err := api.NewClient(api.Config{Address: addr})
 		if err != nil {
-			log.Error(err, "unable to construct prometheus api", "address", spec.Address[a])
+			log.Error(err, "unable to construct prometheus api", "address", addr)
 			continue
 		}
-		apis = append(apis, promv1.NewAPI(c))
+		apis = append(apis, &promAPI{
+			addr:   addr,
+			client: promv1.NewAPI(c),
+		})
 	}
 	if len(apis) == 0 {
 		return nil, allConsFailedErr
@@ -143,11 +155,19 @@ func (l *PrometheusMP) Load(production, consumption, offset map[int32]int64) {
 	l.messagesBehind = offset
 }
 
-func (l *PrometheusMP) query(prom promv1.API, ctx context.Context, query string) (model.Value, error) {
-	value, warnings, err := prom.Query(ctx, query, time.Now())
+func (l *PrometheusMP) query(api *promAPI, ctx context.Context, query string) (model.Value, error) {
+	subRequestTotal.WithLabelValues(api.addr).Inc()
+	start := time.Now()
+	value, warnings, err := api.client.Query(ctx, query, time.Now())
 	if err != nil {
+		if ctx.Err() != context.Canceled {
+			subRequestErrors.WithLabelValues(api.addr).Inc()
+		}
 		return nil, err
 	}
+	// measure only success requests duration
+	// to avoid context.Cancel duration values
+	subRequestDuration.WithLabelValues(api.addr).Observe(time.Since(start).Seconds())
 	for _, w := range warnings {
 		l.log.Info("querying prometheus", "warning", w, "query", query)
 	}
@@ -170,7 +190,9 @@ func (l *PrometheusMP) queryAll(query string) model.Value {
 			defer wg.Done()
 			v, err := l.query(api, ctx, query)
 			if err != nil {
-				l.log.Error(err, "failed to query prometheus")
+				if ctx.Err() != context.Canceled {
+					l.log.Error(err, "failed to query prometheus")
+				}
 				return
 			}
 			select {
@@ -194,8 +216,13 @@ func (l *PrometheusMP) queryAll(query string) model.Value {
 }
 
 func (l *PrometheusMP) queryOffset() (metricsMap, error) {
+	start := time.Now()
+	defer requestDuration.WithLabelValues("offset").Observe(time.Since(start).Seconds())
+	requestsTotal.WithLabelValues("offset").Inc()
+
 	value := l.queryAll(l.offsetQuery)
 	if value == nil {
+		requestErrors.WithLabelValues("offset").Inc()
 		return nil, errors.New("failed to get offset metrics from prometheus")
 	}
 	metrics := l.parse(value, l.offsetPartitionLabel)
@@ -204,8 +231,13 @@ func (l *PrometheusMP) queryOffset() (metricsMap, error) {
 
 // queryProductionRate queries Prometheus for the current production rate
 func (l *PrometheusMP) queryProductionRate() (metricsMap, error) {
+	start := time.Now()
+	defer requestDuration.WithLabelValues("production_rate").Observe(time.Since(start).Seconds())
+	requestsTotal.WithLabelValues("production_rate").Inc()
+
 	value := l.queryAll(l.productionQuery)
 	if value == nil {
+		requestErrors.WithLabelValues("production_rate").Inc()
 		return nil, errors.New("failed to get production metrics from prometheus")
 	}
 	metrics := l.parse(value, l.productionPartitionLabel)
@@ -213,8 +245,13 @@ func (l *PrometheusMP) queryProductionRate() (metricsMap, error) {
 }
 
 func (l *PrometheusMP) queryConsumptionRate() (metricsMap, error) {
+	start := time.Now()
+	defer requestDuration.WithLabelValues("consumption_rate").Observe(time.Since(start).Seconds())
+	requestsTotal.WithLabelValues("consumption_rate").Inc()
+
 	value := l.queryAll(l.consumptionQuery)
 	if value == nil {
+		requestErrors.WithLabelValues("consumption_rate").Inc()
 		return nil, errors.New("failed to get consumption metrics from prometheus")
 	}
 	metrics := l.parse(value, l.consumptionPartitionLabel)
