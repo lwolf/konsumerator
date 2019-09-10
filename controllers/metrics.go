@@ -11,7 +11,7 @@ var (
 			Namespace: namespace,
 			Help:      "Total number of processed reconcile events",
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 	reconcileErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -19,7 +19,7 @@ var (
 			Namespace: namespace,
 			Help:      "Total number of errors while processing reconcile events",
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 	reconcileDuration = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
@@ -28,7 +28,7 @@ var (
 			Help:       "Reconcile event duration",
 			Objectives: map[float64]float64{0.5: 1e-1, 0.9: 1e-2, 0.99: 1e-3, 0.999: 1e-4, 1: 1e-5},
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 	statusUpdateDuration = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
@@ -37,7 +37,7 @@ var (
 			Help:       "Reconcile status update duration",
 			Objectives: map[float64]float64{0.5: 1e-1, 0.9: 1e-2, 0.99: 1e-3, 0.999: 1e-4, 1: 1e-5},
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 	deploysCreateTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -45,7 +45,7 @@ var (
 			Namespace: namespace,
 			Help:      "Total number of created deploys",
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 	deploysCreateErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -53,7 +53,7 @@ var (
 			Namespace: namespace,
 			Help:      "Total number of errors while creating deploys",
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 	deploysDeleteTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -61,7 +61,7 @@ var (
 			Namespace: namespace,
 			Help:      "Total number of deleted deploys",
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 	deploysDeleteErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -69,7 +69,7 @@ var (
 			Namespace: namespace,
 			Help:      "Total number of errors while deleting deploys",
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 	deploysUpdateTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -77,7 +77,7 @@ var (
 			Namespace: namespace,
 			Help:      "Total number of updated deploys",
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 	deploysUpdateErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -85,7 +85,7 @@ var (
 			Namespace: namespace,
 			Help:      "Total number of errors while updating deploys",
 		},
-		[]string{"namespace"},
+		[]string{"name"},
 	)
 )
 
