@@ -227,14 +227,14 @@ func (co consumerOperator) isLagging(lag time.Duration) bool {
 	return lag >= tolerableLag.Duration
 }
 
-func (co consumerOperator) isAutoScaleEnbled() bool {
+func (co consumerOperator) isAutoScaleEnabled() bool {
 	_, autoscalerDisabled := co.consumer.Annotations[disableAutoscalerAnnotation]
 	return !autoscalerDisabled && co.consumer.Spec.Autoscaler != nil
 }
 
 func (co consumerOperator) newMetricsProvider() providers.MetricsProvider {
 	defaultProvider := providers.NewDummyMP(*co.consumer.Spec.NumPartitions)
-	if !co.isAutoScaleEnbled() {
+	if !co.isAutoScaleEnabled() {
 		return defaultProvider
 	}
 	switch co.consumer.Spec.Autoscaler.Mode {
