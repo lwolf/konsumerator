@@ -20,16 +20,12 @@ func Ptr2Int64(i int64) *int64 {
 	return &i
 }
 
-func ParsePartitionAnnotation(partition string) *int32 {
-	if len(partition) == 0 {
-		return nil
-	}
+func ParsePartitionAnnotation(partition string) (int32, error) {
 	p, err := strconv.ParseInt(partition, 10, 32)
 	if err != nil {
-		return nil
+		return int32(0), err
 	}
-	p32 := int32(p)
-	return &p32
+	return int32(p), nil
 }
 
 func GomaxprocsFromResource(cpu *resource.Quantity) string {
