@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -10,6 +11,7 @@ import (
 const (
 	defaultPartitionEnvKey = "KONSUMERATOR_PARTITION"
 	gomaxprocsEnvKey       = "GOMAXPROCS"
+	TimeLayout             = time.RFC3339
 )
 
 func Ptr2Int32(i int32) *int32 {
@@ -18,6 +20,15 @@ func Ptr2Int32(i int32) *int32 {
 
 func Ptr2Int64(i int64) *int64 {
 	return &i
+}
+
+func ParseTimeAnnotation(ts string) (time.Time, error) {
+	t, err := time.Parse(TimeLayout, ts)
+
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t, nil
 }
 
 func ParsePartitionAnnotation(partition string) (int32, error) {

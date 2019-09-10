@@ -40,14 +40,32 @@ import (
 	"github.com/lwolf/konsumerator/pkg/providers"
 )
 
-var (
-	partitionAnnotation         = "konsumerator.lwolf.org/partition"
-	disableAutoscalerAnnotation = "konsumerator.lwolf.org/disable-autoscaler"
-	generationAnnotation        = "konsumerator.lwolf.org/generation"
-	ownerKey                    = ".metadata.controller"
-	defaultMinSyncPeriod        = time.Minute
-	apiGVStr                    = konsumeratorv1alpha1.GroupVersion.String()
+const (
+	InstanceStatusRunning          string = "RUNNING"
+	InstanceStatusPendingScaleUp   string = "PENDING_SCALE_UP"
+	InstanceStatusPendingScaleDown string = "PENDING_SCALE_DOWN"
+
+	partitionAnnotation           = "konsumerator.lwolf.org/partition"
+	disableAutoscalerAnnotation   = "konsumerator.lwolf.org/disable-autoscaler"
+	generationAnnotation          = "konsumerator.lwolf.org/generation"
+	scalingStatusAnnotation       = "konsumerator.lwolf.org/scaling-status"
+	scalingStatusChangeAnnotation = "konsumerator.lwolf.org/scaling-status-change"
+	ownerKey                      = ".metadata.controller"
+
+	cmpResourcesLt int = -1
+	cmpResourcesEq int = 0
+	cmpResourcesGt int = 1
 )
+
+var (
+	defaultMinSyncPeriod    = time.Minute
+	scaleStatePendingPeriod = time.Minute * 5
+	apiGVStr                = konsumeratorv1alpha1.GroupVersion.String()
+)
+
+func scalingAllowed(lastChange time.Time) bool {
+	return time.Now().Sub(lastChange) >= scaleStatePendingPeriod
+}
 
 func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) bool {
 	status := consumer.Status
@@ -59,6 +77,25 @@ func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) bool {
 		return true
 	}
 	return false
+}
+
+func cmpResourceRequirements(old corev1.ResourceRequirements, new corev1.ResourceRequirements) int {
+	reqCpu := new.Requests.Cpu().Cmp(*old.Requests.Cpu())
+	limCpu := new.Limits.Cpu().Cmp(*old.Limits.Cpu())
+	reqMem := new.Requests.Memory().Cmp(*old.Requests.Memory())
+	limMem := new.Limits.Memory().Cmp(*old.Limits.Memory())
+	switch {
+	case reqCpu != 0:
+		return reqCpu
+	case limCpu != 0:
+		return limCpu
+	case reqMem != 0:
+		return reqMem
+	case limMem != 0:
+		return limMem
+	default:
+		return 0
+	}
 }
 
 // ConsumerReconciler reconciles a Consumer object
@@ -153,51 +190,27 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	for _, origDeploy := range co.toUpdateInstances {
 		deploy := origDeploy.DeepCopy()
-		deploy, err := co.updateDeployWithPredictor(deploy, predictor)
+		deploy, err := co.updateDeployWithPredictor(deploy, predictor, true)
 		if err != nil {
 			log.Error(err, "failed to update deploy")
 			continue
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			log.Error(err, "unable to update deployment", "deployment", deploy)
-			r.Recorder.Eventf(
-				co.consumer,
-				corev1.EventTypeWarning,
-				"DeployUpdate",
-				"deployment %s: update failed", deploy.Name,
-			)
 			continue
 		}
-		r.Recorder.Eventf(
-			&consumer,
-			corev1.EventTypeNormal,
-			"DeployUpdate",
-			"deployment %s: updated", deploy.Name,
-		)
 	}
 	for _, origDeploy := range co.toEstimateInstances {
 		deploy := origDeploy.DeepCopy()
-		deploy, err := co.updateDeployWithPredictor(deploy, predictor)
+		deploy, err := co.updateDeployWithPredictor(deploy, predictor, false)
 		if err != nil {
 			log.Error(err, "failed to update deploy")
 			continue
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			log.Error(err, "unable to update deployment", "deployment", deploy)
-			r.Recorder.Eventf(
-				co.consumer,
-				corev1.EventTypeWarning,
-				"DeployUpdate",
-				"deployment %s: update failed", deploy.Name,
-			)
 			continue
 		}
-		r.Recorder.Eventf(
-			&consumer,
-			corev1.EventTypeNormal,
-			"DeployUpdate",
-			"deployment %s: updated", deploy.Name,
-		)
 	}
 	return result, nil
 }
@@ -228,6 +241,8 @@ type consumerOperator struct {
 	consumer *konsumeratorv1alpha1.Consumer
 	mp       providers.MetricsProvider
 	log      logr.Logger
+	// XXX: should it be a part of mp?
+	metricsUpdated bool
 
 	missingIds          []int32
 	pausedIds           []int32
@@ -291,6 +306,7 @@ func (co consumerOperator) newMetricsProvider() providers.MetricsProvider {
 				co.log.Error(err, "failed to query lag provider")
 			} else {
 				tm := metav1.Now()
+				co.metricsUpdated = true
 				co.consumer.Status.LastSyncTime = &tm
 				co.consumer.Status.LastSyncState = providers.DumpSyncState(*co.consumer.Spec.NumPartitions, mp)
 			}
@@ -330,7 +346,9 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 			co.toUpdateInstances = append(co.toUpdateInstances, deploy)
 			continue
 		}
-		co.toEstimateInstances = append(co.toEstimateInstances, deploy)
+		if co.metricsUpdated {
+			co.toEstimateInstances = append(co.toEstimateInstances, deploy)
+		}
 	}
 	for i := int32(0); i < *co.consumer.Spec.NumPartitions; i++ {
 		if _, ok := trackedPartitions[i]; !ok {
@@ -349,20 +367,77 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 
 func (co consumerOperator) newDeploy(predictor predictors.Predictor, partition int32) (*appsv1.Deployment, error) {
 	deploy := co.constructDeploy(partition)
-	return co.updateDeployWithPredictor(deploy, predictor)
+	return co.updateDeployWithPredictor(deploy, predictor, true)
 }
 
-func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor) (*appsv1.Deployment, error) {
+func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor, force bool) (*appsv1.Deployment, error) {
 	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[partitionAnnotation])
 	if err != nil {
 		return nil, err
 	}
+	currentState := deploy.Annotations[scalingStatusAnnotation]
+	lastStateChange, err := helpers.ParseTimeAnnotation(deploy.Annotations[scalingStatusChangeAnnotation])
+	if err != nil {
+		return nil, err
+	}
+
+	lag := co.mp.GetLagByPartition(partition)
+	setPendingScaleUpState := co.consumer.Spec.Autoscaler.Prometheus.TolerableLag != nil && lag >= co.consumer.Spec.Autoscaler.Prometheus.TolerableLag.Duration
+	setPendingScaleDownState := co.consumer.Spec.Autoscaler.Prometheus.TolerableLag != nil && lag < co.consumer.Spec.Autoscaler.Prometheus.TolerableLag.Duration
+	// needsUpdate := false
 	deploy.Annotations[generationAnnotation] = co.observedGeneration()
 	deploy.Spec = co.consumer.Spec.DeploymentTemplate
 	for i := range deploy.Spec.Template.Spec.Containers {
+		setNewResources := false
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		container.Resources = estimateResources(predictor, container.Name, &co.consumer.Spec, partition)
-		container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
+		resources := estimateResources(predictor, container.Name, &co.consumer.Spec, partition)
+		if !force {
+			cmpRes := cmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, resources)
+			switch cmpRes {
+			case cmpResourcesEq:
+				if currentState != InstanceStatusRunning {
+					// needsUpdate = true
+					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+				}
+			case cmpResourcesGt:
+				if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
+					// needsUpdate = true
+					setNewResources = true
+				} else if setPendingScaleUpState {
+					// needsUpdate = true
+					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleUp
+					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+				}
+			case cmpResourcesLt:
+				if currentState == InstanceStatusPendingScaleDown && scalingAllowed(lastStateChange) {
+					// needsUpdate = true
+					setNewResources = true
+				} else if setPendingScaleDownState {
+					// needsUpdate = true
+					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleDown
+					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+				}
+			}
+			co.log.Info(
+				"cmp resource",
+				"partition", partition,
+				"container", container.Name,
+				"cmp", cmpRes,
+				"currentState", currentState,
+				"scallingAllowed", scalingAllowed(lastStateChange),
+				"setPendingScaleUpState", setPendingScaleUpState,
+				"setPendingScaleDownState", setPendingScaleDownState,
+				"setNewResources", setNewResources,
+				// "needsUpdate", needsUpdate,
+			)
+			if force || setNewResources {
+				deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+				deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+				container.Resources = resources
+				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
+			}
+		}
 	}
 	return deploy, nil
 }
@@ -382,6 +457,8 @@ func (co consumerOperator) constructDeploy(partition int32) *appsv1.Deployment {
 	}
 	deploy.Annotations[partitionAnnotation] = strconv.Itoa(int(partition))
 	deploy.Annotations[generationAnnotation] = co.observedGeneration()
+	deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+	deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
 	return deploy
 }
 
@@ -390,3 +467,78 @@ func estimateResources(predictor predictors.Predictor, containerName string, con
 	resources := predictor.Estimate(containerName, limits, partition)
 	return *resources
 }
+
+/*
+		currentState := deploy.Annotations[scalingStatusAnnotation]
+		lastStateChange, err := helpers.ParseTimeAnnotation(deploy.Annotations[scalingStatusChangeAnnotation])
+		if err != nil {
+			log.Error(err, "failed to parse annotation with last state change.")
+			continue
+		}
+
+		lag := mp.GetLagByPartition(partition)
+		setPendingScaleUpState := consumer.Spec.Autoscaler.Prometheus.TolerableLag != nil && lag >= consumer.Spec.Autoscaler.Prometheus.TolerableLag.Duration
+		setPendingScaleDownState := consumer.Spec.Autoscaler.Prometheus.TolerableLag != nil && lag < consumer.Spec.Autoscaler.Prometheus.TolerableLag.Duration
+
+		needsUpdate := false
+
+		for i := range deploy.Spec.Template.Spec.Containers {
+			setNewResources := false
+			container := &deploy.Spec.Template.Spec.Containers[i]
+			resources := estimateResources(predictor, container.Name, &consumer.Spec, partition)
+			cmpRes := cmpResourceRequirements(origDeploy.Spec.Template.Spec.Containers[i].Resources, resources)
+			switch cmpRes {
+			case cmpResourcesEq:
+				if currentState != InstanceStatusRunning {
+					needsUpdate = true
+					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+				}
+			case cmpResourcesGt:
+				if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
+					needsUpdate = true
+					setNewResources = true
+				} else if setPendingScaleUpState {
+					needsUpdate = true
+					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleUp
+					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+				}
+			case cmpResourcesLt:
+				if currentState == InstanceStatusPendingScaleDown && scalingAllowed(lastStateChange) {
+					needsUpdate = true
+					setNewResources = true
+				} else if setPendingScaleDownState {
+					needsUpdate = true
+					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleDown
+					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+				}
+			}
+			log.Info(
+				"cmp resource",
+				"partition", partition,
+				"container", container.Name,
+				"cmp", cmpRes,
+				"currentState", currentState,
+				"scallingAllowed", scalingAllowed(lastStateChange),
+				"setPendingScaleUpState", setPendingScaleUpState,
+				"setPendingScaleDownState", setPendingScaleDownState,
+				"setNewResources", setNewResources,
+				"needsUpdate", needsUpdate,
+			)
+
+			if setNewResources {
+				deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+				deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+				container.Resources = resources
+				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, consumer.Spec.PartitionEnvKey, int(partition))
+			}
+		}
+		if needsUpdate {
+			if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
+				log.Error(err, "unable to update deployment", "deployment", deploy)
+				continue
+			}
+		}
+	}
+
+*/
