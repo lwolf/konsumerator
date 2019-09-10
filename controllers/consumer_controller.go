@@ -151,12 +151,12 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		)
 	}
 
-	updateDeploy := func(origDeploy *appsv1.Deployment) {
+	for _, origDeploy := range co.toUpdateInstances {
 		deploy := origDeploy.DeepCopy()
 		deploy, err := co.updateDeployWithPredictor(deploy, predictor)
 		if err != nil {
 			log.Error(err, "failed to update deploy")
-			return
+			continue
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			log.Error(err, "unable to update deployment", "deployment", deploy)
@@ -166,7 +166,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 				"DeployUpdate",
 				"deployment %s: update failed", deploy.Name,
 			)
-			return
+			continue
 		}
 		r.Recorder.Eventf(
 			&consumer,
@@ -175,12 +175,29 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			"deployment %s: updated", deploy.Name,
 		)
 	}
-
-	for _, origDeploy := range co.toUpdateInstances {
-		updateDeploy(origDeploy)
-	}
 	for _, origDeploy := range co.toEstimateInstances {
-		updateDeploy(origDeploy)
+		deploy := origDeploy.DeepCopy()
+		deploy, err := co.updateDeployWithPredictor(deploy, predictor)
+		if err != nil {
+			log.Error(err, "failed to update deploy")
+			continue
+		}
+		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
+			log.Error(err, "unable to update deployment", "deployment", deploy)
+			r.Recorder.Eventf(
+				co.consumer,
+				corev1.EventTypeWarning,
+				"DeployUpdate",
+				"deployment %s: update failed", deploy.Name,
+			)
+			continue
+		}
+		r.Recorder.Eventf(
+			&consumer,
+			corev1.EventTypeNormal,
+			"DeployUpdate",
+			"deployment %s: updated", deploy.Name,
+		)
 	}
 	return result, nil
 }
