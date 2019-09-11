@@ -75,3 +75,22 @@ func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequireme
 
 	return env
 }
+
+func CmpResourceRequirements(old corev1.ResourceRequirements, new corev1.ResourceRequirements) int {
+	reqCpu := new.Requests.Cpu().Cmp(*old.Requests.Cpu())
+	limCpu := new.Limits.Cpu().Cmp(*old.Limits.Cpu())
+	reqMem := new.Requests.Memory().Cmp(*old.Requests.Memory())
+	limMem := new.Limits.Memory().Cmp(*old.Limits.Memory())
+	switch {
+	case reqCpu != 0:
+		return reqCpu
+	case limCpu != 0:
+		return limCpu
+	case reqMem != 0:
+		return reqMem
+	case limMem != 0:
+		return limMem
+	default:
+		return 0
+	}
+}

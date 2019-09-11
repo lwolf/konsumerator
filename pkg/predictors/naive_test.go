@@ -285,7 +285,7 @@ func TestEstimateResources(t *testing.T) {
 			promSpec:  &tt.promSpec,
 			log:       testLogger(),
 		}
-		resources := estimator.Estimate(tt.containerName, tt.limits, tt.partition)
+		resources, _ := estimator.Estimate(tt.containerName, tt.limits, tt.partition)
 		if resources.Requests.Cpu().MilliValue() != tt.expectedResources.Requests.Cpu().MilliValue() {
 			t.Logf("%s: expected request cpu %s, got %s", testName, tt.expectedResources.Requests.Cpu().String(), resources.Requests.Cpu().String())
 			t.Fail()

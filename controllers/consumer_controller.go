@@ -41,6 +41,7 @@ import (
 
 const (
 	InstanceStatusRunning          string = "RUNNING"
+	InstanceStatusSaturated        string = "SATURATED"
 	InstanceStatusPendingScaleUp   string = "PENDING_SCALE_UP"
 	InstanceStatusPendingScaleDown string = "PENDING_SCALE_DOWN"
 
@@ -76,25 +77,6 @@ func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) bool {
 		return true
 	}
 	return false
-}
-
-func cmpResourceRequirements(old corev1.ResourceRequirements, new corev1.ResourceRequirements) int {
-	reqCpu := new.Requests.Cpu().Cmp(*old.Requests.Cpu())
-	limCpu := new.Limits.Cpu().Cmp(*old.Limits.Cpu())
-	reqMem := new.Requests.Memory().Cmp(*old.Requests.Memory())
-	limMem := new.Limits.Memory().Cmp(*old.Limits.Memory())
-	switch {
-	case reqCpu != 0:
-		return reqCpu
-	case limCpu != 0:
-		return limCpu
-	case reqMem != 0:
-		return reqMem
-	case limMem != 0:
-		return limMem
-	default:
-		return 0
-	}
 }
 
 // ConsumerReconciler reconciles a Consumer object
@@ -136,12 +118,14 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	log.V(1).Info(
 		"deployments count",
+		"metricsUpdated", co.metricsUpdated,
 		"expected", consumer.Spec.NumPartitions,
 		"running", len(co.runningIds),
 		"paused", len(co.pausedIds),
 		"missing", len(co.missingIds),
 		"lagging", len(co.laggingIds),
-		"outdated", len(co.toUpdateInstances),
+		"toUpdate", len(co.toUpdateInstances),
+		"toEstimate", len(co.toEstimateInstances),
 	)
 
 	if err := r.Status().Update(ctx, co.consumer); errors.IgnoreConflict(err) != nil {
@@ -268,11 +252,11 @@ func newConsumerOperator(log logr.Logger, consumer *konsumeratorv1alpha1.Consume
 	return co, err
 }
 
-func (co consumerOperator) observedGeneration() string {
+func (co *consumerOperator) observedGeneration() string {
 	return strconv.Itoa(int(*co.consumer.Status.ObservedGeneration))
 }
 
-func (co consumerOperator) isLagging(lag time.Duration) bool {
+func (co *consumerOperator) isLagging(lag time.Duration) bool {
 	tolerableLag := co.consumer.Spec.Autoscaler.Prometheus.TolerableLag
 	if tolerableLag == nil {
 		return false
@@ -280,12 +264,12 @@ func (co consumerOperator) isLagging(lag time.Duration) bool {
 	return lag >= tolerableLag.Duration
 }
 
-func (co consumerOperator) isAutoScaleEnabled() bool {
+func (co *consumerOperator) isAutoScaleEnabled() bool {
 	_, autoscalerDisabled := co.consumer.Annotations[disableAutoscalerAnnotation]
 	return !autoscalerDisabled && co.consumer.Spec.Autoscaler != nil
 }
 
-func (co consumerOperator) newMetricsProvider() providers.MetricsProvider {
+func (co *consumerOperator) newMetricsProvider() providers.MetricsProvider {
 	defaultProvider := providers.NewDummyMP(*co.consumer.Spec.NumPartitions)
 	if !co.isAutoScaleEnabled() {
 		return defaultProvider
@@ -364,12 +348,12 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 	status.Missing = helpers.Ptr2Int32(int32(len(co.missingIds)))
 }
 
-func (co consumerOperator) newDeploy(predictor predictors.Predictor, partition int32) (*appsv1.Deployment, error) {
+func (co *consumerOperator) newDeploy(predictor predictors.Predictor, partition int32) (*appsv1.Deployment, error) {
 	deploy := co.constructDeploy(partition)
 	return co.updateDeployWithPredictor(deploy, predictor, true)
 }
 
-func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor, force bool) (*appsv1.Deployment, error) {
+func (co *consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor, force bool) (*appsv1.Deployment, error) {
 	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[partitionAnnotation])
 	if err != nil {
 		return nil, err
@@ -382,37 +366,33 @@ func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, 
 
 	lag := co.mp.GetLagByPartition(partition)
 	isLagging := co.isLagging(lag)
-	// needsUpdate := false
-	deploy.Annotations[generationAnnotation] = co.observedGeneration()
-	deploy.Spec = co.consumer.Spec.DeploymentTemplate
+	if force {
+		deploy.Annotations[generationAnnotation] = co.observedGeneration()
+		deploy.Spec = co.consumer.Spec.DeploymentTemplate
+	}
 	for i := range deploy.Spec.Template.Spec.Containers {
 		setNewResources := false
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		resources := estimateResources(predictor, container.Name, &co.consumer.Spec, partition)
-		if !force {
-			cmpRes := cmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, resources)
+		resources, isSaturated := estimateResources(predictor, container.Name, &co.consumer.Spec, partition)
+		if !force && time.Since(co.consumer.Status.LastSyncTime.Time) < scaleStatePendingPeriod {
+			cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, resources)
 			switch cmpRes {
 			case cmpResourcesEq:
 				if currentState != InstanceStatusRunning {
-					// needsUpdate = true
 					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
 					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
 				}
 			case cmpResourcesGt:
 				if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
-					// needsUpdate = true
 					setNewResources = true
 				} else if isLagging {
-					// needsUpdate = true
 					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleUp
 					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
 				}
 			case cmpResourcesLt:
 				if currentState == InstanceStatusPendingScaleDown && scalingAllowed(lastStateChange) {
-					// needsUpdate = true
 					setNewResources = true
 				} else if !isLagging {
-					// needsUpdate = true
 					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleDown
 					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
 				}
@@ -426,12 +406,15 @@ func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, 
 				"scallingAllowed", scalingAllowed(lastStateChange),
 				"isLagging", isLagging,
 				"setNewResources", setNewResources,
-				// "needsUpdate", needsUpdate,
 			)
 		}
-		if force || setNewResources {
+		if isSaturated {
+			deploy.Annotations[scalingStatusAnnotation] = InstanceStatusSaturated
+		} else {
 			deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
-			deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+		}
+		deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+		if force || setNewResources {
 			container.Resources = resources
 			container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
 		}
@@ -439,7 +422,7 @@ func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, 
 	return deploy, nil
 }
 
-func (co consumerOperator) constructDeploy(partition int32) *appsv1.Deployment {
+func (co *consumerOperator) constructDeploy(partition int32) *appsv1.Deployment {
 	deployLabels := make(map[string]string)
 	deployAnnotations := make(map[string]string)
 	deploy := &appsv1.Deployment{
@@ -459,8 +442,8 @@ func (co consumerOperator) constructDeploy(partition int32) *appsv1.Deployment {
 	return deploy
 }
 
-func estimateResources(predictor predictors.Predictor, containerName string, consumerSpec *konsumeratorv1alpha1.ConsumerSpec, partition int32) corev1.ResourceRequirements {
+func estimateResources(predictor predictors.Predictor, containerName string, consumerSpec *konsumeratorv1alpha1.ConsumerSpec, partition int32) (corev1.ResourceRequirements, bool) {
 	limits := predictors.GetResourcePolicy(containerName, consumerSpec)
-	resources := predictor.Estimate(containerName, limits, partition)
-	return *resources
+	resources, isSaturated := predictor.Estimate(containerName, limits, partition)
+	return *resources, isSaturated
 }
