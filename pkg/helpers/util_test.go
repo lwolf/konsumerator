@@ -142,3 +142,63 @@ func TestSetOrUpdateEnv(t *testing.T) {
 		})
 	}
 }
+
+func constructResourceRequirements(reqCpu, reqMem, limCpu, limMem string) corev1.ResourceRequirements {
+	return corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(reqCpu),
+			corev1.ResourceMemory: resource.MustParse(reqMem),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(limCpu),
+			corev1.ResourceMemory: resource.MustParse(limMem),
+		},
+	}
+}
+
+func TestCmpResourceRequirements(t *testing.T) {
+	tests := map[string]struct {
+		old corev1.ResourceRequirements
+		new corev1.ResourceRequirements
+		exp int
+	}{
+		"old has higher cpu request": {
+			old: constructResourceRequirements("2.1", "2G", "3", "2G"),
+			new: constructResourceRequirements("2", "2G", "3", "2G"),
+			exp: -1,
+		},
+		"new has higher cpu request": {
+			old: constructResourceRequirements("2", "2G", "3", "2G"),
+			new: constructResourceRequirements("2.5", "2G", "3", "2G"),
+			exp: 1,
+		},
+		"old has higher cpu limit": {
+			old: constructResourceRequirements("2", "2G", "3", "2G"),
+			new: constructResourceRequirements("2", "2G", "2", "2G"),
+			exp: -1,
+		},
+		"old has higher memory request": {
+			old: constructResourceRequirements("2", "3G", "2", "3G"),
+			new: constructResourceRequirements("2", "2G", "2", "3G"),
+			exp: -1,
+		},
+		"old has higher memory limit": {
+			old: constructResourceRequirements("2", "2G", "2", "3G"),
+			new: constructResourceRequirements("2", "2G", "2", "2G"),
+			exp: -1,
+		},
+		"equal requirements": {
+			old: constructResourceRequirements("2", "2G", "2", "2G"),
+			new: constructResourceRequirements("2", "2G", "2", "2G"),
+			exp: 0,
+		},
+	}
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			res := CmpResourceRequirements(tt.old, tt.new)
+			if res != tt.exp {
+				t.Fatalf("expected %d, got %d", tt.exp, res)
+			}
+		})
+	}
+}

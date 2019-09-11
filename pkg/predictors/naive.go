@@ -58,7 +58,6 @@ func (s *NaivePredictor) validateCpu(request int64, limit int64, policy *autosca
 		l = policy.MinAllowed.Cpu().MilliValue()
 	}
 	if limit > policy.MaxAllowed.Cpu().MilliValue() {
-		isSaturated = true
 		l = policy.MaxAllowed.Cpu().MilliValue()
 	}
 	if request > l {

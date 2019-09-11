@@ -24,7 +24,6 @@ func Ptr2Int64(i int64) *int64 {
 
 func ParseTimeAnnotation(ts string) (time.Time, error) {
 	t, err := time.Parse(TimeLayout, ts)
-
 	if err != nil {
 		return time.Time{}, err
 	}
