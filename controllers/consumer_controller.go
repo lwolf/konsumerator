@@ -67,16 +67,23 @@ func scalingAllowed(lastChange time.Time) bool {
 	return time.Since(lastChange) >= scaleStatePendingPeriod
 }
 
-func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) bool {
+func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) (bool, error) {
 	status := consumer.Status
 	if status.LastSyncTime == nil || status.LastSyncState == nil {
-		return true
+		return true, nil
+	}
+	if consumer.Spec.Autoscaler == nil {
+		return false, fmt.Errorf("autoscaler is not present in consumer spec")
+	}
+	if consumer.Spec.Autoscaler.Mode == konsumeratorv1alpha1.AutoscalerTypePrometheus &&
+		consumer.Spec.Autoscaler.Prometheus == nil {
+		return false, fmt.Errorf("autoscaler misconfiguration: prometheus setup is missing")
 	}
 	timeToSync := metav1.Now().Sub(status.LastSyncTime.Time) > consumer.Spec.Autoscaler.Prometheus.MinSyncPeriod.Duration
 	if timeToSync {
-		return true
+		return true, nil
 	}
-	return false
+	return false, nil
 }
 
 // ConsumerReconciler reconciles a Consumer object
@@ -285,7 +292,12 @@ func (co *consumerOperator) newMetricsProvider() providers.MetricsProvider {
 			return defaultProvider
 		}
 		providers.LoadSyncState(mp, co.consumer.Status)
-		if shouldUpdateMetrics(co.consumer) {
+		shouldUpdate, err := shouldUpdateMetrics(co.consumer)
+		if err != nil {
+			co.log.Error(err, "failed to initialize Prometheus Metrics Provider")
+			return defaultProvider
+		}
+		if shouldUpdate {
 			co.log.Info("going to update metrics info")
 			if err := mp.Update(); err != nil {
 				co.log.Error(err, "failed to query lag provider")
