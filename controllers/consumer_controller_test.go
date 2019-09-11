@@ -3,10 +3,13 @@ package controllers
 import (
 	v1 "k8s.io/api/apps/v1"
 	"testing"
+	"time"
 
 	tlog "github.com/go-logr/logr/testing"
-	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 )
 
 func TestEstimateResources(t *testing.T) {
@@ -101,4 +104,144 @@ func testCompareStatus(t *testing.T, a, b konsumeratorv1alpha1.ConsumerStatus) {
 	equalInt32("Lagging", *a.Lagging, *b.Lagging)
 	equalInt32("Missing", *a.Missing, *b.Missing)
 	equalInt32("Outdated", *a.Outdated, *b.Outdated)
+}
+
+func newPrometheusAutoscalerSpec(minSyncPeriod time.Duration) *konsumeratorv1alpha1.PrometheusAutoscalerSpec {
+	return &konsumeratorv1alpha1.PrometheusAutoscalerSpec{
+		Address:       nil,
+		MinSyncPeriod: &metav1.Duration{Duration: minSyncPeriod},
+		Offset:        konsumeratorv1alpha1.OffsetQuerySpec{},
+		Production:    konsumeratorv1alpha1.ProductionQuerySpec{},
+		Consumption:   konsumeratorv1alpha1.ConsumptionQuerySpec{},
+		RatePerCore:   nil,
+		RamPerCore:    resource.Quantity{},
+		TolerableLag:  nil,
+		CriticalLag:   nil,
+		RecoveryTime:  nil,
+	}
+}
+
+func TestShouldUpdateMetrics(t *testing.T) {
+	tests := map[string]struct {
+		consumer  *konsumeratorv1alpha1.Consumer
+		expResult bool
+		expError  bool
+	}{
+		"should update if time to sync": {
+			consumer: &konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions: testInt32ToPt(1),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "prometheus",
+						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+					},
+					DeploymentTemplate: v1.DeploymentSpec{},
+				},
+				Status: konsumeratorv1alpha1.ConsumerStatus{
+					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
+					LastSyncState: map[string]konsumeratorv1alpha1.InstanceState{},
+				},
+			},
+			expResult: true,
+			expError:  false,
+		},
+		"false if not the time to sync": {
+			consumer: &konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions: testInt32ToPt(1),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "prometheus",
+						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+					},
+					DeploymentTemplate: v1.DeploymentSpec{},
+				},
+				Status: konsumeratorv1alpha1.ConsumerStatus{
+					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -1)},
+					LastSyncState: map[string]konsumeratorv1alpha1.InstanceState{},
+				},
+			},
+			expResult: false,
+			expError:  false,
+		},
+		"should update if no LastSyncTime": {
+			consumer: &konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions: testInt32ToPt(1),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "prometheus",
+						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+					},
+					DeploymentTemplate: v1.DeploymentSpec{},
+				},
+				Status: konsumeratorv1alpha1.ConsumerStatus{
+					LastSyncTime:  nil,
+					LastSyncState: map[string]konsumeratorv1alpha1.InstanceState{},
+				},
+			},
+			expResult: true,
+			expError:  false,
+		},
+		"should update if no LastSyncState ": {
+			consumer: &konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions: testInt32ToPt(1),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "prometheus",
+						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+					},
+					DeploymentTemplate: v1.DeploymentSpec{},
+				},
+				Status: konsumeratorv1alpha1.ConsumerStatus{
+					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -1)},
+					LastSyncState: nil,
+				},
+			},
+			expResult: true,
+			expError:  false,
+		},
+		"should fail if no autoscaler setup": {
+			consumer: &konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions:      testInt32ToPt(1),
+					Autoscaler:         nil,
+					DeploymentTemplate: v1.DeploymentSpec{},
+				},
+				Status: konsumeratorv1alpha1.ConsumerStatus{
+					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
+					LastSyncState: map[string]konsumeratorv1alpha1.InstanceState{},
+				},
+			},
+			expResult: false,
+			expError:  true,
+		},
+		"should fail if prometheus config is missing": {
+			consumer: &konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions: testInt32ToPt(1),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "prometheus",
+						Prometheus: nil,
+					},
+					DeploymentTemplate: v1.DeploymentSpec{},
+				},
+				Status: konsumeratorv1alpha1.ConsumerStatus{
+					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
+					LastSyncState: map[string]konsumeratorv1alpha1.InstanceState{},
+				},
+			},
+			expResult: false,
+			expError:  true,
+		},
+	}
+	for testName, tt := range tests {
+		t.Run(testName, func(t *testing.T) {
+			res, err := shouldUpdateMetrics(tt.consumer)
+			if res != tt.expResult {
+				t.Fatalf("expected %v, got %v", tt.expResult, res)
+			}
+			if (err != nil) != tt.expError {
+				t.Fatalf("Error check, expected %v, got %v", tt.expError, err != nil)
+			}
+		})
+	}
 }

@@ -24,12 +24,16 @@ v0.4
 * [x] Update readme with the steps to configure dev env in linux/macos
 
 v0.5 scaling
-* [ ] Scale down only when no lag present
-* [ ] Scale down after X periods of no lag
+* [x] Scale down only when no lag present
+* [x] Scale only after X periods of lag/no lag
+* [x] Introduce another deployment status - `SATURATED` to indicate that we don't have
+    enough resources for it
+* [ ] Need a way to expose resource saturation level (how many CPUs are lacking)
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 
 * [ ] Consider getting all the pods to estimate uptime/last scale event
-* [ ] Store last X metrics in the consumer status
+* [ ] Consider using number of messages in all estimates instead of `projected lag time`
 * [ ] Per-deployment auto-scaling pause
+* [ ] Verify that scaling works with multi-container pods
 
 v0.6  - observability
 * [x] Post behaviour updates to Kubernetes events
@@ -49,7 +53,7 @@ Unsorted
 * [ ] [TEST] Add more integration tests 
 * [ ] [TEST] add test to verify that env variables are always set 
 * [ ] [BUG] update of the auto-scaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
-* [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive)
+* [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive) 
 
 * [ ] [Feature] call webhooks on scaling events
 * [ ] [Feature] Vertical auto-scaling of balanced workloads (single deployment)
@@ -59,4 +63,6 @@ Unsorted
 * [ ] [Feature] ? Use `scale` as a way to pause/resume the consumer
 * [ ] [Feature] ? Tool for operations `consumerctl stop/start consumer`
 * [ ] [Feature] ? Ability to set additional deployment-level annotations/labels ?
+* [ ] [Feature] Implement second metrics provider (Kafka)
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
+* [ ] [Feature] Get kafka lag directly from the prometheus [blocked](https://cwiki.apache.org/confluence/display/KAFKA/489%3A+Kafka+Consumer+Record+Latency+Metric)

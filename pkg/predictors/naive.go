@@ -47,9 +47,10 @@ func (s *NaivePredictor) estimateMemory(consumption int64, ramPerCore int64, cpu
 	return requests, limit
 }
 
-func (s *NaivePredictor) validateCpu(request int64, limit int64, policy *autoscalev1.ContainerResourcePolicy) (int64, int64) {
+func (s *NaivePredictor) validateCpu(request int64, limit int64, policy *autoscalev1.ContainerResourcePolicy) (int64, int64, bool) {
 	r := request
 	l := limit
+	isSaturated := false
 	if request < policy.MinAllowed.Cpu().MilliValue() {
 		r = policy.MinAllowed.Cpu().MilliValue()
 	}
@@ -60,10 +61,11 @@ func (s *NaivePredictor) validateCpu(request int64, limit int64, policy *autosca
 		l = policy.MaxAllowed.Cpu().MilliValue()
 	}
 	if request > l {
+		isSaturated = true
 		r = l
 	}
 	s.log.V(1).Info("CPU validation result", "outRequest", r, "outLimit", l)
-	return r, l
+	return r, l, isSaturated
 }
 
 func (s *NaivePredictor) validateMemory(request int64, limit int64, policy *autoscalev1.ContainerResourcePolicy) (int64, int64) {
@@ -85,7 +87,8 @@ func (s *NaivePredictor) validateMemory(request int64, limit int64, policy *auto
 	return r, l
 }
 
-func (s *NaivePredictor) Estimate(containerName string, limits *autoscalev1.ContainerResourcePolicy, partition int32) *corev1.ResourceRequirements {
+func (s *NaivePredictor) Estimate(containerName string, limits *autoscalev1.ContainerResourcePolicy, partition int32) (*corev1.ResourceRequirements, bool) {
+	isSaturated := false
 	log := s.log.WithValues("ContainerName", containerName, "partition", partition)
 	log.V(1).Info("Estimating resources")
 	expectedConsumption := s.expectedConsumption(partition)
@@ -96,7 +99,7 @@ func (s *NaivePredictor) Estimate(containerName string, limits *autoscalev1.Cont
 	log.V(1).Info("estimated Memory", "req", memoryReq, "limit", memoryLimit)
 
 	if limits != nil {
-		cpuReq, cpuLimit = s.validateCpu(cpuReq, cpuLimit, limits)
+		cpuReq, cpuLimit, isSaturated = s.validateCpu(cpuReq, cpuLimit, limits)
 		memoryReq, memoryLimit = s.validateMemory(memoryReq, memoryLimit, limits)
 	}
 
@@ -109,7 +112,7 @@ func (s *NaivePredictor) Estimate(containerName string, limits *autoscalev1.Cont
 			corev1.ResourceCPU:    *resource.NewMilliQuantity(cpuLimit, resource.DecimalSI),
 			corev1.ResourceMemory: *resource.NewMilliQuantity(memoryLimit, resource.DecimalSI),
 		},
-	}
+	}, isSaturated
 }
 
 func GetResourcePolicy(name string, spec *konsumeratorv1alpha1.ConsumerSpec) *autoscalev1.ContainerResourcePolicy {

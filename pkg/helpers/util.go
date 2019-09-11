@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -10,6 +11,7 @@ import (
 const (
 	defaultPartitionEnvKey = "KONSUMERATOR_PARTITION"
 	gomaxprocsEnvKey       = "GOMAXPROCS"
+	TimeLayout             = time.RFC3339
 )
 
 func Ptr2Int32(i int32) *int32 {
@@ -18,6 +20,14 @@ func Ptr2Int32(i int32) *int32 {
 
 func Ptr2Int64(i int64) *int64 {
 	return &i
+}
+
+func ParseTimeAnnotation(ts string) (time.Time, error) {
+	t, err := time.Parse(TimeLayout, ts)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return t, nil
 }
 
 func ParsePartitionAnnotation(partition string) (int32, error) {
@@ -63,4 +73,23 @@ func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequireme
 	env = SetEnv(env, gomaxprocsEnvKey, GomaxprocsFromResource(resources.Limits.Cpu()))
 
 	return env
+}
+
+func CmpResourceRequirements(old corev1.ResourceRequirements, new corev1.ResourceRequirements) int {
+	reqCpu := new.Requests.Cpu().Cmp(*old.Requests.Cpu())
+	limCpu := new.Limits.Cpu().Cmp(*old.Limits.Cpu())
+	reqMem := new.Requests.Memory().Cmp(*old.Requests.Memory())
+	limMem := new.Limits.Memory().Cmp(*old.Limits.Memory())
+	switch {
+	case reqCpu != 0:
+		return reqCpu
+	case limCpu != 0:
+		return limCpu
+	case reqMem != 0:
+		return reqMem
+	case limMem != 0:
+		return limMem
+	default:
+		return 0
+	}
 }

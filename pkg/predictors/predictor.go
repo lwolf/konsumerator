@@ -7,5 +7,5 @@ import (
 
 type Predictor interface {
 	// TODO: do not expose autoscalerv1 type. Replace with some internal type
-	Estimate(containerName string, limits *autoscalev1.ContainerResourcePolicy, partition int32) *corev1.ResourceRequirements
+	Estimate(containerName string, limits *autoscalev1.ContainerResourcePolicy, partition int32) (*corev1.ResourceRequirements, bool)
 }

@@ -85,6 +85,8 @@ kind-create: docker-build kind-destroy
 kind-load-image:
 	kind load docker-image --name "konsumerator" ${IMG}
 
+kind-update: docker-build kind-load-image deploy
+
 kind-apply:
 	kubectl apply -f ./hack/ci/prom.yaml -n kube-system
 	kubectl apply -f ./hack/ci/konsumerator-dashboard.yaml -n kube-system
