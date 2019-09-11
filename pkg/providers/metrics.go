@@ -2,6 +2,7 @@ package providers
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
 
 const namespace = "konsumerator"
@@ -69,6 +70,6 @@ var (
 )
 
 func initMetrics() {
-	prometheus.MustRegister(requestsTotal, requestErrors, requestDuration,
+	metrics.Registry.MustRegister(requestsTotal, requestErrors, requestDuration,
 		subRequestTotal, subRequestErrors, subRequestDuration)
 }

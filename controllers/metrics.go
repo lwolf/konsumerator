@@ -1,6 +1,9 @@
 package controllers
 
-import "github.com/prometheus/client_golang/prometheus"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
+)
 
 const namespace = "konsumerator"
 
@@ -90,7 +93,7 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(reconcileTotal, reconcileErrors,
+	metrics.Registry.MustRegister(reconcileTotal, reconcileErrors,
 		reconcileDuration, statusUpdateDuration,
 		deploysCreateTotal, deploysCreateErrors,
 		deploysDeleteTotal, deploysDeleteErrors,
