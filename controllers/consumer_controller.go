@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-
 	"github.com/mitchellh/hashstructure"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/apps/v1"
@@ -64,7 +63,7 @@ var (
 )
 
 func scalingAllowed(lastChange time.Time) bool {
-	return time.Now().Sub(lastChange) >= scaleStatePendingPeriod
+	return time.Since(lastChange) >= scaleStatePendingPeriod
 }
 
 func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) bool {
@@ -382,8 +381,7 @@ func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, 
 	}
 
 	lag := co.mp.GetLagByPartition(partition)
-	setPendingScaleUpState := co.consumer.Spec.Autoscaler.Prometheus.TolerableLag != nil && lag >= co.consumer.Spec.Autoscaler.Prometheus.TolerableLag.Duration
-	setPendingScaleDownState := co.consumer.Spec.Autoscaler.Prometheus.TolerableLag != nil && lag < co.consumer.Spec.Autoscaler.Prometheus.TolerableLag.Duration
+	isLagging := co.isLagging(lag)
 	// needsUpdate := false
 	deploy.Annotations[generationAnnotation] = co.observedGeneration()
 	deploy.Spec = co.consumer.Spec.DeploymentTemplate
@@ -404,7 +402,7 @@ func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, 
 				if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
 					// needsUpdate = true
 					setNewResources = true
-				} else if setPendingScaleUpState {
+				} else if isLagging {
 					// needsUpdate = true
 					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleUp
 					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
@@ -413,7 +411,7 @@ func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, 
 				if currentState == InstanceStatusPendingScaleDown && scalingAllowed(lastStateChange) {
 					// needsUpdate = true
 					setNewResources = true
-				} else if setPendingScaleDownState {
+				} else if !isLagging {
 					// needsUpdate = true
 					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleDown
 					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
@@ -426,17 +424,16 @@ func (co consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, 
 				"cmp", cmpRes,
 				"currentState", currentState,
 				"scallingAllowed", scalingAllowed(lastStateChange),
-				"setPendingScaleUpState", setPendingScaleUpState,
-				"setPendingScaleDownState", setPendingScaleDownState,
+				"isLagging", isLagging,
 				"setNewResources", setNewResources,
 				// "needsUpdate", needsUpdate,
 			)
-			if force || setNewResources {
-				deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
-				deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
-				container.Resources = resources
-				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
-			}
+		}
+		if force || setNewResources {
+			deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+			deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+			container.Resources = resources
+			container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
 		}
 	}
 	return deploy, nil
