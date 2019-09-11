@@ -59,14 +59,16 @@ spec:
       type: Recreate
     selector:
       matchLabels:
-        app: fake-consumer
+        app: faker
+        tier: consumer
     template:
       metadata:
         annotations:
           prometheus.io/scrape: "true"
           prometheus.io/port: "9000"
         labels:
-          app: fake-consumer
+          app: faker
+          tier: consumer
       spec:
         containers:
           - image: lwolf/faker:latest

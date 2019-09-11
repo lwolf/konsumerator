@@ -25,7 +25,7 @@ var (
 	}, []string{"partition"})
 )
 
-func runGenerator(client *redis.Client, baseProductionRate int, partition int) {
+func runGenerator(client *redis.Client, baseProductionRate int, fullPeriod int, partition int) {
 	log.Printf("starting load generation for partition %d", partition)
 	productionOffsetKey := fmt.Sprintf("%s-%d", lib.ProductionOffsetKey, partition)
 	state, err := lib.GetOffset(client, productionOffsetKey, 0)
@@ -34,7 +34,7 @@ func runGenerator(client *redis.Client, baseProductionRate int, partition int) {
 	}
 	ticker := time.NewTicker(time.Second)
 	for range ticker.C {
-		batchSize := generatePoint(float64(time.Now().Unix()), partition, baseProductionRate, 7200)
+		batchSize := generatePoint(float64(time.Now().Unix()), partition, baseProductionRate, float64(fullPeriod))
 		log.Printf("going to create batch %v", batchSize)
 		values := make([]interface{}, int(batchSize))
 		for i := range values {
@@ -63,7 +63,7 @@ func generatePoint(i float64, partition int, baseProductionRate int, resolution 
 	return offset + fuzz + (float64(baseProductionRate) * math.Sin(i*(math.Pi*2/resolution)))
 
 }
-func RunProducer(client *redis.Client, numPartitions int, baseProductionRate int, port int) {
+func RunProducer(client *redis.Client, numPartitions int, baseProductionRate int, fullPeriod int, port int) {
 	log.Printf("running the producer partitions=%d, productionRate=%d, port=%d", numPartitions, baseProductionRate, port)
 	prometheus.MustRegister(productionOffsetMetric)
 	wg := sync.WaitGroup{}
@@ -71,7 +71,7 @@ func RunProducer(client *redis.Client, numPartitions int, baseProductionRate int
 		part := i
 		go func() {
 			wg.Add(1)
-			runGenerator(client, baseProductionRate, part)
+			runGenerator(client, baseProductionRate, fullPeriod, part)
 			wg.Done()
 		}()
 	}

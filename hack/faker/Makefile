@@ -1,4 +1,4 @@
-VERSION?=v0.22
+VERSION?=v0.23
 run: redis
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/faker main.go
 	docker build -t lwolf/faker:${VERSION} .

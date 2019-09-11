@@ -16,6 +16,7 @@ type ConsumerCmd struct {
 type ProducerCmd struct {
 	NumPartitions int `arg:"--num-partitions"`
 	BaseRate      int `arg:"--base-rate"`
+	FullPeriod    int `arg:"--full-period"`
 }
 
 var args struct {
@@ -42,6 +43,7 @@ func main() {
 			redisClient,
 			args.Producer.NumPartitions,
 			args.Producer.BaseRate,
+			args.Producer.FullPeriod,
 			args.Port,
 		)
 	}
