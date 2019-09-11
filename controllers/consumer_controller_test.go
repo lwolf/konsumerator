@@ -199,11 +199,29 @@ func TestShouldUpdateMetrics(t *testing.T) {
 			expResult: true,
 			expError:  false,
 		},
-		"should fail if not prometheus autoscaler": {
+		"should fail if no autoscaler setup": {
 			consumer: &konsumeratorv1alpha1.Consumer{
 				Spec: konsumeratorv1alpha1.ConsumerSpec{
 					NumPartitions:      testInt32ToPt(1),
 					Autoscaler:         nil,
+					DeploymentTemplate: v1.DeploymentSpec{},
+				},
+				Status: konsumeratorv1alpha1.ConsumerStatus{
+					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
+					LastSyncState: map[string]konsumeratorv1alpha1.InstanceState{},
+				},
+			},
+			expResult: false,
+			expError:  true,
+		},
+		"should fail if prometheus config is missing": {
+			consumer: &konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions: testInt32ToPt(1),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "prometheus",
+						Prometheus: nil,
+					},
 					DeploymentTemplate: v1.DeploymentSpec{},
 				},
 				Status: konsumeratorv1alpha1.ConsumerStatus{
