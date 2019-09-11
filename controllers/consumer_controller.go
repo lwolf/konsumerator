@@ -400,7 +400,11 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 			cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, resources)
 			switch cmpRes {
 			case cmpResourcesEq:
-				deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusRunning)
+				if isSaturated {
+					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusSaturated)
+				} else {
+					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusRunning)
+				}
 			case cmpResourcesGt:
 				if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
 					setNewResources = true
@@ -422,6 +426,7 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 				"currentState", currentState,
 				"scallingAllowed", scalingAllowed(lastStateChange),
 				"isLagging", isLagging,
+				"isSaturated", isSaturated,
 				"setNewResources", setNewResources,
 			)
 		}
