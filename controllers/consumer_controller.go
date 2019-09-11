@@ -173,7 +173,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	for _, origDeploy := range co.toUpdateInstances {
 		deploy := origDeploy.DeepCopy()
-		deploy, err := co.updateDeployWithPredictor(deploy, predictor, true)
+		deploy, err := co.updateDeployWithPredictor(deploy, predictor)
 		if err != nil {
 			log.Error(err, "failed to update deploy")
 			continue
@@ -185,14 +185,16 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	for _, origDeploy := range co.toEstimateInstances {
 		deploy := origDeploy.DeepCopy()
-		deploy, err := co.updateDeployWithPredictor(deploy, predictor, false)
+		deploy, needsUpdate, err := co.updateEstimatedDeployWithPredictor(deploy, predictor)
 		if err != nil {
 			log.Error(err, "failed to update deploy")
 			continue
 		}
-		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
-			log.Error(err, "unable to update deployment", "deployment", deploy)
-			continue
+		if needsUpdate {
+			if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
+				log.Error(err, "unable to update deployment", "deployment", deploy)
+				continue
+			}
 		}
 	}
 	return result, nil
@@ -350,51 +352,54 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 
 func (co *consumerOperator) newDeploy(predictor predictors.Predictor, partition int32) (*appsv1.Deployment, error) {
 	deploy := co.constructDeploy(partition)
-	return co.updateDeployWithPredictor(deploy, predictor, true)
+	return co.updateDeployWithPredictor(deploy, predictor)
 }
 
-func (co *consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor, force bool) (*appsv1.Deployment, error) {
+func (co *consumerOperator) setStatusAnnotationIfChanged(annotations map[string]string, newValue string) (map[string]string, bool) {
+	currentState := annotations[scalingStatusAnnotation]
+	if currentState != newValue {
+		annotations[scalingStatusAnnotation] = newValue
+		annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+		return annotations, true
+	}
+	return annotations, false
+}
+
+func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor) (*appsv1.Deployment, bool, error) {
 	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[partitionAnnotation])
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	currentState := deploy.Annotations[scalingStatusAnnotation]
 	lastStateChange, err := helpers.ParseTimeAnnotation(deploy.Annotations[scalingStatusChangeAnnotation])
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	lag := co.mp.GetLagByPartition(partition)
 	isLagging := co.isLagging(lag)
-	if force {
-		deploy.Annotations[generationAnnotation] = co.observedGeneration()
-		deploy.Spec = co.consumer.Spec.DeploymentTemplate
-	}
+	needsUpdate := false
 	for i := range deploy.Spec.Template.Spec.Containers {
 		setNewResources := false
+		var isChangedAnnoations = false
 		container := &deploy.Spec.Template.Spec.Containers[i]
 		resources, isSaturated := estimateResources(predictor, container.Name, &co.consumer.Spec, partition)
-		if !force && time.Since(co.consumer.Status.LastSyncTime.Time) < scaleStatePendingPeriod {
+		if time.Since(co.consumer.Status.LastSyncTime.Time) < scaleStatePendingPeriod {
 			cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, resources)
 			switch cmpRes {
 			case cmpResourcesEq:
-				if currentState != InstanceStatusRunning {
-					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
-					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
-				}
+				deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusRunning)
 			case cmpResourcesGt:
 				if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
 					setNewResources = true
 				} else if isLagging {
-					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleUp
-					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusPendingScaleUp)
 				}
 			case cmpResourcesLt:
 				if currentState == InstanceStatusPendingScaleDown && scalingAllowed(lastStateChange) {
 					setNewResources = true
 				} else if !isLagging {
-					deploy.Annotations[scalingStatusAnnotation] = InstanceStatusPendingScaleDown
-					deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusPendingScaleDown)
 				}
 			}
 			co.log.Info(
@@ -408,16 +413,42 @@ func (co *consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment,
 				"setNewResources", setNewResources,
 			)
 		}
+		if isChangedAnnoations {
+			needsUpdate = true
+		}
+		if setNewResources {
+			needsUpdate = true
+			if isSaturated {
+				deploy.Annotations[scalingStatusAnnotation] = InstanceStatusSaturated
+			} else {
+				deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+			}
+			deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+			container.Resources = resources
+			container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
+		}
+	}
+	return deploy, needsUpdate, nil
+}
+
+func (co *consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor) (*appsv1.Deployment, error) {
+	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[partitionAnnotation])
+	if err != nil {
+		return nil, err
+	}
+	deploy.Annotations[generationAnnotation] = co.observedGeneration()
+	deploy.Spec = co.consumer.Spec.DeploymentTemplate
+	for i := range deploy.Spec.Template.Spec.Containers {
+		container := &deploy.Spec.Template.Spec.Containers[i]
+		resources, isSaturated := estimateResources(predictor, container.Name, &co.consumer.Spec, partition)
+		container.Resources = resources
 		if isSaturated {
 			deploy.Annotations[scalingStatusAnnotation] = InstanceStatusSaturated
 		} else {
 			deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
 		}
 		deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
-		if force || setNewResources {
-			container.Resources = resources
-			container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
-		}
+		container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
 	}
 	return deploy, nil
 }

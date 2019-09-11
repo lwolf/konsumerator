@@ -33,6 +33,7 @@ v0.5 scaling
 * [ ] Consider getting all the pods to estimate uptime/last scale event
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`
 * [ ] Per-deployment auto-scaling pause
+* [ ] Verify that scaling works with multi-container pods
 
 v0.6  - observability
 * [x] Post behaviour updates to Kubernetes events
@@ -62,4 +63,6 @@ Unsorted
 * [ ] [Feature] ? Use `scale` as a way to pause/resume the consumer
 * [ ] [Feature] ? Tool for operations `consumerctl stop/start consumer`
 * [ ] [Feature] ? Ability to set additional deployment-level annotations/labels ?
+* [ ] [Feature] Implement second metrics provider (Kafka)
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
+* [ ] [Feature] Get kafka lag directly from the prometheus [blocked](https://cwiki.apache.org/confluence/display/KAFKA/489%3A+Kafka+Consumer+Record+Latency+Metric)
