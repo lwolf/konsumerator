@@ -100,15 +100,22 @@ type ConsumerReconciler struct {
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
 
 func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	start := time.Now()
+	defer func() {
+		reconcileDuration.WithLabelValues(req.Name).Observe(time.Since(start).Seconds())
+	}()
+
 	ctx := context.Background()
 	log := r.Log.WithValues("consumer", req.NamespacedName)
 	result := ctrl.Result{RequeueAfter: defaultMinSyncPeriod}
+	reconcileTotal.WithLabelValues(req.Name).Inc()
 
 	var consumer konsumeratorv1alpha1.Consumer
 	if err := r.Get(ctx, req.NamespacedName, &consumer); err != nil {
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
 		// requeue (we'll need to wait for a new notification), and we can get them
 		// on deleted requests.
+		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, errors.IgnoreNotFound(err)
 	}
 	var managedDeploys v1.DeploymentList
@@ -116,11 +123,13 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		eMsg := "unable to list managed deployments"
 		log.Error(err, eMsg)
 		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)
+		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, err
 	}
 
 	co, err := newConsumerOperator(log, &consumer, managedDeploys)
 	if err != nil {
+		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, err
 	}
 	log.V(1).Info(
@@ -135,29 +144,36 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		"toEstimate", len(co.toEstimateInstances),
 	)
 
+	start = time.Now()
 	if err := r.Status().Update(ctx, co.consumer); errors.IgnoreConflict(err) != nil {
 		eMsg := "unable to update Consumer status"
 		log.Error(err, eMsg)
 		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
+		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return result, err
 	}
+	statusUpdateDuration.WithLabelValues(req.Name).Observe(time.Since(start).Seconds())
 
 	predictor := predictors.NewNaivePredictor(log, co.mp, co.consumer.Spec.Autoscaler.Prometheus)
 	for _, partition := range co.missingIds {
 		newD, err := co.newDeploy(predictor, partition)
 		if err != nil {
+			deploysCreateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "failed to create new deploy")
 			continue
 		}
 		if err := ctrl.SetControllerReference(co.consumer, newD, r.Scheme); err != nil {
+			deploysCreateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "unable to set owner reference for the new Deployment", "deployment", newD, "partition", partition)
 			continue
 		}
 		if err := r.Create(ctx, newD); errors.IgnoreAlreadyExists(err) != nil {
+			deploysCreateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "unable to create new Deployment", "deployment", newD, "partition", partition)
 			continue
 		}
 		log.V(1).Info("created new deployment", "deployment", newD, "partition", partition)
+		deploysCreateTotal.WithLabelValues(req.Name).Inc()
 		r.Recorder.Eventf(
 			co.consumer,
 			corev1.EventTypeNormal,
@@ -169,7 +185,10 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	for _, deploy := range co.toRemoveInstances {
 		if err := r.Delete(ctx, deploy); errors.IgnoreNotFound(err) != nil {
 			log.Error(err, "unable to delete deployment", "deployment", deploy)
+			deploysDeleteErrors.WithLabelValues(req.Name).Inc()
+			continue
 		}
+		deploysDeleteTotal.WithLabelValues(req.Name).Inc()
 		r.Recorder.Eventf(
 			co.consumer,
 			corev1.EventTypeNormal,
@@ -182,26 +201,32 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		deploy := origDeploy.DeepCopy()
 		deploy, err := co.updateDeployWithPredictor(deploy, predictor)
 		if err != nil {
+			deploysUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "failed to update deploy")
 			continue
 		}
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
+			deploysUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "unable to update deployment", "deployment", deploy)
 			continue
 		}
+		deploysUpdateTotal.WithLabelValues(req.Name).Inc()
 	}
 	for _, origDeploy := range co.toEstimateInstances {
 		deploy := origDeploy.DeepCopy()
 		deploy, needsUpdate, err := co.updateEstimatedDeployWithPredictor(deploy, predictor)
 		if err != nil {
+			deploysUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "failed to update deploy")
 			continue
 		}
 		if needsUpdate {
 			if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
+				deploysUpdateErrors.WithLabelValues(req.Name).Inc()
 				log.Error(err, "unable to update deployment", "deployment", deploy)
 				continue
 			}
+			deploysUpdateTotal.WithLabelValues(req.Name).Inc()
 		}
 	}
 	return result, nil
