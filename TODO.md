@@ -28,7 +28,7 @@ v0.5 scaling
 * [x] Scale only after X periods of lag/no lag
 * [x] Introduce another deployment status - `SATURATED` to indicate that we don't have
     enough resources for it
-* [ ] Need a way to expose resource saturation level (how many CPUs are lacking)
+* [x] Need a way to expose resource saturation level (how many CPUs are lacking)
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 
 * [ ] Consider getting all the pods to estimate uptime/last scale event
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`

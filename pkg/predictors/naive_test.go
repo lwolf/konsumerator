@@ -10,6 +10,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/providers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -65,16 +66,16 @@ func TestEstimateCpu(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{log: testLogger()}
-		cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore)
-		if cpuR != tt.expectedCpuR {
-			t.Logf("%s: expected Request CPU %d, got %d", testName, tt.expectedCpuR, cpuR)
-			t.Fail()
-		}
-		if cpuL != tt.expectedCpuL {
-			t.Logf("%s: expected Limit CPU %d, got %d", testName, tt.expectedCpuL, cpuL)
-			t.Fail()
-		}
+		t.Run(testName, func(t *testing.T) {
+			estimator := NaivePredictor{log: testLogger()}
+			cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore)
+			if cpuR != tt.expectedCpuR {
+				t.Fatalf("expected Request CPU %d, got %d", tt.expectedCpuR, cpuR)
+			}
+			if cpuL != tt.expectedCpuL {
+				t.Fatalf("expected Limit CPU %d, got %d", tt.expectedCpuL, cpuL)
+			}
+		})
 	}
 }
 
@@ -97,18 +98,17 @@ func TestEstimateMemory(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{log: testLogger()}
-		memoryR, memoryL := estimator.estimateMemory(tt.consumption, tt.ramPerCore, tt.cpuR, tt.cpuL)
-		if memoryR != tt.expectedMemoryR {
-			t.Logf("%s: expected Request Memory %d, got %d", testName, tt.expectedMemoryR, memoryR)
-			t.Fail()
-		}
-		if memoryL != tt.expectedMemoryL {
-			t.Logf("%s: expected Limit Memory %d, got %d", testName, tt.expectedMemoryL, memoryL)
-			t.Fail()
-		}
+		t.Run(testName, func(t *testing.T) {
+			estimator := NaivePredictor{log: testLogger()}
+			memoryR, memoryL := estimator.estimateMemory(tt.consumption, tt.ramPerCore, tt.cpuR, tt.cpuL)
+			if memoryR != tt.expectedMemoryR {
+				t.Fatalf("expected Request Memory %d, got %d", tt.expectedMemoryR, memoryR)
+			}
+			if memoryL != tt.expectedMemoryL {
+				t.Fatalf("expected Limit Memory %d, got %d", tt.expectedMemoryL, memoryL)
+			}
+		})
 	}
-
 }
 
 func TestExpectedConsumption(t *testing.T) {
@@ -132,16 +132,17 @@ func TestExpectedConsumption(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{
-			lagSource: tt.lagStore,
-			promSpec:  &tt.promSpec,
-			log:       testLogger(),
-		}
-		actual := estimator.expectedConsumption(tt.partition)
-		if actual != tt.expectedConsumption {
-			t.Logf("%s: expected consumption %d, got %d", testName, tt.expectedConsumption, actual)
-			t.Fail()
-		}
+		t.Run(testName, func(t *testing.T) {
+			estimator := NaivePredictor{
+				lagSource: tt.lagStore,
+				promSpec:  &tt.promSpec,
+				log:       testLogger(),
+			}
+			actual := estimator.expectedConsumption(tt.partition)
+			if actual != tt.expectedConsumption {
+				t.Fatalf("Expected consumption %d, got %d", tt.expectedConsumption, actual)
+			}
+		})
 	}
 }
 
@@ -210,28 +211,17 @@ func TestEstimateResources(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{
-			lagSource: tt.lagStore,
-			promSpec:  &tt.promSpec,
-			log:       testLogger(),
-		}
-		resources := estimator.Estimate(tt.containerName, tt.partition)
-		if resources.Requests.Cpu().MilliValue() != tt.expectedResources.Requests.Cpu().MilliValue() {
-			t.Logf("%s: expected request cpu %s, got %s", testName, tt.expectedResources.Requests.Cpu().String(), resources.Requests.Cpu().String())
-			t.Fail()
-		}
-		if resources.Requests.Memory().MilliValue() != tt.expectedResources.Requests.Memory().MilliValue() {
-			t.Logf("%s: expected request memory %s, got %s", testName, tt.expectedResources.Requests.Memory().String(), resources.Requests.Memory().String())
-			t.Fail()
-		}
-		if resources.Limits.Cpu().MilliValue() != tt.expectedResources.Limits.Cpu().MilliValue() {
-			t.Logf("%s: expected limit cpu %s, got %s", testName, tt.expectedResources.Limits.Cpu().String(), resources.Limits.Cpu().String())
-			t.Fail()
-		}
-		if resources.Limits.Memory().MilliValue() != tt.expectedResources.Limits.Memory().MilliValue() {
-			t.Logf("%s: expected limit memory %s, got %s", testName, tt.expectedResources.Limits.Memory().String(), resources.Limits.Memory().String())
-			t.Fail()
-		}
+		t.Run(testName, func(t *testing.T) {
+			estimator := NaivePredictor{
+				lagSource: tt.lagStore,
+				promSpec:  &tt.promSpec,
+				log:       testLogger(),
+			}
+			resources := estimator.Estimate(tt.containerName, tt.partition)
+			if helpers.CmpResourceRequirements(*resources, tt.expectedResources) != 0 {
+				t.Fatalf("Resource estimation mismatch, expected %v, got %v", tt.expectedResources, resources)
+			}
+		})
 	}
 }
 
