@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -152,15 +151,13 @@ func TestEstimateResources(t *testing.T) {
 		promSpec          konsumeratorv1alpha1.PrometheusAutoscalerSpec
 		lagStore          providers.MetricsProvider
 		partition         int32
-		limits            *autoscalev1.ContainerResourcePolicy
 		expectedResources corev1.ResourceRequirements
 	}{
-		"base estimation without limits": {
+		"base estimation": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 20000}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
 			partition:     0,
-			limits:        nil,
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("2"),
@@ -172,12 +169,11 @@ func TestEstimateResources(t *testing.T) {
 				},
 			},
 		},
-		"low production rate without limits": {
+		"low production rate": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
 			partition:     0,
-			limits:        nil,
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("100m"),
@@ -189,84 +185,19 @@ func TestEstimateResources(t *testing.T) {
 				},
 			},
 		},
-		"low production rate with limits": {
-			containerName: "test",
-			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:      NewMockProvider(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
-			partition:     0,
-			limits: &autoscalev1.ContainerResourcePolicy{
-				ContainerName: "test",
-				MinAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("250m"),
-					corev1.ResourceMemory: resource.MustParse("250M"),
-				},
-				MaxAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
-			expectedResources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("250m"),
-					corev1.ResourceMemory: resource.MustParse("250M"),
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
-		},
-		"base estimation over the limits": {
-			containerName: "test",
-			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:      NewMockProvider(map[int32]int64{0: 20000}, map[int32]int64{0: 20000}, map[int32]int64{0: 0}),
-			partition:     0,
-			limits: &autoscalev1.ContainerResourcePolicy{
-				ContainerName: "test",
-				MinAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
-				},
-				MaxAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
-			expectedResources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
-		},
-		"allocate minimum resources if no metrics data provided (dummy provider)": {
+		"allocate no resources if no metrics data provided (dummy provider)": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
 			partition:     0,
-			limits: &autoscalev1.ContainerResourcePolicy{
-				ContainerName: "test",
-				MinAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
-				},
-				MaxAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
+					corev1.ResourceCPU:    resource.MustParse("0"),
+					corev1.ResourceMemory: resource.MustParse("0"),
 				},
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
+					corev1.ResourceCPU:    resource.MustParse("0"),
+					corev1.ResourceMemory: resource.MustParse("0"),
 				},
 			},
 		},
@@ -275,7 +206,6 @@ func TestEstimateResources(t *testing.T) {
 			promSpec:          *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:          NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
 			partition:         0,
-			limits:            nil,
 			expectedResources: corev1.ResourceRequirements{},
 		},
 	}

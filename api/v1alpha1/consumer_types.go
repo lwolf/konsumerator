@@ -30,9 +30,6 @@ const (
 	AutoscalerTypeNone       AutoscalerType = ""
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
 // ConsumerSpec defines the desired state of Consumer
 type ConsumerSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
