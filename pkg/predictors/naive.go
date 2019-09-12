@@ -4,7 +4,6 @@ import (
 	"math"
 
 	"github.com/go-logr/logr"
-	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -47,61 +46,20 @@ func (s *NaivePredictor) estimateMemory(consumption int64, ramPerCore int64, cpu
 	return requests, limit
 }
 
-func (s *NaivePredictor) validateCpu(request int64, limit int64, policy *autoscalev1.ContainerResourcePolicy) (int64, int64, bool) {
-	r := request
-	l := limit
-	isSaturated := false
-	if request < policy.MinAllowed.Cpu().MilliValue() {
-		r = policy.MinAllowed.Cpu().MilliValue()
-	}
-	if limit < policy.MinAllowed.Cpu().MilliValue() {
-		l = policy.MinAllowed.Cpu().MilliValue()
-	}
-	if limit > policy.MaxAllowed.Cpu().MilliValue() {
-		l = policy.MaxAllowed.Cpu().MilliValue()
-	}
-	if request > l {
-		isSaturated = true
-		r = l
-	}
-	s.log.V(1).Info("CPU validation result", "outRequest", r, "outLimit", l)
-	return r, l, isSaturated
-}
-
-func (s *NaivePredictor) validateMemory(request int64, limit int64, policy *autoscalev1.ContainerResourcePolicy) (int64, int64) {
-	r := request
-	l := limit
-	if request < policy.MinAllowed.Memory().MilliValue() {
-		r = policy.MinAllowed.Memory().MilliValue()
-	}
-	if limit < policy.MinAllowed.Memory().MilliValue() {
-		l = policy.MinAllowed.Memory().MilliValue()
-	}
-	if limit > policy.MaxAllowed.Memory().MilliValue() {
-		l = policy.MaxAllowed.Memory().MilliValue()
-	}
-	if request > l {
-		r = l
-	}
-	s.log.V(1).Info("Memory validation result", "outRequest", r, "outLimit", l)
-	return r, l
-}
-
-func (s *NaivePredictor) Estimate(containerName string, limits *autoscalev1.ContainerResourcePolicy, partition int32) (*corev1.ResourceRequirements, bool) {
-	isSaturated := false
-	log := s.log.WithValues("ContainerName", containerName, "partition", partition)
-	log.V(1).Info("Estimating resources")
+func (s *NaivePredictor) Estimate(containerName string, partition int32) *corev1.ResourceRequirements {
 	expectedConsumption := s.expectedConsumption(partition)
-	log.V(1).Info("expected consumption", "value", expectedConsumption)
 	cpuReq, cpuLimit := s.estimateCpu(expectedConsumption, *s.promSpec.RatePerCore)
-	log.V(1).Info("estimated CPU", "req", cpuReq, "limit", cpuLimit)
 	memoryReq, memoryLimit := s.estimateMemory(expectedConsumption, s.promSpec.RamPerCore.MilliValue(), cpuReq, cpuLimit)
-	log.V(1).Info("estimated Memory", "req", memoryReq, "limit", memoryLimit)
-
-	if limits != nil {
-		cpuReq, cpuLimit, isSaturated = s.validateCpu(cpuReq, cpuLimit, limits)
-		memoryReq, memoryLimit = s.validateMemory(memoryReq, memoryLimit, limits)
-	}
+	s.log.V(1).Info(
+		"resource estimation results",
+		"containerName", containerName,
+		"partition", partition,
+		"expected consumption", expectedConsumption,
+		"cpuReq", cpuReq,
+		"cpuLimit", cpuLimit,
+		"memReq", memoryReq,
+		"memLimit", memoryLimit,
+	)
 
 	return &corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
@@ -112,14 +70,5 @@ func (s *NaivePredictor) Estimate(containerName string, limits *autoscalev1.Cont
 			corev1.ResourceCPU:    *resource.NewMilliQuantity(cpuLimit, resource.DecimalSI),
 			corev1.ResourceMemory: *resource.NewMilliQuantity(memoryLimit, resource.DecimalSI),
 		},
-	}, isSaturated
-}
-
-func GetResourcePolicy(name string, spec *konsumeratorv1alpha1.ConsumerSpec) *autoscalev1.ContainerResourcePolicy {
-	for _, cp := range spec.ResourcePolicy.ContainerPolicies {
-		if cp.ContainerName == name {
-			return &cp
-		}
 	}
-	return nil
 }

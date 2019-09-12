@@ -35,6 +35,7 @@ import (
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	"github.com/lwolf/konsumerator/pkg/errors"
 	"github.com/lwolf/konsumerator/pkg/helpers"
+	"github.com/lwolf/konsumerator/pkg/limiters"
 	"github.com/lwolf/konsumerator/pkg/predictors"
 	"github.com/lwolf/konsumerator/pkg/providers"
 )
@@ -48,6 +49,7 @@ const (
 	partitionAnnotation           = "konsumerator.lwolf.org/partition"
 	disableAutoscalerAnnotation   = "konsumerator.lwolf.org/disable-autoscaler"
 	generationAnnotation          = "konsumerator.lwolf.org/generation"
+	cpuSaturationLevel            = "konsumerator.lwolf.org/cpu-saturation-level"
 	scalingStatusAnnotation       = "konsumerator.lwolf.org/scaling-status"
 	scalingStatusChangeAnnotation = "konsumerator.lwolf.org/scaling-status-change"
 	ownerKey                      = ".metadata.controller"
@@ -256,8 +258,9 @@ func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 type consumerOperator struct {
 	consumer *konsumeratorv1alpha1.Consumer
-	mp       providers.MetricsProvider
+	limiter  limiters.ResourceLimiter
 	log      logr.Logger
+	mp       providers.MetricsProvider
 	// XXX: should it be a part of mp?
 	metricsUpdated bool
 
@@ -279,6 +282,7 @@ func newConsumerOperator(log logr.Logger, consumer *konsumeratorv1alpha1.Consume
 	consumer.Status.ObservedGeneration = helpers.Ptr2Int64(int64(hash))
 	co := &consumerOperator{
 		consumer: consumer,
+		limiter:  limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, log),
 		log:      log,
 	}
 	co.mp = co.newMetricsProvider()
@@ -420,15 +424,17 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 		setNewResources := false
 		var isChangedAnnoations = false
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		resources, isSaturated := estimateResources(predictor, container.Name, &co.consumer.Spec, partition)
+		resources, underProvision := estimateResources(partition, container.Name, predictor, co.limiter)
 		if time.Since(co.consumer.Status.LastSyncTime.Time) < scaleStatePendingPeriod {
 			cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, resources)
 			switch cmpRes {
 			case cmpResourcesEq:
-				if isSaturated {
+				if underProvision > 0 {
 					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusSaturated)
+					deploy.Annotations[cpuSaturationLevel] = strconv.Itoa(int(underProvision))
 				} else {
 					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusRunning)
+					delete(deploy.Annotations, cpuSaturationLevel)
 				}
 			case cmpResourcesGt:
 				if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
@@ -451,7 +457,7 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 				"currentState", currentState,
 				"scallingAllowed", scalingAllowed(lastStateChange),
 				"isLagging", isLagging,
-				"isSaturated", isSaturated,
+				"saturationLevel", underProvision,
 				"setNewResources", setNewResources,
 			)
 		}
@@ -460,10 +466,12 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 		}
 		if setNewResources {
 			needsUpdate = true
-			if isSaturated {
+			if underProvision > 0 {
+				deploy.Annotations[cpuSaturationLevel] = strconv.Itoa(int(underProvision))
 				deploy.Annotations[scalingStatusAnnotation] = InstanceStatusSaturated
 			} else {
 				deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+				delete(deploy.Annotations, cpuSaturationLevel)
 			}
 			deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
 			container.Resources = resources
@@ -482,12 +490,14 @@ func (co *consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment,
 	deploy.Spec = co.consumer.Spec.DeploymentTemplate
 	for i := range deploy.Spec.Template.Spec.Containers {
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		resources, isSaturated := estimateResources(predictor, container.Name, &co.consumer.Spec, partition)
+		resources, underProvision := estimateResources(partition, container.Name, predictor, co.limiter)
 		container.Resources = resources
-		if isSaturated {
+		if underProvision > 0 {
 			deploy.Annotations[scalingStatusAnnotation] = InstanceStatusSaturated
+			deploy.Annotations[cpuSaturationLevel] = strconv.Itoa(int(underProvision))
 		} else {
 			deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+			delete(deploy.Annotations, cpuSaturationLevel)
 		}
 		deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
 		container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
@@ -515,8 +525,9 @@ func (co *consumerOperator) constructDeploy(partition int32) *appsv1.Deployment 
 	return deploy
 }
 
-func estimateResources(predictor predictors.Predictor, containerName string, consumerSpec *konsumeratorv1alpha1.ConsumerSpec, partition int32) (corev1.ResourceRequirements, bool) {
-	limits := predictors.GetResourcePolicy(containerName, consumerSpec)
-	resources, isSaturated := predictor.Estimate(containerName, limits, partition)
-	return *resources, isSaturated
+func estimateResources(partition int32, containerName string, predictor predictors.Predictor, limiter limiters.ResourceLimiter) (corev1.ResourceRequirements, int64) {
+	estimates := predictor.Estimate(containerName, partition)
+	resources := limiter.ApplyLimits(containerName, estimates)
+	reqDiff := estimates.Requests.Cpu().MilliValue() - resources.Requests.Cpu().MilliValue()
+	return *resources, reqDiff
 }
