@@ -71,7 +71,50 @@ func TestNewConsumerOperator(t *testing.T) {
 				Paused:   testInt32ToPt(1),
 				Lagging:  testInt32ToPt(0),
 				Missing:  testInt32ToPt(9),
-				Outdated: testInt32ToPt(1),
+				Outdated: testInt32ToPt(0),
+			},
+		},
+		{
+			"2 paused deployments",
+			&konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions: testInt32ToPt(10),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "",
+						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{},
+					},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
+				},
+			},
+			appsv1.DeploymentList{
+				Items: []appsv1.Deployment{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								partitionAnnotation:         "6",
+								disableAutoscalerAnnotation: "true",
+							},
+						},
+						Status: appsv1.DeploymentStatus{Replicas: 1},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								partitionAnnotation:         "5",
+								disableAutoscalerAnnotation: "true",
+							},
+						},
+						Status: appsv1.DeploymentStatus{Replicas: 1},
+					},
+				},
+			},
+			konsumeratorv1alpha1.ConsumerStatus{
+				Expected: testInt32ToPt(10),
+				Running:  testInt32ToPt(0),
+				Paused:   testInt32ToPt(2),
+				Lagging:  testInt32ToPt(0),
+				Missing:  testInt32ToPt(8),
+				Outdated: testInt32ToPt(0),
 			},
 		},
 	}
