@@ -355,13 +355,14 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 		trackedPartitions[partition] = true
 		lag := co.mp.GetLagByPartition(partition)
 		co.log.Info("lag per partition", "partition", partition, "lag", lag)
+		if deployIsPaused(deploy) {
+			co.pausedIds = append(co.pausedIds, partition)
+			continue
+		} else {
+			co.runningIds = append(co.runningIds, partition)
+		}
 		if co.isLagging(lag) {
 			co.laggingIds = append(co.laggingIds, partition)
-		}
-		if deploy.Status.Replicas > 0 {
-			co.runningIds = append(co.runningIds, partition)
-		} else {
-			co.pausedIds = append(co.pausedIds, partition)
 		}
 		if partition >= *co.consumer.Spec.NumPartitions {
 			co.toRemoveInstances = append(co.toRemoveInstances, deploy)
@@ -530,4 +531,9 @@ func estimateResources(partition int32, containerName string, predictor predicto
 	resources := limiter.ApplyLimits(containerName, estimates)
 	reqDiff := estimates.Requests.Cpu().MilliValue() - resources.Requests.Cpu().MilliValue()
 	return *resources, reqDiff
+}
+
+func deployIsPaused(deploy *appsv1.Deployment) bool {
+	_, pausedAnnotation := deploy.Annotations[disableAutoscalerAnnotation]
+	return deploy.Status.Replicas == 0 || pausedAnnotation
 }
