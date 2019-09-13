@@ -1,11 +1,11 @@
 package controllers
 
 import (
-	v1 "k8s.io/api/apps/v1"
 	"testing"
 	"time"
 
 	tlog "github.com/go-logr/logr/testing"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -20,7 +20,7 @@ func TestNewConsumerOperator(t *testing.T) {
 	testCases := []struct {
 		name           string
 		consumer       *konsumeratorv1alpha1.Consumer
-		deploys        v1.DeploymentList
+		deploys        appsv1.DeploymentList
 		expectedStatus konsumeratorv1alpha1.ConsumerStatus
 	}{
 		{
@@ -29,10 +29,10 @@ func TestNewConsumerOperator(t *testing.T) {
 				Spec: konsumeratorv1alpha1.ConsumerSpec{
 					NumPartitions:      testInt32ToPt(10),
 					Autoscaler:         nil,
-					DeploymentTemplate: v1.DeploymentSpec{},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 			},
-			v1.DeploymentList{},
+			appsv1.DeploymentList{},
 			konsumeratorv1alpha1.ConsumerStatus{
 				Expected: testInt32ToPt(10),
 				Running:  testInt32ToPt(0),
@@ -51,11 +51,11 @@ func TestNewConsumerOperator(t *testing.T) {
 						Mode:       "",
 						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{},
 					},
-					DeploymentTemplate: v1.DeploymentSpec{},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 			},
-			v1.DeploymentList{
-				Items: []v1.Deployment{
+			appsv1.DeploymentList{
+				Items: []appsv1.Deployment{
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
@@ -71,7 +71,50 @@ func TestNewConsumerOperator(t *testing.T) {
 				Paused:   testInt32ToPt(1),
 				Lagging:  testInt32ToPt(0),
 				Missing:  testInt32ToPt(9),
-				Outdated: testInt32ToPt(1),
+				Outdated: testInt32ToPt(0),
+			},
+		},
+		{
+			"2 paused deployments",
+			&konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions: testInt32ToPt(10),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "",
+						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{},
+					},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
+				},
+			},
+			appsv1.DeploymentList{
+				Items: []appsv1.Deployment{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								partitionAnnotation:         "6",
+								disableAutoscalerAnnotation: "true",
+							},
+						},
+						Status: appsv1.DeploymentStatus{Replicas: 1},
+					},
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								partitionAnnotation:         "5",
+								disableAutoscalerAnnotation: "true",
+							},
+						},
+						Status: appsv1.DeploymentStatus{Replicas: 1},
+					},
+				},
+			},
+			konsumeratorv1alpha1.ConsumerStatus{
+				Expected: testInt32ToPt(10),
+				Running:  testInt32ToPt(0),
+				Paused:   testInt32ToPt(2),
+				Lagging:  testInt32ToPt(0),
+				Missing:  testInt32ToPt(8),
+				Outdated: testInt32ToPt(0),
 			},
 		},
 	}
@@ -135,7 +178,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 						Mode:       "prometheus",
 						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
 					},
-					DeploymentTemplate: v1.DeploymentSpec{},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 				Status: konsumeratorv1alpha1.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
@@ -153,7 +196,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 						Mode:       "prometheus",
 						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
 					},
-					DeploymentTemplate: v1.DeploymentSpec{},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 				Status: konsumeratorv1alpha1.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -1)},
@@ -171,7 +214,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 						Mode:       "prometheus",
 						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
 					},
-					DeploymentTemplate: v1.DeploymentSpec{},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 				Status: konsumeratorv1alpha1.ConsumerStatus{
 					LastSyncTime:  nil,
@@ -189,7 +232,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 						Mode:       "prometheus",
 						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
 					},
-					DeploymentTemplate: v1.DeploymentSpec{},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 				Status: konsumeratorv1alpha1.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -1)},
@@ -204,7 +247,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 				Spec: konsumeratorv1alpha1.ConsumerSpec{
 					NumPartitions:      testInt32ToPt(1),
 					Autoscaler:         nil,
-					DeploymentTemplate: v1.DeploymentSpec{},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 				Status: konsumeratorv1alpha1.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
@@ -222,7 +265,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 						Mode:       "prometheus",
 						Prometheus: nil,
 					},
-					DeploymentTemplate: v1.DeploymentSpec{},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 				Status: konsumeratorv1alpha1.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
@@ -241,6 +284,61 @@ func TestShouldUpdateMetrics(t *testing.T) {
 			}
 			if (err != nil) != tt.expError {
 				t.Fatalf("Error check, expected %v, got %v", tt.expError, err != nil)
+			}
+		})
+	}
+}
+
+func TestDeployIsPaused(t *testing.T) {
+	testCases := map[string]struct {
+		replicas    int32
+		annotations map[string]string
+		want        bool
+	}{
+		"status is paused if scaled to 0": {
+			replicas:    0,
+			annotations: map[string]string{"key": ":value"},
+			want:        true,
+		},
+		"status is paused if annotation is set to something": {
+			replicas:    1,
+			annotations: map[string]string{disableAutoscalerAnnotation: "true"},
+			want:        true,
+		},
+		"status is paused if annotation is set to empty string": {
+			replicas:    1,
+			annotations: map[string]string{disableAutoscalerAnnotation: ""},
+			want:        true,
+		},
+		"status not paused if no scaling annotation preset": {
+			replicas:    1,
+			annotations: map[string]string{"key": "value"},
+			want:        false,
+		},
+		"status not paused if annotations are missing": {
+			replicas:    1,
+			annotations: nil,
+			want:        false,
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			deploy := &appsv1.Deployment{
+				TypeMeta: metav1.TypeMeta{},
+				ObjectMeta: metav1.ObjectMeta{
+					Annotations: tc.annotations,
+					Name:        "test",
+				},
+				Spec: appsv1.DeploymentSpec{
+					Replicas: &tc.replicas,
+				},
+				Status: appsv1.DeploymentStatus{
+					Replicas: tc.replicas,
+				},
+			}
+			got := deployIsPaused(deploy)
+			if got != tc.want {
+				t.Fatalf("expected %v, but got %v", tc.want, got)
 			}
 		})
 	}

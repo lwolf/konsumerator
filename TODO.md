@@ -29,10 +29,7 @@ v0.5 scaling
 * [x] Introduce another deployment status - `SATURATED` to indicate that we don't have
     enough resources for it
 * [x] Need a way to expose resource saturation level (how many CPUs are lacking)
-* [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 
-* [ ] Consider getting all the pods to estimate uptime/last scale event
-* [ ] Consider using number of messages in all estimates instead of `projected lag time`
-* [ ] Per-deployment auto-scaling pause
+* [x] Per-deployment auto-scaling pause
 * [ ] Verify that scaling works with multi-container pods
 
 v0.6  - observability
@@ -43,6 +40,10 @@ v0.6  - observability
 
 v0.7
 * [ ] Verify that HA mode works
+* [ ] Verify that system operates as expected when autoscaling is disabled 
+* [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 
+* [ ] Consider using number of messages in all estimates instead of `projected lag time`
+* [ ] Add totalMaxAllowed which will limit total number of cores available for the consumer
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
 * [ ] Add ignore list of container names (do not do anything with sidecars)
@@ -58,11 +59,11 @@ Unsorted
 * [ ] [Feature] call webhooks on scaling events
 * [ ] [Feature] Vertical auto-scaling of balanced workloads (single deployment)
 * [ ] [Feature] Fully dynamic resource allocations based on historic data
-* [ ] [Feature] ? Add totalMaxAllowed which will limit total number of cores available for the consumer
 * [ ] [Feature] ? consider adding support for VPA/HPA 
 * [ ] [Feature] ? Use `scale` as a way to pause/resume the consumer
 * [ ] [Feature] ? Tool for operations `consumerctl stop/start consumer`
 * [ ] [Feature] ? Ability to set additional deployment-level annotations/labels ?
+* [ ] [Feature] ? Consider getting all the pods to estimate uptime and avoid to frequent restarts
 * [ ] [Feature] Implement second metrics provider (Kafka)
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
 * [ ] [Feature] Get kafka lag directly from the prometheus [blocked](https://cwiki.apache.org/confluence/display/KAFKA/489%3A+Kafka+Consumer+Record+Latency+Metric)
