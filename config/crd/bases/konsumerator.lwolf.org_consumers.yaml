@@ -5215,6 +5215,15 @@ spec:
                         type: string
                     type: object
                   type: array
+                globalPolicy:
+                  properties:
+                    maxAllowed:
+                      additionalProperties:
+                        type: string
+                      description: Specifies the maximum amount of resources that
+                        could be allocated to the entire application
+                      type: object
+                  type: object
               type: object
           required:
           - numPartitions

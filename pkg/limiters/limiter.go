@@ -4,7 +4,7 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
+	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -13,62 +13,39 @@ type ResourceLimiter interface {
 }
 
 type InstanceLimiter struct {
-	policy *autoscalev1.PodResourcePolicy
+	policy *konsumeratorv1alpha1.ResourcePolicy
 	log    logr.Logger
 }
 
-func NewInstanceLimiter(policy *autoscalev1.PodResourcePolicy, log logr.Logger) *InstanceLimiter {
+func NewInstanceLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, log logr.Logger) *InstanceLimiter {
 	return &InstanceLimiter{
 		policy: policy,
 		log:    log,
 	}
 }
 
-func (il *InstanceLimiter) validateCpu(request int64, limit int64, policy *autoscalev1.ContainerResourcePolicy) (int64, int64) {
-	r := request
-	l := limit
-	if request < policy.MinAllowed.Cpu().MilliValue() {
-		r = policy.MinAllowed.Cpu().MilliValue()
-	}
-	if limit < policy.MinAllowed.Cpu().MilliValue() {
-		l = policy.MinAllowed.Cpu().MilliValue()
-	}
-	if limit > policy.MaxAllowed.Cpu().MilliValue() {
-		l = policy.MaxAllowed.Cpu().MilliValue()
-	}
-	if request > l {
-		r = l
-	}
+func (il *InstanceLimiter) validateCpu(request, limit *resource.Quantity, policy *konsumeratorv1alpha1.ContainerResourcePolicy) (int64, int64) {
+	l := adjustQuantity(limit, policy.MinAllowed.Cpu(), policy.MaxAllowed.Cpu())
+	r := adjustQuantity(request, policy.MinAllowed.Cpu(), l)
+
 	il.log.V(1).Info("CPU validation result", "outRequest", r, "outLimit", l)
-	return r, l
+	return r.MilliValue(), l.MilliValue()
 }
 
-func (il *InstanceLimiter) validateMemory(request int64, limit int64, policy *autoscalev1.ContainerResourcePolicy) (int64, int64) {
-	r := request
-	l := limit
-	if request < policy.MinAllowed.Memory().MilliValue() {
-		r = policy.MinAllowed.Memory().MilliValue()
-	}
-	if limit < policy.MinAllowed.Memory().MilliValue() {
-		l = policy.MinAllowed.Memory().MilliValue()
-	}
-	if limit > policy.MaxAllowed.Memory().MilliValue() {
-		l = policy.MaxAllowed.Memory().MilliValue()
-	}
-	if request > l {
-		r = l
-	}
+func (il *InstanceLimiter) validateMemory(request, limit *resource.Quantity, policy *konsumeratorv1alpha1.ContainerResourcePolicy) (int64, int64) {
+	l := adjustQuantity(limit, policy.MinAllowed.Memory(), policy.MaxAllowed.Memory())
+	r := adjustQuantity(request, policy.MinAllowed.Memory(), l)
+
 	il.log.V(1).Info("Memory validation result", "outRequest", r, "outLimit", l)
-	return r, l
+	return r.MilliValue(), l.MilliValue()
 }
-
 func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.ResourceRequirements) *corev1.ResourceRequirements {
 	limits := il.containerResourcePolicy(containerName)
 	if limits == nil {
 		return resources
 	}
-	cpuReq, cpuLimit := il.validateCpu(resources.Requests.Cpu().MilliValue(), resources.Limits.Cpu().MilliValue(), limits)
-	memoryReq, memoryLimit := il.validateMemory(resources.Requests.Memory().MilliValue(), resources.Requests.Memory().MilliValue(), limits)
+	cpuReq, cpuLimit := il.validateCpu(resources.Requests.Cpu(), resources.Limits.Cpu(), limits)
+	memoryReq, memoryLimit := il.validateMemory(resources.Requests.Memory(), resources.Limits.Memory(), limits)
 	return &corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    *resource.NewMilliQuantity(cpuReq, resource.DecimalSI),
@@ -81,11 +58,22 @@ func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.R
 	}
 }
 
-func (il *InstanceLimiter) containerResourcePolicy(name string) *autoscalev1.ContainerResourcePolicy {
+func (il *InstanceLimiter) containerResourcePolicy(name string) *konsumeratorv1alpha1.ContainerResourcePolicy {
 	for _, cp := range il.policy.ContainerPolicies {
 		if cp.ContainerName == name {
 			return &cp
 		}
 	}
 	return nil
+}
+
+func adjustQuantity(resource, min, max *resource.Quantity) *resource.Quantity {
+	switch {
+	case resource.MilliValue() > max.MilliValue():
+		resource = max
+	case resource.MilliValue() < min.MilliValue():
+		resource = min
+	default:
+	}
+	return resource
 }

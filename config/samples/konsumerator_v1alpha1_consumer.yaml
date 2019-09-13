@@ -84,6 +84,10 @@ spec:
   # the consumer from scaling to 0 or infinity in case
   # of incidents
   resourcePolicy:
+    globalPolicy:
+      maxAllowed:
+        cpu: "1200"
+        memory: "1.2T"
     containerPolicies:
     - containerName: consumer
       minAllowed:
@@ -93,9 +97,4 @@ spec:
         cpu: "1"
         memory: "1G"
     - containerName: busybox-info
-      minAllowed:
-        cpu: "100m"
-        memory: "100M"
-      maxAllowed:
-        cpu: "100m"
-        memory: "100M"
+      mode: Off
