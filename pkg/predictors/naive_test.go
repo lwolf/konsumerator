@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/providers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -66,16 +66,16 @@ func TestEstimateCpu(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{log: testLogger()}
-		cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore)
-		if cpuR != tt.expectedCpuR {
-			t.Logf("%s: expected Request CPU %d, got %d", testName, tt.expectedCpuR, cpuR)
-			t.Fail()
-		}
-		if cpuL != tt.expectedCpuL {
-			t.Logf("%s: expected Limit CPU %d, got %d", testName, tt.expectedCpuL, cpuL)
-			t.Fail()
-		}
+		t.Run(testName, func(t *testing.T) {
+			estimator := NaivePredictor{log: testLogger()}
+			cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore)
+			if cpuR != tt.expectedCpuR {
+				t.Fatalf("expected Request CPU %d, got %d", tt.expectedCpuR, cpuR)
+			}
+			if cpuL != tt.expectedCpuL {
+				t.Fatalf("expected Limit CPU %d, got %d", tt.expectedCpuL, cpuL)
+			}
+		})
 	}
 }
 
@@ -98,18 +98,17 @@ func TestEstimateMemory(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{log: testLogger()}
-		memoryR, memoryL := estimator.estimateMemory(tt.consumption, tt.ramPerCore, tt.cpuR, tt.cpuL)
-		if memoryR != tt.expectedMemoryR {
-			t.Logf("%s: expected Request Memory %d, got %d", testName, tt.expectedMemoryR, memoryR)
-			t.Fail()
-		}
-		if memoryL != tt.expectedMemoryL {
-			t.Logf("%s: expected Limit Memory %d, got %d", testName, tt.expectedMemoryL, memoryL)
-			t.Fail()
-		}
+		t.Run(testName, func(t *testing.T) {
+			estimator := NaivePredictor{log: testLogger()}
+			memoryR, memoryL := estimator.estimateMemory(tt.consumption, tt.ramPerCore, tt.cpuR, tt.cpuL)
+			if memoryR != tt.expectedMemoryR {
+				t.Fatalf("expected Request Memory %d, got %d", tt.expectedMemoryR, memoryR)
+			}
+			if memoryL != tt.expectedMemoryL {
+				t.Fatalf("expected Limit Memory %d, got %d", tt.expectedMemoryL, memoryL)
+			}
+		})
 	}
-
 }
 
 func TestExpectedConsumption(t *testing.T) {
@@ -133,35 +132,33 @@ func TestExpectedConsumption(t *testing.T) {
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{
-			lagSource: tt.lagStore,
-			promSpec:  &tt.promSpec,
-			log:       testLogger(),
-		}
-		actual := estimator.expectedConsumption(tt.partition)
-		if actual != tt.expectedConsumption {
-			t.Logf("%s: expected consumption %d, got %d", testName, tt.expectedConsumption, actual)
-			t.Fail()
-		}
+		t.Run(testName, func(t *testing.T) {
+			estimator := NaivePredictor{
+				lagSource: tt.lagStore,
+				promSpec:  &tt.promSpec,
+				log:       testLogger(),
+			}
+			actual := estimator.expectedConsumption(tt.partition)
+			if actual != tt.expectedConsumption {
+				t.Fatalf("Expected consumption %d, got %d", tt.expectedConsumption, actual)
+			}
+		})
 	}
 }
 
 func TestEstimateResources(t *testing.T) {
 	tests := map[string]struct {
-		containerName      string
-		promSpec           konsumeratorv1alpha1.PrometheusAutoscalerSpec
-		lagStore           providers.MetricsProvider
-		partition          int32
-		limits             *autoscalev1.ContainerResourcePolicy
-		expectedResources  corev1.ResourceRequirements
-		expectedSaturation bool
+		containerName     string
+		promSpec          konsumeratorv1alpha1.PrometheusAutoscalerSpec
+		lagStore          providers.MetricsProvider
+		partition         int32
+		expectedResources corev1.ResourceRequirements
 	}{
-		"base estimation without limits": {
+		"base estimation": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 20000}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
 			partition:     0,
-			limits:        nil,
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("2"),
@@ -172,14 +169,12 @@ func TestEstimateResources(t *testing.T) {
 					corev1.ResourceMemory: resource.MustParse("2G"),
 				},
 			},
-			expectedSaturation: false,
 		},
-		"low production rate without limits": {
+		"low production rate": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
 			partition:     0,
-			limits:        nil,
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("100m"),
@@ -190,129 +185,43 @@ func TestEstimateResources(t *testing.T) {
 					corev1.ResourceMemory: resource.MustParse("1G"),
 				},
 			},
-			expectedSaturation: false,
 		},
-		"low production rate with limits": {
-			containerName: "test",
-			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:      NewMockProvider(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
-			partition:     0,
-			limits: &autoscalev1.ContainerResourcePolicy{
-				ContainerName: "test",
-				MinAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("250m"),
-					corev1.ResourceMemory: resource.MustParse("250M"),
-				},
-				MaxAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
-			expectedResources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("250m"),
-					corev1.ResourceMemory: resource.MustParse("250M"),
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
-			expectedSaturation: false,
-		},
-		"base estimation over the limits": {
-			containerName: "test",
-			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:      NewMockProvider(map[int32]int64{0: 20000}, map[int32]int64{0: 20000}, map[int32]int64{0: 0}),
-			partition:     0,
-			limits: &autoscalev1.ContainerResourcePolicy{
-				ContainerName: "test",
-				MinAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
-				},
-				MaxAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
-			expectedResources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
-			expectedSaturation: true,
-		},
-		"allocate minimum resources if no metrics data provided (dummy provider)": {
+		"allocate no resources if no metrics data provided (dummy provider)": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
 			partition:     0,
-			limits: &autoscalev1.ContainerResourcePolicy{
-				ContainerName: "test",
-				MinAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
-				},
-				MaxAllowed: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("600m"),
-					corev1.ResourceMemory: resource.MustParse("700M"),
-				},
-			},
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
+					corev1.ResourceCPU:    resource.MustParse("0"),
+					corev1.ResourceMemory: resource.MustParse("0"),
 				},
 				Limits: corev1.ResourceList{
-					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
+					corev1.ResourceCPU:    resource.MustParse("0"),
+					corev1.ResourceMemory: resource.MustParse("0"),
 				},
 			},
-			expectedSaturation: false,
 		},
 		"no resource allocation if no metrics data provided and no limits are set (dummy provider)": {
-			containerName:      "test",
-			promSpec:           *genPromSpec(10000, resource.MustParse("1G")),
-			lagStore:           NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
-			partition:          0,
-			limits:             nil,
-			expectedResources:  corev1.ResourceRequirements{},
-			expectedSaturation: false,
+			containerName:     "test",
+			promSpec:          *genPromSpec(10000, resource.MustParse("1G")),
+			lagStore:          NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
+			partition:         0,
+			expectedResources: corev1.ResourceRequirements{},
 		},
 	}
 	for testName, tt := range tests {
-		estimator := NaivePredictor{
-			lagSource: tt.lagStore,
-			promSpec:  &tt.promSpec,
-			log:       testLogger(),
-		}
-		resources, isSaturated := estimator.Estimate(tt.containerName, tt.limits, tt.partition)
-		if resources.Requests.Cpu().MilliValue() != tt.expectedResources.Requests.Cpu().MilliValue() {
-			t.Logf("%s: expected request cpu %s, got %s", testName, tt.expectedResources.Requests.Cpu().String(), resources.Requests.Cpu().String())
-			t.Fail()
-		}
-		if resources.Requests.Memory().MilliValue() != tt.expectedResources.Requests.Memory().MilliValue() {
-			t.Logf("%s: expected request memory %s, got %s", testName, tt.expectedResources.Requests.Memory().String(), resources.Requests.Memory().String())
-			t.Fail()
-		}
-		if resources.Limits.Cpu().MilliValue() != tt.expectedResources.Limits.Cpu().MilliValue() {
-			t.Logf("%s: expected limit cpu %s, got %s", testName, tt.expectedResources.Limits.Cpu().String(), resources.Limits.Cpu().String())
-			t.Fail()
-		}
-		if resources.Limits.Memory().MilliValue() != tt.expectedResources.Limits.Memory().MilliValue() {
-			t.Logf("%s: expected limit memory %s, got %s", testName, tt.expectedResources.Limits.Memory().String(), resources.Limits.Memory().String())
-			t.Fail()
-		}
-		if isSaturated != tt.expectedSaturation {
-			t.Logf("%s: expected saturation %v, got %v", testName, tt.expectedSaturation, isSaturated)
-			t.Fail()
-		}
+		t.Run(testName, func(t *testing.T) {
+			estimator := NaivePredictor{
+				lagSource: tt.lagStore,
+				promSpec:  &tt.promSpec,
+				log:       testLogger(),
+			}
+			resources := estimator.Estimate(tt.containerName, tt.partition)
+			if helpers.CmpResourceRequirements(*resources, tt.expectedResources) != 0 {
+				t.Fatalf("Resource estimation mismatch, expected %v, got %v", tt.expectedResources, resources)
+			}
+		})
 	}
 }
 

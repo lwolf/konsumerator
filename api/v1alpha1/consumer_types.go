@@ -16,22 +16,28 @@ limitations under the License.
 package v1alpha1
 
 import (
-	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type AutoscalerType string
 
+// ContainerScalingMode controls whether autoscaler is enabled for a specific
+// container.
+type ContainerScalingMode string
+
 const (
 	AutoscalerTypePrometheus AutoscalerType = "prometheus"
 	AutoscalerTypeVpa        AutoscalerType = "vpa"
 	AutoscalerTypeNone       AutoscalerType = ""
-)
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+	// ContainerScalingModeAuto means autoscaling is enabled for a container.
+	ContainerScalingModeAuto ContainerScalingMode = "Auto"
+	// ContainerScalingModeOff means autoscaling is disabled for a container.
+	ContainerScalingModeOff ContainerScalingMode = "Off"
+)
 
 // ConsumerSpec defines the desired state of Consumer
 type ConsumerSpec struct {
@@ -46,7 +52,44 @@ type ConsumerSpec struct {
 	PartitionEnvKey    string                `json:"partitionEnvKey,omitempty"`
 	DeploymentTemplate appsv1.DeploymentSpec `json:"deploymentTemplate"`
 	// +optional
-	ResourcePolicy *autoscalev1.PodResourcePolicy `json:"resourcePolicy,omitempty"`
+	ResourcePolicy *ResourcePolicy `json:"resourcePolicy,omitempty"`
+}
+
+type ResourcePolicy struct {
+	// +optional
+	GlobalPolicy GlobalResourcePolicy `json:"globalPolicy,omitempty"`
+	// Per-container resource policies.
+	// +optional
+	// +patchMergeKey=containerName
+	// +patchStrategy=merge
+	ContainerPolicies []ContainerResourcePolicy `json:"containerPolicies,omitempty" patchStrategy:"merge" patchMergeKey:"containerName"`
+}
+
+type GlobalResourcePolicy struct {
+	// Specifies the maximum amount of resources that could be allocated
+	// to the entire application
+	// +optional
+	MaxAllowed corev1.ResourceList `json:"maxAllowed,omitempty"`
+}
+
+// ContainerResourcePolicy controls how autoscaler computes the recommended
+// resources for a specific container.
+type ContainerResourcePolicy struct {
+	// Name of the container or DefaultContainerResourcePolicy, in which
+	// case the policy is used by the containers that don't have their own
+	// policy specified.
+	ContainerName string `json:"containerName,omitempty"`
+	// Whether autoscaler is enabled for the container. The default is "Auto".
+	// +optional
+	Mode *ContainerScalingMode `json:"mode,omitempty"`
+	// Specifies the minimal amount of resources that will be recommended
+	// for the container. The default is no minimum.
+	// +optional
+	MinAllowed corev1.ResourceList `json:"minAllowed,omitempty"`
+	// Specifies the maximum amount of resources that will be recommended
+	// for the container. The default is no maximum.
+	// +optional
+	MaxAllowed corev1.ResourceList `json:"maxAllowed,omitempty"`
 }
 
 type AutoscalerSpec struct {

@@ -8,7 +8,6 @@ require (
 	github.com/go-redis/redis v6.15.2+incompatible
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/google/go-cmp v0.3.1
-	github.com/kubernetes/autoscaler v0.0.0-20190704092612-4a9583bd7a59
 	github.com/mitchellh/hashstructure v1.0.0
 	github.com/onsi/ginkgo v1.8.0
 	github.com/onsi/gomega v1.5.0

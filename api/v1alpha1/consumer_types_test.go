@@ -16,7 +16,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	autoscalev1 "github.com/kubernetes/autoscaler/vertical-pod-autoscaler/pkg/apis/autoscaling.k8s.io/v1"
 	"github.com/lwolf/konsumerator/pkg/helpers"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -78,7 +77,7 @@ var _ = Describe("Consumer", func() {
 								},
 							}},
 					}, // spec.deploymentTemplate.template.metadata.creationTimestamp
-					ResourcePolicy: &autoscalev1.PodResourcePolicy{},
+					ResourcePolicy: &ResourcePolicy{},
 				},
 			}
 
