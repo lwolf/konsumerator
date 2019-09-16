@@ -71,6 +71,9 @@ spec:
           tier: consumer
       spec:
         containers:
+          - image: busybox
+            name: busybox-info
+            command: ["/bin/sh", "-ec", "env && sleep 30000"]
           - image: lwolf/faker:latest
             name: consumer
             command:

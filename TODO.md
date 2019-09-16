@@ -36,15 +36,16 @@ v0.6  - observability
 * [ ] Cleanup logging
 * [ ] Expose metrics about own health and behaviour
 * [ ] Grafana dashboard
+* [ ] Reset status annotation if MANUAL mode is enabled
 
 v0.7 testing
-* [ ] Verify that scaling works with multi-container pods
-* [ ] Verify that disabling all auto-scaling and setting resources in the deployment itself works 
+* [x] Verify that scaling works with multi-container pods
+* [x] Verify that disabling all auto-scaling and setting resources in the deployment itself works 
 * [ ] Verify that system works without ResourcePolicy set
-* [ ] Verify that HA mode works
+* [x] Verify that HA mode works
 * [ ] Verify that system operates as expected when autoscaling is disabled 
-* [ ] [TEST] Add more integration tests 
-* [ ] [TEST] add test to verify that env variables are always set
+* [x] [TEST] Add more integration tests 
+* [x] [TEST] add test to verify that env variables are always set
 
 v0.8
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 
