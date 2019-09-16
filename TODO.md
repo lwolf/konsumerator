@@ -30,7 +30,6 @@ v0.5 scaling
     enough resources for it
 * [x] Need a way to expose resource saturation level (how many CPUs are lacking)
 * [x] Per-deployment auto-scaling pause
-* [ ] Verify that scaling works with multi-container pods
 
 v0.6  - observability
 * [x] Post behaviour updates to Kubernetes events
@@ -38,9 +37,16 @@ v0.6  - observability
 * [ ] Expose metrics about own health and behaviour
 * [ ] Grafana dashboard
 
-v0.7
+v0.7 testing
+* [ ] Verify that scaling works with multi-container pods
+* [ ] Verify that disabling all auto-scaling and setting resources in the deployment itself works 
+* [ ] Verify that system works without ResourcePolicy set
 * [ ] Verify that HA mode works
 * [ ] Verify that system operates as expected when autoscaling is disabled 
+* [ ] [TEST] Add more integration tests 
+* [ ] [TEST] add test to verify that env variables are always set
+
+v0.8
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`
 * [ ] Add totalMaxAllowed which will limit total number of cores available for the consumer
@@ -51,8 +57,6 @@ v0.7
 
 -------
 Unsorted
-* [ ] [TEST] Add more integration tests 
-* [ ] [TEST] add test to verify that env variables are always set 
 * [ ] [BUG] update of the auto-scaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
 * [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive) 
 
