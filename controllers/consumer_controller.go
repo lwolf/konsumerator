@@ -57,16 +57,30 @@ const (
 	cmpResourcesLt int = -1
 	cmpResourcesEq int = 0
 	cmpResourcesGt int = 1
-)
 
-var (
 	defaultMinSyncPeriod    = time.Minute
 	scaleStatePendingPeriod = time.Minute * 5
-	apiGVStr                = konsumeratorv1alpha1.GroupVersion.String()
 )
+
+var apiGVStr = konsumeratorv1alpha1.GroupVersion.String()
 
 func scalingAllowed(lastChange time.Time) bool {
 	return time.Since(lastChange) >= scaleStatePendingPeriod
+}
+
+func instanceStatusToInt(status string) int {
+	switch status {
+	case InstanceStatusRunning:
+		return 0
+	case InstanceStatusSaturated:
+		return 1
+	case InstanceStatusPendingScaleUp:
+		return 2
+	case InstanceStatusPendingScaleDown:
+		return 3
+	default:
+		return -1
+	}
 }
 
 func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) (bool, error) {
@@ -162,22 +176,22 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	for _, partition := range co.missingIds {
 		newD, err := co.newDeploy(predictor, partition)
 		if err != nil {
-			deploysCreateErrors.WithLabelValues(req.Name).Inc()
+			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "failed to create new deploy")
 			continue
 		}
 		if err := ctrl.SetControllerReference(co.consumer, newD, r.Scheme); err != nil {
-			deploysCreateErrors.WithLabelValues(req.Name).Inc()
+			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "unable to set owner reference for the new Deployment", "deployment", newD, "partition", partition)
 			continue
 		}
 		if err := r.Create(ctx, newD); errors.IgnoreAlreadyExists(err) != nil {
-			deploysCreateErrors.WithLabelValues(req.Name).Inc()
+			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "unable to create new Deployment", "deployment", newD, "partition", partition)
 			continue
 		}
 		log.V(1).Info("created new deployment", "deployment", newD, "partition", partition)
-		deploysCreateTotal.WithLabelValues(req.Name).Inc()
+		deploymentsCreateTotal.WithLabelValues(req.Name).Inc()
 		r.Recorder.Eventf(
 			co.consumer,
 			corev1.EventTypeNormal,
@@ -189,10 +203,10 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	for _, deploy := range co.toRemoveInstances {
 		if err := r.Delete(ctx, deploy); errors.IgnoreNotFound(err) != nil {
 			log.Error(err, "unable to delete deployment", "deployment", deploy)
-			deploysDeleteErrors.WithLabelValues(req.Name).Inc()
+			deploymentsDeleteErrors.WithLabelValues(req.Name).Inc()
 			continue
 		}
-		deploysDeleteTotal.WithLabelValues(req.Name).Inc()
+		deploymentsDeleteTotal.WithLabelValues(req.Name).Inc()
 		r.Recorder.Eventf(
 			co.consumer,
 			corev1.EventTypeNormal,
@@ -201,44 +215,40 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		)
 	}
 
-	var totalSaturation int
 	for _, origDeploy := range co.toUpdateInstances {
 		deploy := origDeploy.DeepCopy()
 		deploy, err := co.updateDeployWithPredictor(deploy, predictor)
 		if err != nil {
-			deploysUpdateErrors.WithLabelValues(req.Name).Inc()
+			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "failed to update deploy")
 			continue
 		}
-		totalSaturation += getSaturation(deploy)
 
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
-			deploysUpdateErrors.WithLabelValues(req.Name).Inc()
+			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "unable to update deployment", "deployment", deploy)
 			continue
 		}
-		deploysUpdateTotal.WithLabelValues(req.Name).Inc()
+		deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
 	}
 	for _, origDeploy := range co.toEstimateInstances {
 		deploy := origDeploy.DeepCopy()
 		deploy, needsUpdate, err := co.updateEstimatedDeployWithPredictor(deploy, predictor)
 		if err != nil {
-			deploysUpdateErrors.WithLabelValues(req.Name).Inc()
+			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "failed to update deploy")
 			continue
 		}
-		totalSaturation += getSaturation(deploy)
 
 		if needsUpdate {
 			if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
-				deploysUpdateErrors.WithLabelValues(req.Name).Inc()
+				deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
 				log.Error(err, "unable to update deployment", "deployment", deploy)
 				continue
 			}
-			deploysUpdateTotal.WithLabelValues(req.Name).Inc()
+			deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
 		}
 	}
-	deploysSaturation.WithLabelValues(req.Name).Set(float64(totalSaturation))
 
 	return result, nil
 }
@@ -414,17 +424,10 @@ func (co *consumerOperator) newDeploy(predictor predictors.Predictor, partition 
 	return co.updateDeployWithPredictor(deploy, predictor)
 }
 
-func (co *consumerOperator) setStatusAnnotationIfChanged(annotations map[string]string, newValue string) (map[string]string, bool) {
-	currentState := annotations[scalingStatusAnnotation]
-	if currentState != newValue {
-		annotations[scalingStatusAnnotation] = newValue
-		annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
-		return annotations, true
-	}
-	return annotations, false
-}
-
 func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor) (*appsv1.Deployment, bool, error) {
+	if time.Since(co.consumer.Status.LastSyncTime.Time) >= scaleStatePendingPeriod {
+		return deploy, false, nil
+	}
 	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[partitionAnnotation])
 	if err != nil {
 		return nil, false, err
@@ -439,61 +442,44 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 	isLagging := co.isLagging(lag)
 	needsUpdate := false
 	for i := range deploy.Spec.Template.Spec.Containers {
-		setNewResources := false
-		var isChangedAnnoations = false
+		isChangedAnnotations := false
 		container := &deploy.Spec.Template.Spec.Containers[i]
 		resources, underProvision := estimateResources(partition, container.Name, predictor, co.limiter)
-		if time.Since(co.consumer.Status.LastSyncTime.Time) < scaleStatePendingPeriod {
-			cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, resources)
-			switch cmpRes {
-			case cmpResourcesEq:
-				if underProvision > 0 {
-					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusSaturated)
-					deploy.Annotations[cpuSaturationLevel] = strconv.Itoa(int(underProvision))
-				} else {
-					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusRunning)
-					delete(deploy.Annotations, cpuSaturationLevel)
-				}
-			case cmpResourcesGt:
-				if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
-					setNewResources = true
-				} else if isLagging {
-					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusPendingScaleUp)
-				}
-			case cmpResourcesLt:
-				if currentState == InstanceStatusPendingScaleDown && scalingAllowed(lastStateChange) {
-					setNewResources = true
-				} else if !isLagging {
-					deploy.Annotations, isChangedAnnoations = co.setStatusAnnotationIfChanged(deploy.Annotations, InstanceStatusPendingScaleDown)
-				}
-			}
-			co.log.Info(
-				"cmp resource",
-				"partition", partition,
-				"container", container.Name,
-				"cmp", cmpRes,
-				"currentState", currentState,
-				"scalingAllowed", scalingAllowed(lastStateChange),
-				"isLagging", isLagging,
-				"saturationLevel", underProvision,
-				"setNewResources", setNewResources,
-			)
-		}
-		if isChangedAnnoations {
-			needsUpdate = true
-		}
-		if setNewResources {
-			needsUpdate = true
-			if underProvision > 0 {
-				deploy.Annotations[cpuSaturationLevel] = strconv.Itoa(int(underProvision))
-				deploy.Annotations[scalingStatusAnnotation] = InstanceStatusSaturated
+		cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, resources)
+		switch cmpRes {
+		case cmpResourcesEq:
+			isChangedAnnotations = updateScaleAnnotations(deploy, underProvision)
+		case cmpResourcesGt:
+			if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
+				updateScaleAnnotations(deploy, underProvision)
+				container.Resources = resources
+				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
+				needsUpdate = true
 			} else {
-				deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
-				delete(deploy.Annotations, cpuSaturationLevel)
+				isChangedAnnotations = updateScalingStatus(deploy, InstanceStatusPendingScaleUp)
 			}
-			deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
-			container.Resources = resources
-			container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
+		case cmpResourcesLt:
+			if currentState == InstanceStatusPendingScaleDown && scalingAllowed(lastStateChange) {
+				updateScaleAnnotations(deploy, underProvision)
+				container.Resources = resources
+				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
+				needsUpdate = true
+			} else if !isLagging {
+				isChangedAnnotations = updateScalingStatus(deploy, InstanceStatusPendingScaleDown)
+			}
+		}
+		co.log.Info(
+			"cmp resource",
+			"partition", partition,
+			"container", container.Name,
+			"cmp", cmpRes,
+			"currentState", currentState,
+			"scalingAllowed", scalingAllowed(lastStateChange),
+			"isLagging", isLagging,
+			"saturationLevel", underProvision,
+		)
+		if isChangedAnnotations {
+			needsUpdate = true
 		}
 	}
 	return deploy, needsUpdate, nil
@@ -511,13 +497,12 @@ func (co *consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment,
 		resources, underProvision := estimateResources(partition, container.Name, predictor, co.limiter)
 		container.Resources = resources
 		if underProvision > 0 {
-			deploy.Annotations[scalingStatusAnnotation] = InstanceStatusSaturated
+			updateScalingStatus(deploy, InstanceStatusSaturated)
 			deploy.Annotations[cpuSaturationLevel] = strconv.Itoa(int(underProvision))
 		} else {
-			deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
+			updateScalingStatus(deploy, InstanceStatusRunning)
 			delete(deploy.Annotations, cpuSaturationLevel)
 		}
-		deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
 		container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
 	}
 	return deploy, nil
@@ -538,8 +523,7 @@ func (co *consumerOperator) constructDeploy(partition int32) *appsv1.Deployment 
 	}
 	deploy.Annotations[partitionAnnotation] = strconv.Itoa(int(partition))
 	deploy.Annotations[generationAnnotation] = co.observedGeneration()
-	deploy.Annotations[scalingStatusAnnotation] = InstanceStatusRunning
-	deploy.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+	updateScalingStatus(deploy, InstanceStatusRunning)
 	return deploy
 }
 
@@ -550,19 +534,30 @@ func estimateResources(partition int32, containerName string, predictor predicto
 	return *resources, reqDiff
 }
 
-func deployIsPaused(deploy *appsv1.Deployment) bool {
-	_, pausedAnnotation := deploy.Annotations[disableAutoscalerAnnotation]
-	return deploy.Status.Replicas == 0 || pausedAnnotation
+func deployIsPaused(d *appsv1.Deployment) bool {
+	_, pausedAnnotation := d.Annotations[disableAutoscalerAnnotation]
+	return d.Status.Replicas == 0 || pausedAnnotation
 }
 
-func getSaturation(deploy *appsv1.Deployment) int {
-	saturation := deploy.Annotations[cpuSaturationLevel]
-	if saturation == "" {
-		return 0
+func updateScaleAnnotations(d *appsv1.Deployment, underProvision int64) bool {
+	if underProvision > 0 {
+		d.Annotations[cpuSaturationLevel] = strconv.Itoa(int(underProvision))
+		deploymentSaturation.WithLabelValues(d.Name).Set(float64(underProvision))
+		return updateScalingStatus(d, InstanceStatusSaturated)
 	}
-	s, err := strconv.ParseInt(saturation, 10, 32)
-	if err != nil {
-		return 0
+	delete(d.Annotations, cpuSaturationLevel)
+	deploymentSaturation.WithLabelValues(d.Name).Set(float64(0))
+	return updateScalingStatus(d, InstanceStatusRunning)
+}
+
+func updateScalingStatus(d *appsv1.Deployment, newStatus string) bool {
+	curStatus := d.Annotations[scalingStatusAnnotation]
+	if curStatus == newStatus {
+		return false
 	}
-	return int(s)
+	d.Annotations[scalingStatusAnnotation] = newStatus
+	d.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+	ds := float64(instanceStatusToInt(newStatus))
+	deploymentStatus.WithLabelValues(d.Name).Set(ds)
+	return true
 }
