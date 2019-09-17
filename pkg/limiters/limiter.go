@@ -28,7 +28,6 @@ func (il *InstanceLimiter) validateCpu(request, limit *resource.Quantity, policy
 	l := adjustQuantity(limit, policy.MinAllowed.Cpu(), policy.MaxAllowed.Cpu())
 	r := adjustQuantity(request, policy.MinAllowed.Cpu(), l)
 
-	il.log.V(1).Info("CPU validation result", "outRequest", r, "outLimit", l)
 	return r.MilliValue(), l.MilliValue()
 }
 
@@ -36,7 +35,6 @@ func (il *InstanceLimiter) validateMemory(request, limit *resource.Quantity, pol
 	l := adjustQuantity(limit, policy.MinAllowed.Memory(), policy.MaxAllowed.Memory())
 	r := adjustQuantity(request, policy.MinAllowed.Memory(), l)
 
-	il.log.V(1).Info("Memory validation result", "outRequest", r, "outLimit", l)
 	return r.MilliValue(), l.MilliValue()
 }
 func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.ResourceRequirements) *corev1.ResourceRequirements {
@@ -46,6 +44,15 @@ func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.R
 	}
 	cpuReq, cpuLimit := il.validateCpu(resources.Requests.Cpu(), resources.Limits.Cpu(), limits)
 	memoryReq, memoryLimit := il.validateMemory(resources.Requests.Memory(), resources.Limits.Memory(), limits)
+	il.log.V(1).Info(
+		"resource limiting results",
+		"containerName", containerName,
+		"cpuReq", cpuReq,
+		"cpuLimit", cpuLimit,
+		"memReq", memoryReq,
+		"memLimit", memoryLimit,
+	)
+
 	return &corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    *resource.NewMilliQuantity(cpuReq, resource.DecimalSI),
