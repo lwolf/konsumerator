@@ -32,10 +32,7 @@ func initReconciler(consumer *konsumeratorv1alpha1.Consumer) (client.Client, *co
 	_ = konsumeratorv1alpha1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
 
-	objs := []runtime.Object{
-		consumer,
-	}
-	cl := fake.NewFakeClientWithScheme(s, objs...)
+	cl := fake.NewFakeClientWithScheme(s, consumer)
 	broadcaster := record.NewBroadcasterForTests(time.Second)
 	eventSource := corev1.EventSource{Component: "eventTest"}
 	recorder := broadcaster.NewRecorder(s, eventSource)
@@ -48,6 +45,20 @@ func TestConsumerReconciliation(t *testing.T) {
 		name      = "testconsumer"
 		namespace = "testns"
 	)
+	objMeta := metav1.ObjectMeta{
+		Name:      name,
+		Namespace: namespace,
+	}
+	autoscalerSpec := konsumeratorv1alpha1.AutoscalerSpec{
+		Mode: konsumeratorv1alpha1.AutoscalerTypePrometheus,
+		Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{
+			Offset:      konsumeratorv1alpha1.OffsetQuerySpec{},
+			Production:  konsumeratorv1alpha1.ProductionQuerySpec{},
+			Consumption: konsumeratorv1alpha1.ConsumptionQuerySpec{},
+			RatePerCore: helpers.Ptr2Int64(5000),
+			RamPerCore:  resource.Quantity{},
+		},
+	}
 	testCases := map[string]struct {
 		consumer              *konsumeratorv1alpha1.Consumer
 		expDeployAnnotation   map[string]map[string]string
@@ -56,24 +67,12 @@ func TestConsumerReconciliation(t *testing.T) {
 	}{
 		"deployment should have minimum resources without metrics provider": {
 			consumer: &konsumeratorv1alpha1.Consumer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: namespace,
-				},
+				ObjectMeta: objMeta,
 				Spec: konsumeratorv1alpha1.ConsumerSpec{
 					NumPartitions: helpers.Ptr2Int32(1),
 					Name:          name,
 					Namespace:     namespace,
-					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
-						Mode: konsumeratorv1alpha1.AutoscalerTypePrometheus,
-						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{
-							Offset:      konsumeratorv1alpha1.OffsetQuerySpec{},
-							Production:  konsumeratorv1alpha1.ProductionQuerySpec{},
-							Consumption: konsumeratorv1alpha1.ConsumptionQuerySpec{},
-							RatePerCore: helpers.Ptr2Int64(5000),
-							RamPerCore:  resource.Quantity{},
-						},
-					},
+					Autoscaler:    &autoscalerSpec,
 					DeploymentTemplate: appsv1.DeploymentSpec{
 						Replicas: helpers.Ptr2Int32(1),
 						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}, MatchExpressions: nil},
@@ -110,24 +109,12 @@ func TestConsumerReconciliation(t *testing.T) {
 		},
 		"sidecar container should not skew metrics estimation": {
 			consumer: &konsumeratorv1alpha1.Consumer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: namespace,
-				},
+				ObjectMeta: objMeta,
 				Spec: konsumeratorv1alpha1.ConsumerSpec{
 					NumPartitions: helpers.Ptr2Int32(1),
 					Name:          name,
 					Namespace:     namespace,
-					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
-						Mode: konsumeratorv1alpha1.AutoscalerTypePrometheus,
-						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{
-							Offset:      konsumeratorv1alpha1.OffsetQuerySpec{},
-							Production:  konsumeratorv1alpha1.ProductionQuerySpec{},
-							Consumption: konsumeratorv1alpha1.ConsumptionQuerySpec{},
-							RatePerCore: helpers.Ptr2Int64(5000),
-							RamPerCore:  resource.Quantity{},
-						},
-					},
+					Autoscaler:    &autoscalerSpec,
 					DeploymentTemplate: appsv1.DeploymentSpec{
 						Replicas: helpers.Ptr2Int32(1),
 						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}, MatchExpressions: nil},
@@ -170,24 +157,12 @@ func TestConsumerReconciliation(t *testing.T) {
 		},
 		"resource policy should be applied to corresponding containers correctly": {
 			consumer: &konsumeratorv1alpha1.Consumer{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      name,
-					Namespace: namespace,
-				},
+				ObjectMeta: objMeta,
 				Spec: konsumeratorv1alpha1.ConsumerSpec{
 					NumPartitions: helpers.Ptr2Int32(1),
 					Name:          name,
 					Namespace:     namespace,
-					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
-						Mode: konsumeratorv1alpha1.AutoscalerTypePrometheus,
-						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{
-							Offset:      konsumeratorv1alpha1.OffsetQuerySpec{},
-							Production:  konsumeratorv1alpha1.ProductionQuerySpec{},
-							Consumption: konsumeratorv1alpha1.ConsumptionQuerySpec{},
-							RatePerCore: helpers.Ptr2Int64(5000),
-							RamPerCore:  resource.Quantity{},
-						},
-					},
+					Autoscaler:    &autoscalerSpec,
 					DeploymentTemplate: appsv1.DeploymentSpec{
 						Replicas: helpers.Ptr2Int32(1),
 						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}, MatchExpressions: nil},
