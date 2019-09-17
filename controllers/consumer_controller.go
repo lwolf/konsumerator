@@ -138,11 +138,11 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		"deployments count",
 		"metricsUpdated", co.metricsUpdated,
 		"expected", consumer.Spec.NumPartitions,
-		"running", len(co.runningIds),
-		"paused", len(co.pausedIds),
-		"missing", len(co.missingIds),
-		"lagging", len(co.laggingIds),
-		"toUpdate", len(co.toUpdateInstances),
+		"running", *co.consumer.Status.Running,
+		"paused", *co.consumer.Status.Paused,
+		"missing", *co.consumer.Status.Missing,
+		"lagging", *co.consumer.Status.Lagging,
+		"toUpdate", *co.consumer.Status.Outdated,
 		"toEstimate", len(co.toEstimateInstances),
 	)
 
@@ -201,6 +201,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		)
 	}
 
+	var totalSaturation int
 	for _, origDeploy := range co.toUpdateInstances {
 		deploy := origDeploy.DeepCopy()
 		deploy, err := co.updateDeployWithPredictor(deploy, predictor)
@@ -209,6 +210,8 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			log.Error(err, "failed to update deploy")
 			continue
 		}
+		totalSaturation += getSaturation(deploy)
+
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			deploysUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "unable to update deployment", "deployment", deploy)
@@ -224,6 +227,8 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			log.Error(err, "failed to update deploy")
 			continue
 		}
+		totalSaturation += getSaturation(deploy)
+
 		if needsUpdate {
 			if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 				deploysUpdateErrors.WithLabelValues(req.Name).Inc()
@@ -233,6 +238,8 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			deploysUpdateTotal.WithLabelValues(req.Name).Inc()
 		}
 	}
+	deploysSaturation.WithLabelValues(req.Name).Set(float64(totalSaturation))
+
 	return result, nil
 }
 
@@ -289,6 +296,16 @@ func newConsumerOperator(log logr.Logger, consumer *konsumeratorv1alpha1.Consume
 	}
 	co.mp = co.newMetricsProvider()
 	co.syncDeploys(managedDeploys)
+
+	name := co.consumer.Name
+	status := co.consumer.Status
+	consumerStatus.WithLabelValues(name, "running").Set(float64(*status.Running))
+	consumerStatus.WithLabelValues(name, "paused").Set(float64(*status.Paused))
+	consumerStatus.WithLabelValues(name, "lagging").Set(float64(*status.Lagging))
+	consumerStatus.WithLabelValues(name, "outdated").Set(float64(*status.Outdated))
+	consumerStatus.WithLabelValues(name, "expected").Set(float64(*status.Expected))
+	consumerStatus.WithLabelValues(name, "missing").Set(float64(*status.Missing))
+
 	return co, err
 }
 
@@ -458,7 +475,7 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 				"container", container.Name,
 				"cmp", cmpRes,
 				"currentState", currentState,
-				"scallingAllowed", scalingAllowed(lastStateChange),
+				"scalingAllowed", scalingAllowed(lastStateChange),
 				"isLagging", isLagging,
 				"saturationLevel", underProvision,
 				"setNewResources", setNewResources,
@@ -538,4 +555,16 @@ func estimateResources(partition int32, containerName string, predictor predicto
 func deployIsPaused(deploy *appsv1.Deployment) bool {
 	_, pausedAnnotation := deploy.Annotations[disableAutoscalerAnnotation]
 	return deploy.Status.Replicas == 0 || pausedAnnotation
+}
+
+func getSaturation(deploy *appsv1.Deployment) int {
+	saturation := deploy.Annotations[cpuSaturationLevel]
+	if saturation == "" {
+		return 0
+	}
+	s, err := strconv.ParseInt(saturation, 10, 32)
+	if err != nil {
+		return 0
+	}
+	return int(s)
 }
