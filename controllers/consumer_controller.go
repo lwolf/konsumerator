@@ -277,7 +277,6 @@ type consumerOperator struct {
 	pausedIds           []int32
 	runningIds          []int32
 	laggingIds          []int32
-	outdatedIds         []int32
 	toRemoveInstances   []*appsv1.Deployment
 	toUpdateInstances   []*appsv1.Deployment
 	toEstimateInstances []*appsv1.Deployment
@@ -388,7 +387,6 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 			continue
 		}
 		if deploy.Annotations[generationAnnotation] != co.observedGeneration() {
-			co.outdatedIds = append(co.outdatedIds, partition)
 			co.toUpdateInstances = append(co.toUpdateInstances, deploy)
 			continue
 		}
