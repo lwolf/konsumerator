@@ -156,6 +156,8 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 	statusUpdateDuration.WithLabelValues(req.Name).Observe(time.Since(start).Seconds())
 
+	// TODO: if consumer.spec.autoscaler is absent from the spec, we get panic
+	// we need to either enforce autoscaler in the manifest of check for it here
 	predictor := predictors.NewNaivePredictor(log, co.mp, co.consumer.Spec.Autoscaler.Prometheus)
 	for _, partition := range co.missingIds {
 		newD, err := co.newDeploy(predictor, partition)

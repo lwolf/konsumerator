@@ -112,8 +112,9 @@ When such Consumer are being created, operator will create `.spec.numPartitions`
 ```bash
 $ kubectl get consumers
 
-  NAME                 REPLICAS   AUTOSCALER    LAGGING AVAILABLE   AGE
-  consumer-sample      100        Prometheus    6       100         7s
+  NAME              EXPECTED   RUNNING   PAUSED   MISSING   LAGGING   OUTDATED   AUTOSCALER   AGE
+  consumer-sample   100        100       0        0         6         0          prometheus   6d2h
+
 
 ```
 

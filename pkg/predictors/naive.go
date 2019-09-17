@@ -18,6 +18,7 @@ type NaivePredictor struct {
 }
 
 func NewNaivePredictor(log logr.Logger, store providers.MetricsProvider, promSpec *konsumeratorv1alpha1.PrometheusAutoscalerSpec) *NaivePredictor {
+	// TODO: we need to do a basic validation of all the fields during creating of the Predictor
 	ctrlLogger := log.WithName("naivePredictor")
 	return &NaivePredictor{
 		lagSource: store,
