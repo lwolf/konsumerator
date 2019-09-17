@@ -33,11 +33,11 @@ v0.5 scaling
 
 v0.6  - observability
 * [x] Post behaviour updates to Kubernetes events
-* [ ] Cleanup logging
+* [x] Cleanup logging
 * [ ] Expose metrics about own health and behaviour
 * [ ] Grafana dashboard
 * [ ] Alerts (all operator instances are down)
-* [ ] Update spec to deploy 3 instances of operator
+* [x] Update spec to deploy 3 instances of operator
 * [ ] Add totalMaxAllowed which will limit total number of cores available for the consumer
 
 v0.7 testing

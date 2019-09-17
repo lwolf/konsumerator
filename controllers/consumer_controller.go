@@ -329,14 +329,14 @@ func (co *consumerOperator) newMetricsProvider() providers.MetricsProvider {
 			return defaultProvider
 		}
 		if shouldUpdate {
-			co.log.Info("going to update metrics info")
 			if err := mp.Update(); err != nil {
-				co.log.Error(err, "failed to query lag provider")
+				co.log.Error(err, "failed to query metrics from the lag provider")
 			} else {
 				tm := metav1.Now()
 				co.metricsUpdated = true
 				co.consumer.Status.LastSyncTime = &tm
 				co.consumer.Status.LastSyncState = providers.DumpSyncState(*co.consumer.Spec.NumPartitions, mp)
+				co.log.Info("metrics data were updated successfully")
 			}
 		}
 		return mp
@@ -356,7 +356,7 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 		}
 		trackedPartitions[partition] = true
 		lag := co.mp.GetLagByPartition(partition)
-		co.log.Info("lag per partition", "partition", partition, "lag", lag)
+		co.log.V(1).Info("lag per partition", "partition", partition, "lag", lag)
 		if deployIsPaused(deploy) {
 			co.pausedIds = append(co.pausedIds, partition)
 			continue
