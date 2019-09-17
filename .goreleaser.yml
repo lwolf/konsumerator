@@ -36,3 +36,5 @@ dockers:
     image_templates:
       - "quay.io/lwolf/konsumerator:{{ .Tag }}"
       - "quay.io/lwolf/konsumerator:latest"
+      - "docker.pkg.github.com/lwolf/konsumerator/{{ .Tag }}"
+      - "docker.pkg.github.com/lwolf/konsumerator/latest"
