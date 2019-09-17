@@ -36,7 +36,9 @@ v0.6  - observability
 * [ ] Cleanup logging
 * [ ] Expose metrics about own health and behaviour
 * [ ] Grafana dashboard
-* [ ] Reset status annotation if MANUAL mode is enabled
+* [ ] Alerts (all operator instances are down)
+* [ ] Update spec to deploy 3 instances of operator
+* [ ] Add totalMaxAllowed which will limit total number of cores available for the consumer
 
 v0.7 testing
 * [x] Verify that scaling works with multi-container pods
@@ -50,7 +52,6 @@ v0.7 testing
 v0.8
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`
-* [ ] Add totalMaxAllowed which will limit total number of cores available for the consumer
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
 * [ ] Add ignore list of container names (do not do anything with sidecars)
@@ -60,7 +61,9 @@ v0.8
 Unsorted
 * [ ] [BUG] update of the auto-scaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
 * [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive) 
+* [ ] Reset status annotation if MANUAL mode is enabled
 
+* [ ] [Feature] implement defaulting/validating webhooks
 * [ ] [Feature] call webhooks on scaling events
 * [ ] [Feature] Vertical auto-scaling of balanced workloads (single deployment)
 * [ ] [Feature] Fully dynamic resource allocations based on historic data
