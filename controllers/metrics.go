@@ -15,7 +15,7 @@ var (
 			Name:      "reconcile_total",
 			Help:      "Total number of processed reconcile events",
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	reconcileErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -24,7 +24,7 @@ var (
 			Name:      "reconcile_errors_total",
 			Help:      "Total number of errors while processing reconcile events",
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	reconcileDuration = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
@@ -34,7 +34,7 @@ var (
 			Help:       "Reconcile event duration",
 			Objectives: map[float64]float64{0.5: 1e-1, 0.9: 1e-2, 0.99: 1e-3, 0.999: 1e-4, 1: 1e-5},
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	deploymentsCreateTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -43,16 +43,16 @@ var (
 			Name:      "deployments_create_total",
 			Help:      "Total number of created deployments",
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	deploymentsCreateErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
 			Subsystem: "consumer",
-			Name:      "deployments__create_errors",
+			Name:      "deployments_create_errors",
 			Help:      "Total number of errors while creating deployment",
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	deploymentsDeleteTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -61,7 +61,7 @@ var (
 			Name:      "deployments_delete_total",
 			Help:      "Total number of deleted deployments",
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	deploymentsDeleteErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -70,7 +70,7 @@ var (
 			Name:      "deployments_delete_errors",
 			Help:      "Total number of errors while deleting deployment",
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	deploymentsUpdateTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -79,7 +79,7 @@ var (
 			Name:      "deployments_update_total",
 			Help:      "Total number of updated deployments",
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	deploymentsUpdateErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -88,7 +88,7 @@ var (
 			Name:      "deployments_update_errors",
 			Help:      "Total number of errors while updating deployments",
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	statusUpdateDuration = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
@@ -98,7 +98,7 @@ var (
 			Help:       "Status update duration",
 			Objectives: map[float64]float64{0.5: 1e-1, 0.9: 1e-2, 0.99: 1e-3, 0.999: 1e-4, 1: 1e-5},
 		},
-		[]string{"name"},
+		[]string{"consumer"},
 	)
 	consumerStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -107,7 +107,7 @@ var (
 			Name:      "status",
 			Help:      "Consumer deployments status",
 		},
-		[]string{"name", "type"},
+		[]string{"consumer", "type"},
 	)
 	deploymentSaturation = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -116,7 +116,7 @@ var (
 			Name:      "saturation",
 			Help:      "Current cpu saturation for deployment",
 		},
-		[]string{"name"},
+		[]string{"consumer", "deployment"},
 	)
 	deploymentStatus = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
@@ -126,7 +126,7 @@ var (
 			Help: "Current deployment status. " +
 				"0 - RUNNING, 1 - SATURATED, 2 - PENDING_SCALE_UP, 3 - PENDING_SCALE_DOWN, -1 - UNKNOWN",
 		},
-		[]string{"name"},
+		[]string{"consumer", "deployment"},
 	)
 )
 
