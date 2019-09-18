@@ -12,14 +12,20 @@ type ResourceLimiter interface {
 }
 
 type InstanceLimiter struct {
-	policy *konsumeratorv1alpha1.ResourcePolicy
-	log    logr.Logger
+	policy   *konsumeratorv1alpha1.ResourcePolicy
+	registry map[string]*konsumeratorv1alpha1.ContainerResourcePolicy
+	log      logr.Logger
 }
 
 func NewInstanceLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, log logr.Logger) *InstanceLimiter {
+	registry := make(map[string]*konsumeratorv1alpha1.ContainerResourcePolicy, len(policy.ContainerPolicies))
+	for _, cp := range policy.ContainerPolicies {
+		registry[cp.ContainerName] = &cp
+	}
 	return &InstanceLimiter{
-		policy: policy,
-		log:    log,
+		policy:   policy,
+		registry: registry,
+		log:      log,
 	}
 }
 
@@ -36,8 +42,8 @@ func (il *InstanceLimiter) validateMemory(request, limit *resource.Quantity, pol
 	return r.MilliValue(), l.MilliValue()
 }
 func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.ResourceRequirements) *corev1.ResourceRequirements {
-	limits := il.containerResourcePolicy(containerName)
-	if limits == nil {
+	limits, ok := il.registry[containerName]
+	if !ok {
 		return resources
 	}
 	cpuReq, cpuLimit := il.validateCpu(resources.Requests.Cpu(), resources.Limits.Cpu(), limits)
@@ -61,15 +67,6 @@ func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.R
 			corev1.ResourceMemory: *resource.NewMilliQuantity(memoryLimit, resource.DecimalSI),
 		},
 	}
-}
-
-func (il *InstanceLimiter) containerResourcePolicy(name string) *konsumeratorv1alpha1.ContainerResourcePolicy {
-	for _, cp := range il.policy.ContainerPolicies {
-		if cp.ContainerName == name {
-			return &cp
-		}
-	}
-	return nil
 }
 
 func adjustQuantity(resource, min, max *resource.Quantity) *resource.Quantity {
