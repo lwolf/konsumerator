@@ -11,6 +11,7 @@ services:
 
 before_script:
   - echo "$QUAY_PASSWORD" | docker login -u "$QUAY_LOGIN" quay.io --password-stdin
+  - echo "$GITHUB_TOKEN" | docker login -u "$GITHUB_LOGIN" docker.pkg.github.com --password-stdin
 
 jobs:
   include:
