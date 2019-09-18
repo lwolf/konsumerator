@@ -8,7 +8,6 @@ import (
 )
 
 type InstanceLimiter struct {
-	policy   *konsumeratorv1alpha1.ResourcePolicy
 	registry map[string]*konsumeratorv1alpha1.ContainerResourcePolicy
 	log      logr.Logger
 }
@@ -19,7 +18,6 @@ func NewInstanceLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, log logr.Lo
 		registry[cp.ContainerName] = &cp
 	}
 	return &InstanceLimiter{
-		policy:   policy,
 		registry: registry,
 		log:      log,
 	}
