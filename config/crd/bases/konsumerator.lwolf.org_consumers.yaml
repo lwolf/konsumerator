@@ -5229,7 +5229,9 @@ spec:
           - numPartitions
           - name
           - namespace
+          - autoscaler
           - deploymentTemplate
+          - resourcePolicy
           type: object
         status:
           properties:

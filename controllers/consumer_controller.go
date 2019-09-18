@@ -161,12 +161,15 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	)
 
 	start = time.Now()
-	if err := r.Status().Update(ctx, co.consumer); errors.IgnoreConflict(err) != nil {
-		eMsg := "unable to update Consumer status"
-		log.Error(err, eMsg)
-		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
-		reconcileErrors.WithLabelValues(req.Name).Inc()
-		return result, err
+	if err := r.Status().Update(ctx, co.consumer); err != nil {
+		properError := errors.IgnoreConflict(err)
+		if properError != nil {
+			eMsg := "unable to update Consumer status"
+			log.Error(err, eMsg)
+			r.Recorder.Event(&consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
+			reconcileErrors.WithLabelValues(req.Name).Inc()
+		}
+		return result, properError
 	}
 	statusUpdateDuration.WithLabelValues(req.Name).Observe(time.Since(start).Seconds())
 

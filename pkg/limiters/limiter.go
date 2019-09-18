@@ -2,10 +2,9 @@ package limiters
 
 import (
 	"github.com/go-logr/logr"
-	"k8s.io/apimachinery/pkg/api/resource"
-
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type ResourceLimiter interface {
@@ -27,7 +26,6 @@ func NewInstanceLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, log logr.Lo
 func (il *InstanceLimiter) validateCpu(request, limit *resource.Quantity, policy *konsumeratorv1alpha1.ContainerResourcePolicy) (int64, int64) {
 	l := adjustQuantity(limit, policy.MinAllowed.Cpu(), policy.MaxAllowed.Cpu())
 	r := adjustQuantity(request, policy.MinAllowed.Cpu(), l)
-
 	return r.MilliValue(), l.MilliValue()
 }
 
