@@ -220,7 +220,9 @@ func (l *PrometheusMP) queryAll(query string) model.Value {
 
 func (l *PrometheusMP) queryOffset() (metricsMap, error) {
 	start := time.Now()
-	defer requestDuration.WithLabelValues(l.consumer, "offset").Observe(time.Since(start).Seconds())
+	defer func() {
+		requestDuration.WithLabelValues(l.consumer, "offset").Observe(time.Since(start).Seconds())
+	}()
 	requestsTotal.WithLabelValues(l.consumer, "offset").Inc()
 
 	value := l.queryAll(l.offsetQuery)
@@ -235,7 +237,9 @@ func (l *PrometheusMP) queryOffset() (metricsMap, error) {
 // queryProductionRate queries Prometheus for the current production rate
 func (l *PrometheusMP) queryProductionRate() (metricsMap, error) {
 	start := time.Now()
-	defer requestDuration.WithLabelValues(l.consumer, "production_rate").Observe(time.Since(start).Seconds())
+	defer func() {
+		requestDuration.WithLabelValues(l.consumer, "production_rate").Observe(time.Since(start).Seconds())
+	}()
 	requestsTotal.WithLabelValues(l.consumer, "production_rate").Inc()
 
 	value := l.queryAll(l.productionQuery)
@@ -249,7 +253,9 @@ func (l *PrometheusMP) queryProductionRate() (metricsMap, error) {
 
 func (l *PrometheusMP) queryConsumptionRate() (metricsMap, error) {
 	start := time.Now()
-	defer requestDuration.WithLabelValues(l.consumer, "consumption_rate").Observe(time.Since(start).Seconds())
+	defer func() {
+		requestDuration.WithLabelValues(l.consumer, "consumption_rate").Observe(time.Since(start).Seconds())
+	}()
 	requestsTotal.WithLabelValues(l.consumer, "consumption_rate").Inc()
 
 	value := l.queryAll(l.consumptionQuery)
