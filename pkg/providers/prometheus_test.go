@@ -41,7 +41,7 @@ func TestNewPrometheusMP(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := NewPrometheusMP(tlog.NullLogger{}, &v1alpha1.PrometheusAutoscalerSpec{
 				Address: tc.addrs,
-			})
+			}, "test")
 			if err != nil {
 				if len(tc.expErr) == 0 {
 					t.Fatalf("unexpected err: %s", err)
@@ -144,7 +144,7 @@ func TestPrometheusMP_Update(t *testing.T) {
 					Query:          fmt.Sprintf("%s/%d", tc.queryType, tc.expectedOffset),
 					PartitionLabel: "partition",
 				},
-			})
+			}, "test")
 			testCheckErr(t, err)
 
 			testEqualInt64(t, pm.GetProductionRate(1), 0)

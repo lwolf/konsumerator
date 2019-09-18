@@ -17,7 +17,7 @@ var (
 			Help:        "Total number of Prometheus provider requests",
 			ConstLabels: nil,
 		},
-		[]string{"type"},
+		[]string{"consumer", "type"},
 	)
 	requestErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -27,7 +27,7 @@ var (
 			Help:        "Total number of error requests to Prometheus provider",
 			ConstLabels: nil,
 		},
-		[]string{"type"},
+		[]string{"consumer", "type"},
 	)
 	requestDuration = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
@@ -37,7 +37,7 @@ var (
 			Help:       "Prometheus provider request duration",
 			Objectives: map[float64]float64{0.5: 1e-1, 0.9: 1e-2, 0.99: 1e-3, 0.999: 1e-4, 1: 1e-5},
 		},
-		[]string{"type"},
+		[]string{"consumer", "type"},
 	)
 	subRequestTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -46,7 +46,7 @@ var (
 			Name:      "sub_requests_total",
 			Help:      "Total number of HTTP requests to Prometheus",
 		},
-		[]string{"addr"},
+		[]string{"consumer", "addr"},
 	)
 	subRequestErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -65,7 +65,7 @@ var (
 			Help:       "Prometheus HTTP request duration",
 			Objectives: map[float64]float64{0.5: 1e-1, 0.9: 1e-2, 0.99: 1e-3, 0.999: 1e-4, 1: 1e-5},
 		},
-		[]string{"addr"},
+		[]string{"consumer", "addr"},
 	)
 )
 
