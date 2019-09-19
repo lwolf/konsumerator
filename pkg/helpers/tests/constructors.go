@@ -22,8 +22,16 @@ func NewContainerResourcePolicy(name, minCpu, minMem, maxCpu, maxMem string) kon
 }
 
 func NewResourceRequirements(reqCpu, reqMem, limCpu, limMem string) *corev1.ResourceRequirements {
+	var r corev1.ResourceList
+	if reqCpu != "" || reqMem != "" {
+		r = NewResourceList(reqCpu, reqMem)
+	}
+	var l corev1.ResourceList
+	if limCpu != "" || limMem != "" {
+		r = NewResourceList(limCpu, limMem)
+	}
 	return &corev1.ResourceRequirements{
-		Requests: NewResourceList(reqCpu, reqMem),
-		Limits:   NewResourceList(limCpu, limMem),
+		Requests: r,
+		Limits:   l,
 	}
 }

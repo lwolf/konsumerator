@@ -60,6 +60,16 @@ func (il *InstanceLimiter) validateCpu(request, limit *resource.Quantity, policy
 func (il *InstanceLimiter) validateMemory(request, limit *resource.Quantity, policy *konsumeratorv1alpha1.ContainerResourcePolicy) (int64, int64) {
 	l := adjustQuantity(limit, policy.MinAllowed.Memory(), policy.MaxAllowed.Memory())
 	r := adjustQuantity(request, policy.MinAllowed.Memory(), l)
-
 	return r.MilliValue(), l.MilliValue()
+}
+
+func adjustQuantity(resource, min, max *resource.Quantity) *resource.Quantity {
+	switch {
+	case resource.MilliValue() > max.MilliValue():
+		resource = max
+	case resource.MilliValue() < min.MilliValue():
+		resource = min
+	default:
+	}
+	return resource
 }
