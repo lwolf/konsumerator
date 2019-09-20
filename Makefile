@@ -22,7 +22,7 @@ test: generate fmt vet manifests
 
 # Build manager binary
 manager: generate fmt vet
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bin/konsumerator main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o bin/konsumerator main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
