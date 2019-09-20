@@ -27,8 +27,11 @@ func TestNewConsumerOperator(t *testing.T) {
 			"empty deployments",
 			&konsumeratorv1alpha1.Consumer{
 				Spec: konsumeratorv1alpha1.ConsumerSpec{
-					NumPartitions:      testInt32ToPt(10),
-					Autoscaler:         nil,
+					NumPartitions: testInt32ToPt(10),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "",
+						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{},
+					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 			},
