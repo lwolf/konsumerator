@@ -1,8 +1,6 @@
 package limiters
 
 import (
-	"github.com/lwolf/konsumerator/pkg/helpers/tests"
-
 	"github.com/go-logr/logr"
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
@@ -22,13 +20,16 @@ func NewGlobalLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, used *corev1.
 		return l
 	}
 	if used == nil {
-		used = tests.NewResourceList("0", "0")
+		used = &corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("0"),
+			corev1.ResourceMemory: resource.MustParse("0"),
+		}
 	}
 
 	limit := policy.GlobalPolicy.MaxAllowed
 	if used.Cpu().Cmp(*limit.Cpu()) == 1 || used.Memory().Cmp(*limit.Memory()) == 1 {
 		l.log.V(1).Info(
-			"cpu limit is less than used",
+			"Resource allocation is higher than global limit",
 			"limit.CPU", limit.Cpu().MilliValue(),
 			"limit.Memory", limit.Memory().MilliValue(),
 			"used.CPU", used.Cpu().MilliValue(),
