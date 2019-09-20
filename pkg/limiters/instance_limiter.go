@@ -8,14 +8,17 @@ import (
 )
 
 type InstanceLimiter struct {
-	registry map[string]*konsumeratorv1alpha1.ContainerResourcePolicy
+	registry map[string]konsumeratorv1alpha1.ContainerResourcePolicy
 	log      logr.Logger
 }
 
 func NewInstanceLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, log logr.Logger) *InstanceLimiter {
-	registry := make(map[string]*konsumeratorv1alpha1.ContainerResourcePolicy, len(policy.ContainerPolicies))
-	for _, cp := range policy.ContainerPolicies {
-		registry[cp.ContainerName] = &cp
+	registry := make(map[string]konsumeratorv1alpha1.ContainerResourcePolicy, 0)
+	if policy != nil {
+		for i := range policy.ContainerPolicies {
+			cp := policy.ContainerPolicies[i]
+			registry[cp.ContainerName] = cp
+		}
 	}
 	return &InstanceLimiter{
 		registry: registry,
@@ -28,8 +31,8 @@ func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.R
 	if !ok {
 		return resources
 	}
-	cpuReq, cpuLimit := il.validateCpu(resources.Requests.Cpu(), resources.Limits.Cpu(), limits)
-	memoryReq, memoryLimit := il.validateMemory(resources.Requests.Memory(), resources.Limits.Memory(), limits)
+	cpuReq, cpuLimit := il.validateCpu(resources.Requests.Cpu(), resources.Limits.Cpu(), &limits)
+	memoryReq, memoryLimit := il.validateMemory(resources.Requests.Memory(), resources.Limits.Memory(), &limits)
 	il.log.V(1).Info(
 		"resource limiting results",
 		"containerName", containerName,

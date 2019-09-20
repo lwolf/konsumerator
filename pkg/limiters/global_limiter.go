@@ -1,47 +1,50 @@
 package limiters
 
 import (
-	"fmt"
+	"github.com/lwolf/konsumerator/pkg/helpers/tests"
 
 	"github.com/go-logr/logr"
+	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 type GlobalLimiter struct {
-	availCPU, availMem *resource.Quantity
-	log                logr.Logger
+	availCPU *resource.Quantity
+	availMem *resource.Quantity
+	log      logr.Logger
 }
 
-func NewGlobalLimiter(limit, used *corev1.ResourceRequirements, log logr.Logger) (*GlobalLimiter, error) {
-	if used == nil {
-		return nil, fmt.Errorf("used resources can't be nil")
-	}
-
+func NewGlobalLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, used *corev1.ResourceList, log logr.Logger) *GlobalLimiter {
 	l := &GlobalLimiter{log: log}
-	if limit == nil {
+	if policy == nil || policy.GlobalPolicy == nil {
 		// no limits were set
-		return l, nil
+		return l
+	}
+	if used == nil {
+		used = tests.NewResourceList("0", "0")
 	}
 
-	if used.Requests.Cpu().Cmp(*limit.Requests.Cpu()) == 1 {
-		return nil, fmt.Errorf("cpu limit %d is less than used %d",
-			limit.Requests.Cpu().MilliValue(), used.Requests.Cpu().MilliValue())
-	}
-	if used.Requests.Memory().Cmp(*limit.Requests.Memory()) == 1 {
-		return nil, fmt.Errorf("memory limit %d is less than used %d",
-			limit.Requests.Memory().MilliValue(), used.Requests.Memory().MilliValue())
+	limit := policy.GlobalPolicy.MaxAllowed
+	if used.Cpu().Cmp(*limit.Cpu()) == 1 || used.Memory().Cmp(*limit.Memory()) == 1 {
+		l.log.V(1).Info(
+			"cpu limit is less than used",
+			"limit.CPU", limit.Cpu().MilliValue(),
+			"limit.Memory", limit.Memory().MilliValue(),
+			"used.CPU", used.Cpu().MilliValue(),
+			"used.Memory", used.Memory().MilliValue(),
+		)
 	}
 
-	cpu := limit.Requests.Cpu()
-	cpu.Sub(*used.Requests.Cpu())
+	cpu := limit.Cpu()
+	cpu.Sub(*used.Cpu())
 	l.availCPU = cpu
 
-	mem := limit.Requests.Memory()
-	mem.Sub(*used.Requests.Memory())
+	mem := limit.Memory()
+	mem.Sub(*used.Memory())
 	l.availMem = mem
 
-	return l, nil
+	return l
 }
 
 func (l *GlobalLimiter) ApplyLimits(_ string, resources *corev1.ResourceRequirements) *corev1.ResourceRequirements {
@@ -50,18 +53,24 @@ func (l *GlobalLimiter) ApplyLimits(_ string, resources *corev1.ResourceRequirem
 		return resources
 	}
 
+	requestCPU := resources.Requests.Cpu()
+	requestMem := resources.Requests.Memory()
+
 	if l.availCPU.IsZero() || l.availMem.IsZero() {
-		l.log.V(1).Info(
-			"global limiter exhausted",
-			"cpuReq", resources.Requests.Cpu().MilliValue(),
-			"cpuLimit", l.availCPU.MilliValue(),
-			"memReq", resources.Requests.Memory().MilliValue(),
-			"memLimit", l.availCPU.MilliValue(),
-		)
-		return nil
+		if requestCPU.MilliValue() > 0 && requestMem.MilliValue() > 0 {
+			l.log.V(1).Info(
+				"global limiter exhausted",
+				"cpuReq", requestCPU.MilliValue(),
+				"cpuLimit", l.availCPU.MilliValue(),
+				"memReq", requestMem.MilliValue(),
+				"memLimit", l.availMem.MilliValue(),
+			)
+			return nil
+		}
 	}
-	cpu := l.deductCPU(resources.Requests.Cpu())
-	mem := l.deductMem(resources.Requests.Memory())
+
+	cpu := l.deductCPU(requestCPU)
+	mem := l.deductMem(requestMem)
 	return &corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    *resource.NewMilliQuantity(cpu.MilliValue(), resource.DecimalSI),

@@ -248,11 +248,11 @@ func TestConsumerReconciliation(t *testing.T) {
 					}
 					expectedEnv := tc.expContainerEnv[container.Name]
 					if diff := cmp.Diff(expectedEnv, env); diff != "" {
-						t.Errorf("%s Environment mismatch (-expectedEnv +container.Env):\n%s", tName, diff)
+						t.Errorf("%q Environment mismatch (-expectedEnv +container.Env):\n%s", tName, diff)
 					}
 					expectedResources := tc.expContainerResources[container.Name]
 					if helpers.CmpResourceRequirements(container.Resources, expectedResources) != 0 {
-						t.Fatalf("Container resource mismatch. Want %v, got %v", expectedResources, container.Resources)
+						t.Fatalf("Container resource mismatch. \nWant \n%v, \ngot \n%v", expectedResources, container.Resources)
 					}
 				}
 			}

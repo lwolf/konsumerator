@@ -24,7 +24,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/mitchellh/hashstructure"
 	appsv1 "k8s.io/api/apps/v1"
-	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -134,7 +133,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, errors.IgnoreNotFound(err)
 	}
-	var managedDeploys v1.DeploymentList
+	var managedDeploys appsv1.DeploymentList
 	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(ownerKey, req.Name)); err != nil {
 		eMsg := "unable to list managed deployments"
 		log.Error(err, eMsg)
@@ -175,9 +174,9 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 
 	// TODO: if consumer.spec.autoscaler is absent from the spec, we get panic
 	// we need to either enforce autoscaler in the manifest of check for it here
-	predictor := predictors.NewNaivePredictor(log, co.mp, co.consumer.Spec.Autoscaler.Prometheus)
+	co.predictor = predictors.NewNaivePredictor(log, co.mp, co.consumer.Spec.Autoscaler.Prometheus)
 	for _, partition := range co.missingIds {
-		newD, err := co.newDeploy(predictor, partition)
+		newD, err := co.newDeploy(partition)
 		if err != nil {
 			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "failed to create new deploy")
@@ -219,14 +218,12 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	for _, origDeploy := range co.toUpdateInstances {
-		deploy := origDeploy.DeepCopy()
-		deploy, err := co.updateDeployWithPredictor(deploy, predictor)
+		deploy, err := co.updateDeploy(origDeploy.DeepCopy())
 		if err != nil {
 			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "failed to update deploy")
 			continue
 		}
-
 		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "unable to update deployment", "deployment", deploy)
@@ -235,14 +232,12 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
 	}
 	for _, origDeploy := range co.toEstimateInstances {
-		deploy := origDeploy.DeepCopy()
-		deploy, needsUpdate, err := co.updateEstimatedDeployWithPredictor(deploy, predictor)
+		deploy, needsUpdate, err := co.estimateDeploy(origDeploy.DeepCopy())
 		if err != nil {
 			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
 			log.Error(err, "failed to update deploy")
 			continue
 		}
-
 		if needsUpdate {
 			if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 				deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
@@ -280,9 +275,17 @@ func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 type consumerOperator struct {
 	consumer *konsumeratorv1alpha1.Consumer
-	limiter  limiters.ResourceLimiter
-	log      logr.Logger
-	mp       providers.MetricsProvider
+
+	limiter       limiters.ResourceLimiter
+	globalLimiter limiters.ResourceLimiter
+
+	usedResources *corev1.ResourceList
+
+	predictor predictors.Predictor
+
+	log logr.Logger
+	mp  providers.MetricsProvider
+
 	// XXX: should it be a part of mp?
 	metricsUpdated bool
 
@@ -295,7 +298,7 @@ type consumerOperator struct {
 	toEstimateInstances []*appsv1.Deployment
 }
 
-func newConsumerOperator(log logr.Logger, consumer *konsumeratorv1alpha1.Consumer, managedDeploys v1.DeploymentList) (*consumerOperator, error) {
+func newConsumerOperator(log logr.Logger, consumer *konsumeratorv1alpha1.Consumer, managedDeploys appsv1.DeploymentList) (*consumerOperator, error) {
 	hash, err := hashstructure.Hash(consumer.Spec.DeploymentTemplate, nil)
 	if err != nil {
 		return nil, err
@@ -306,8 +309,10 @@ func newConsumerOperator(log logr.Logger, consumer *konsumeratorv1alpha1.Consume
 		limiter:  limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, log),
 		log:      log,
 	}
+	// TODO: refactor following list of actions
 	co.mp = co.newMetricsProvider()
 	co.syncDeploys(managedDeploys)
+	co.globalLimiter = limiters.NewGlobalLimiter(consumer.Spec.ResourcePolicy, co.usedResources, log)
 
 	name := co.consumer.Name
 	status := co.consumer.Status
@@ -374,7 +379,7 @@ func (co *consumerOperator) newMetricsProvider() providers.MetricsProvider {
 	}
 }
 
-func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
+func (co *consumerOperator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 	trackedPartitions := make(map[int32]bool)
 	for i := range managedDeploys.Items {
 		deploy := &managedDeploys.Items[i]
@@ -399,6 +404,14 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 			co.toRemoveInstances = append(co.toRemoveInstances, deploy)
 			continue
 		}
+
+		// count used resources by each container in deployment
+		for _, container := range deploy.Spec.Template.Spec.Containers {
+			r := container.Resources.Requests
+			co.usedResources.Cpu().Add(*r.Cpu())
+			co.usedResources.Memory().Add(*r.Memory())
+		}
+
 		if deploy.Annotations[generationAnnotation] != co.observedGeneration() {
 			co.toUpdateInstances = append(co.toUpdateInstances, deploy)
 			continue
@@ -422,12 +435,12 @@ func (co *consumerOperator) syncDeploys(managedDeploys v1.DeploymentList) {
 	status.Missing = helpers.Ptr2Int32(int32(len(co.missingIds)))
 }
 
-func (co *consumerOperator) newDeploy(predictor predictors.Predictor, partition int32) (*appsv1.Deployment, error) {
+func (co *consumerOperator) newDeploy(partition int32) (*appsv1.Deployment, error) {
 	deploy := co.constructDeploy(partition)
-	return co.updateDeployWithPredictor(deploy, predictor)
+	return co.updateDeploy(deploy)
 }
 
-func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor) (*appsv1.Deployment, bool, error) {
+func (co *consumerOperator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, bool, error) {
 	if time.Since(co.consumer.Status.LastSyncTime.Time) >= scaleStatePendingPeriod {
 		return deploy, false, nil
 	}
@@ -447,15 +460,15 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 	for i := range deploy.Spec.Template.Spec.Containers {
 		isChangedAnnotations := false
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		resources, underProvision := estimateResources(partition, container.Name, predictor, co.limiter)
-		cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, resources)
+		resources, underProvision := co.updateResources(container, partition)
+		cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, *resources)
 		switch cmpRes {
 		case cmpResourcesEq:
 			isChangedAnnotations = co.updateScaleAnnotations(deploy, underProvision)
 		case cmpResourcesGt:
 			if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
 				co.updateScaleAnnotations(deploy, underProvision)
-				container.Resources = resources
+				container.Resources = *resources
 				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
 				needsUpdate = true
 			} else {
@@ -464,7 +477,7 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 		case cmpResourcesLt:
 			if currentState == InstanceStatusPendingScaleDown && scalingAllowed(lastStateChange) {
 				co.updateScaleAnnotations(deploy, underProvision)
-				container.Resources = resources
+				container.Resources = *resources
 				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
 				needsUpdate = true
 			} else if !isLagging {
@@ -488,7 +501,7 @@ func (co *consumerOperator) updateEstimatedDeployWithPredictor(deploy *appsv1.De
 	return deploy, needsUpdate, nil
 }
 
-func (co *consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment, predictor predictors.Predictor) (*appsv1.Deployment, error) {
+func (co *consumerOperator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, error) {
 	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[partitionAnnotation])
 	if err != nil {
 		return nil, err
@@ -496,10 +509,16 @@ func (co *consumerOperator) updateDeployWithPredictor(deploy *appsv1.Deployment,
 	deploy.Annotations[generationAnnotation] = co.observedGeneration()
 	deploy.Spec = co.consumer.Spec.DeploymentTemplate
 	for i := range deploy.Spec.Template.Spec.Containers {
+		var resources *corev1.ResourceRequirements
+		var underProvision int64
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		resources, underProvision := estimateResources(partition, container.Name, predictor, co.limiter)
+		if container.Resources.Requests.Cpu().IsZero() {
+			resources, underProvision = co.allocateResources(container, partition)
+		} else {
+			resources, underProvision = co.updateResources(container, partition)
+		}
 		co.updateScaleAnnotations(deploy, underProvision)
-		container.Resources = resources
+		container.Resources = *resources
 		container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
 	}
 	return deploy, nil
@@ -524,11 +543,55 @@ func (co *consumerOperator) constructDeploy(partition int32) *appsv1.Deployment 
 	return deploy
 }
 
-func estimateResources(partition int32, containerName string, predictor predictors.Predictor, limiter limiters.ResourceLimiter) (corev1.ResourceRequirements, int64) {
-	estimates := predictor.Estimate(containerName, partition)
-	resources := limiter.ApplyLimits(containerName, estimates)
+func (co *consumerOperator) allocateResources(container *corev1.Container, partition int32) (*corev1.ResourceRequirements, int64) {
+	estimates := co.predictor.Estimate(container.Name, partition)
+	resources := co.limiter.ApplyLimits(container.Name, estimates)
 	reqDiff := estimates.Requests.Cpu().MilliValue() - resources.Requests.Cpu().MilliValue()
-	return *resources, reqDiff
+	return resources, reqDiff
+}
+
+func (co *consumerOperator) updateResources(container *corev1.Container, partition int32) (*corev1.ResourceRequirements, int64) {
+	allocatedResources, reqDiff := co.allocateResources(container, partition)
+	rr := container.Resources.Requests.DeepCopy()
+
+	// diff between existing and requested CPU
+	cpu := allocatedResources.Requests.Cpu()
+	cpu.Sub(*rr.Cpu())
+
+	// diff between existing and requested Memory
+	mem := allocatedResources.Requests.Memory()
+	mem.Sub(*rr.Memory())
+
+	request := &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    *cpu,
+			corev1.ResourceMemory: *mem,
+		},
+	}
+	requestedResources := co.globalLimiter.ApplyLimits("", request)
+	if requestedResources == nil {
+		// global limiter exhausted
+		// return existing resources
+		return &corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    *container.Resources.Requests.Cpu(),
+				corev1.ResourceMemory: *container.Resources.Requests.Memory(),
+			},
+		}, reqDiff
+	}
+	globalDiff := request.Requests.Cpu().MilliValue() - requestedResources.Requests.Cpu().MilliValue()
+
+	// sum-up allocated and requested resources
+	cpu.Add(*allocatedResources.Requests.Cpu())
+	cpu.Add(*requestedResources.Requests.Cpu())
+	mem.Add(*allocatedResources.Requests.Memory())
+	mem.Add(*requestedResources.Requests.Memory())
+	return &corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    *cpu,
+			corev1.ResourceMemory: *mem,
+		},
+	}, reqDiff + globalDiff
 }
 
 func deployIsPaused(d *appsv1.Deployment) bool {
