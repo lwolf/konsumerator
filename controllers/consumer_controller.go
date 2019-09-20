@@ -64,44 +64,6 @@ const (
 
 var apiGVStr = konsumeratorv1alpha1.GroupVersion.String()
 
-func scalingAllowed(lastChange time.Time) bool {
-	return time.Since(lastChange) >= scaleStatePendingPeriod
-}
-
-func instanceStatusToInt(status string) int {
-	switch status {
-	case InstanceStatusRunning:
-		return 0
-	case InstanceStatusSaturated:
-		return 1
-	case InstanceStatusPendingScaleUp:
-		return 2
-	case InstanceStatusPendingScaleDown:
-		return 3
-	default:
-		return -1
-	}
-}
-
-func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) (bool, error) {
-	status := consumer.Status
-	if status.LastSyncTime == nil || status.LastSyncState == nil {
-		return true, nil
-	}
-	if consumer.Spec.Autoscaler == nil {
-		return false, fmt.Errorf("autoscaler is not present in consumer spec")
-	}
-	if consumer.Spec.Autoscaler.Mode == konsumeratorv1alpha1.AutoscalerTypePrometheus &&
-		consumer.Spec.Autoscaler.Prometheus == nil {
-		return false, fmt.Errorf("autoscaler misconfiguration: prometheus setup is missing")
-	}
-	timeToSync := metav1.Now().Sub(status.LastSyncTime.Time) > consumer.Spec.Autoscaler.Prometheus.MinSyncPeriod.Duration
-	if timeToSync {
-		return true, nil
-	}
-	return false, nil
-}
-
 // ConsumerReconciler reconciles a Consumer object
 type ConsumerReconciler struct {
 	client.Client
@@ -110,12 +72,35 @@ type ConsumerReconciler struct {
 	Scheme   *runtime.Scheme
 }
 
+func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(&appsv1.Deployment{}, ownerKey, func(rawObj runtime.Object) []string {
+		// grab the object, extract the owner...
+		d := rawObj.(*appsv1.Deployment)
+		owner := metav1.GetControllerOf(d)
+		if owner == nil {
+			return nil
+		}
+		if owner.APIVersion != apiGVStr || owner.Kind != "Consumer" {
+			return nil
+		}
+		return []string{owner.Name}
+	}); err != nil {
+		return err
+	}
+
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&konsumeratorv1alpha1.Consumer{}).
+		Owns(&appsv1.Deployment{}).
+		Complete(r)
+}
+
 // +kubebuilder:rbac:groups=konsumerator.lwolf.org,resources=consumers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=konsumerator.lwolf.org,resources=consumers/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=watch;create;get;update;patch;delete;list
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
 
 func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+	reconcileTotal.WithLabelValues(req.Name).Inc()
 	start := time.Now()
 	defer func() {
 		reconcileDuration.WithLabelValues(req.Name).Observe(time.Since(start).Seconds())
@@ -124,44 +109,31 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	ctx := context.Background()
 	log := r.Log.WithValues("consumer", req.NamespacedName)
 	result := ctrl.Result{RequeueAfter: defaultMinSyncPeriod}
-	reconcileTotal.WithLabelValues(req.Name).Inc()
 
-	var curCons konsumeratorv1alpha1.Consumer
-	if err := r.Get(ctx, req.NamespacedName, &curCons); err != nil {
+	var consumer konsumeratorv1alpha1.Consumer
+	if err := r.Get(ctx, req.NamespacedName, &consumer); err != nil {
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
 		// requeue (we'll need to wait for a new notification), and we can get them
 		// on deleted requests.
 		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, errors.IgnoreNotFound(err)
 	}
-	consumer := curCons.DeepCopy()
 	var managedDeploys appsv1.DeploymentList
 	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(ownerKey, req.Name)); err != nil {
 		eMsg := "unable to list managed deployments"
 		log.Error(err, eMsg)
-		r.Recorder.Event(consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)
+		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)
 		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, err
 	}
 
-	co, err := newConsumerOperator(log, consumer, managedDeploys)
+	co, err := newConsumerOperator(log, consumer.DeepCopy(), managedDeploys)
 	if err != nil {
 		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, err
 	}
-	log.V(1).Info(
-		"deployments count",
-		"metricsUpdated", co.metricsUpdated,
-		"expected", consumer.Spec.NumPartitions,
-		"running", *co.consumer.Status.Running,
-		"paused", *co.consumer.Status.Paused,
-		"missing", *co.consumer.Status.Missing,
-		"lagging", *co.consumer.Status.Lagging,
-		"toUpdate", *co.consumer.Status.Outdated,
-		"toEstimate", len(co.toEstimateInstances),
-	)
 
-	if cmp.Equal(curCons.Status, consumer.Status) {
+	if cmp.Equal(consumer.Status, co.consumer.Status) {
 		log.V(1).Info("no change detected...")
 		return result, nil
 	}
@@ -172,16 +144,13 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		if properError != nil {
 			eMsg := "unable to update Consumer status"
 			log.Error(err, eMsg)
-			r.Recorder.Event(consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
+			r.Recorder.Event(co.consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
 			reconcileErrors.WithLabelValues(req.Name).Inc()
 		}
 		return result, properError
 	}
 	statusUpdateDuration.WithLabelValues(req.Name).Observe(time.Since(start).Seconds())
 
-	// TODO: if consumer.spec.autoscaler is absent from the spec, we get panic
-	// we need to either enforce autoscaler in the manifest of check for it here
-	co.predictor = predictors.NewNaivePredictor(log, co.mp, co.consumer.Spec.Autoscaler.Prometheus)
 	for _, partition := range co.missingIds {
 		newD, err := co.newDeploy(partition)
 		if err != nil {
@@ -238,6 +207,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		}
 		deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
 	}
+
 	for _, origDeploy := range co.toEstimateInstances {
 		deploy, needsUpdate, err := co.estimateDeploy(origDeploy.DeepCopy())
 		if err != nil {
@@ -245,39 +215,18 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 			log.Error(err, "failed to update deploy")
 			continue
 		}
-		if needsUpdate {
-			if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
-				deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
-				log.Error(err, "unable to update deployment", "deployment", deploy)
-				continue
-			}
-			deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
+		if !needsUpdate {
+			continue
 		}
+		if err := r.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
+			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
+			log.Error(err, "unable to update deployment", "deployment", deploy)
+			continue
+		}
+		deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
 	}
 
 	return result, nil
-}
-
-func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(&appsv1.Deployment{}, ownerKey, func(rawObj runtime.Object) []string {
-		// grab the object, extract the owner...
-		d := rawObj.(*appsv1.Deployment)
-		owner := metav1.GetControllerOf(d)
-		if owner == nil {
-			return nil
-		}
-		if owner.APIVersion != apiGVStr || owner.Kind != "Consumer" {
-			return nil
-		}
-		return []string{owner.Name}
-	}); err != nil {
-		return err
-	}
-
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&konsumeratorv1alpha1.Consumer{}).
-		Owns(&appsv1.Deployment{}).
-		Complete(r)
 }
 
 type consumerOperator struct {
@@ -320,24 +269,19 @@ func newConsumerOperator(log logr.Logger, consumer *konsumeratorv1alpha1.Consume
 	co.mp = co.newMetricsProvider()
 	co.syncDeploys(managedDeploys)
 	co.globalLimiter = limiters.NewGlobalLimiter(consumer.Spec.ResourcePolicy, co.usedResources, log)
-
-	name := co.consumer.Name
-	status := co.consumer.Status
-	consumerStatus.WithLabelValues(name, "running").Set(float64(*status.Running))
-	consumerStatus.WithLabelValues(name, "paused").Set(float64(*status.Paused))
-	consumerStatus.WithLabelValues(name, "lagging").Set(float64(*status.Lagging))
-	consumerStatus.WithLabelValues(name, "outdated").Set(float64(*status.Outdated))
-	consumerStatus.WithLabelValues(name, "expected").Set(float64(*status.Expected))
-	consumerStatus.WithLabelValues(name, "missing").Set(float64(*status.Missing))
+	if co.consumer.Spec.Autoscaler == nil || co.consumer.Spec.Autoscaler.Prometheus == nil {
+		return nil, fmt.Errorf("Spec.Autoscaler.Prometheus can't be empty")
+	}
+	co.predictor = predictors.NewNaivePredictor(log, co.mp, co.consumer.Spec.Autoscaler.Prometheus)
 
 	return co, err
 }
 
-func (co *consumerOperator) observedGeneration() string {
+func (co consumerOperator) observedGeneration() string {
 	return strconv.Itoa(int(*co.consumer.Status.ObservedGeneration))
 }
 
-func (co *consumerOperator) isLagging(lag time.Duration) bool {
+func (co consumerOperator) isLagging(lag time.Duration) bool {
 	tolerableLag := co.consumer.Spec.Autoscaler.Prometheus.TolerableLag
 	if tolerableLag == nil {
 		return false
@@ -352,7 +296,12 @@ func (co *consumerOperator) isAutoScaleEnabled() bool {
 
 func (co *consumerOperator) newMetricsProvider() providers.MetricsProvider {
 	defaultProvider := providers.NewDummyMP(*co.consumer.Spec.NumPartitions)
-	if !co.isAutoScaleEnabled() {
+	shouldUpdate, err := shouldUpdateMetrics(co.consumer)
+	if err != nil {
+		co.log.Error(err, "failed to verify autoscaler configuration")
+		return defaultProvider
+	}
+	if !shouldUpdate || !co.isAutoScaleEnabled() {
 		return defaultProvider
 	}
 	switch co.consumer.Spec.Autoscaler.Mode {
@@ -364,21 +313,14 @@ func (co *consumerOperator) newMetricsProvider() providers.MetricsProvider {
 			return defaultProvider
 		}
 		providers.LoadSyncState(mp, co.consumer.Status)
-		shouldUpdate, err := shouldUpdateMetrics(co.consumer)
-		if err != nil {
-			co.log.Error(err, "failed to initialize Prometheus Metrics Provider")
-			return defaultProvider
-		}
-		if shouldUpdate {
-			if err := mp.Update(); err != nil {
-				co.log.Error(err, "failed to query metrics from the lag provider")
-			} else {
-				tm := metav1.Now()
-				co.metricsUpdated = true
-				co.consumer.Status.LastSyncTime = &tm
-				co.consumer.Status.LastSyncState = providers.DumpSyncState(*co.consumer.Spec.NumPartitions, mp)
-				co.log.Info("metrics data were updated successfully")
-			}
+		if err := mp.Update(); err != nil {
+			co.log.Error(err, "failed to query metrics from Prometheus Metrics Provider")
+		} else {
+			tm := metav1.Now()
+			co.metricsUpdated = true
+			co.consumer.Status.LastSyncTime = &tm
+			co.consumer.Status.LastSyncState = providers.DumpSyncState(*co.consumer.Spec.NumPartitions, mp)
+			co.log.Info("metrics data were updated successfully")
 		}
 		return mp
 	default:
@@ -440,6 +382,26 @@ func (co *consumerOperator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 	status.Outdated = helpers.Ptr2Int32(int32(len(co.toUpdateInstances)))
 	status.Expected = co.consumer.Spec.NumPartitions
 	status.Missing = helpers.Ptr2Int32(int32(len(co.missingIds)))
+
+	name := co.consumer.Name
+	consumerStatus.WithLabelValues(name, "running").Set(float64(*status.Running))
+	consumerStatus.WithLabelValues(name, "paused").Set(float64(*status.Paused))
+	consumerStatus.WithLabelValues(name, "lagging").Set(float64(*status.Lagging))
+	consumerStatus.WithLabelValues(name, "outdated").Set(float64(*status.Outdated))
+	consumerStatus.WithLabelValues(name, "expected").Set(float64(*status.Expected))
+	consumerStatus.WithLabelValues(name, "missing").Set(float64(*status.Missing))
+
+	co.log.V(1).Info(
+		"deployments count",
+		"metricsUpdated", co.metricsUpdated,
+		"expected", co.consumer.Spec.NumPartitions,
+		"running", status.Running,
+		"paused", status.Paused,
+		"missing", status.Missing,
+		"lagging", status.Lagging,
+		"toUpdate", status.Outdated,
+		"toEstimate", len(co.toEstimateInstances),
+	)
 }
 
 func (co *consumerOperator) newDeploy(partition int32) (*appsv1.Deployment, error) {
@@ -601,11 +563,6 @@ func (co *consumerOperator) updateResources(container *corev1.Container, partiti
 	}, reqDiff + globalDiff
 }
 
-func deployIsPaused(d *appsv1.Deployment) bool {
-	_, pausedAnnotation := d.Annotations[disableAutoscalerAnnotation]
-	return d.Status.Replicas == 0 || pausedAnnotation
-}
-
 func (co *consumerOperator) updateScaleAnnotations(d *appsv1.Deployment, underProvision int64) bool {
 	if underProvision > 0 {
 		d.Annotations[cpuSaturationLevel] = strconv.Itoa(int(underProvision))
@@ -627,4 +584,47 @@ func (co *consumerOperator) updateScalingStatus(d *appsv1.Deployment, newStatus 
 	ds := float64(instanceStatusToInt(newStatus))
 	deploymentStatus.WithLabelValues(co.consumer.Name, d.Name).Set(ds)
 	return true
+}
+
+func scalingAllowed(lastChange time.Time) bool {
+	return time.Since(lastChange) >= scaleStatePendingPeriod
+}
+
+func instanceStatusToInt(status string) int {
+	switch status {
+	case InstanceStatusRunning:
+		return 0
+	case InstanceStatusSaturated:
+		return 1
+	case InstanceStatusPendingScaleUp:
+		return 2
+	case InstanceStatusPendingScaleDown:
+		return 3
+	default:
+		return -1
+	}
+}
+
+func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) (bool, error) {
+	status := consumer.Status
+	if status.LastSyncTime == nil || status.LastSyncState == nil {
+		return true, nil
+	}
+	if consumer.Spec.Autoscaler == nil {
+		return false, fmt.Errorf("autoscaler is not present in consumer spec")
+	}
+	if consumer.Spec.Autoscaler.Mode == konsumeratorv1alpha1.AutoscalerTypePrometheus &&
+		consumer.Spec.Autoscaler.Prometheus == nil {
+		return false, fmt.Errorf("autoscaler misconfiguration: prometheus setup is missing")
+	}
+	timeToSync := metav1.Now().Sub(status.LastSyncTime.Time) > consumer.Spec.Autoscaler.Prometheus.MinSyncPeriod.Duration
+	if timeToSync {
+		return true, nil
+	}
+	return false, nil
+}
+
+func deployIsPaused(d *appsv1.Deployment) bool {
+	_, pausedAnnotation := d.Annotations[disableAutoscalerAnnotation]
+	return d.Status.Replicas == 0 || pausedAnnotation
 }
