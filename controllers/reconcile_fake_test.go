@@ -213,6 +213,67 @@ func TestConsumerReconciliation(t *testing.T) {
 				"sidecar": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
 		},
+		"resource policy should ignore global policy on first run": {
+			consumer: &konsumeratorv1alpha1.Consumer{
+				ObjectMeta: objMeta,
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions: helpers.Ptr2Int32(1),
+					Name:          name,
+					Namespace:     namespace,
+					Autoscaler:    &autoscalerSpec,
+					DeploymentTemplate: appsv1.DeploymentSpec{
+						Replicas: helpers.Ptr2Int32(1),
+						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}, MatchExpressions: nil},
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
+									{
+										Name:  "busybox",
+										Image: "busybox-image",
+										Env:   []corev1.EnvVar{{Name: "TESTKEY", Value: "TESTVALUE"}},
+									},
+									{
+										Name:  "sidecar",
+										Image: "sidecar-image",
+										Env:   []corev1.EnvVar{{Name: "SIDECAR_KEY", Value: "SIDECAR_VALUE"}},
+									},
+								},
+							}},
+					},
+					ResourcePolicy: &konsumeratorv1alpha1.ResourcePolicy{
+						GlobalPolicy: &konsumeratorv1alpha1.GlobalResourcePolicy{
+							MaxAllowed: *tests.NewResourceList("450m", "450M"),
+						},
+						ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+							tests.NewContainerResourcePolicy("busybox", "400m", "400M", "800m", "800M"),
+							tests.NewContainerResourcePolicy("sidecar", "100m", "100M", "100m", "100M"),
+						},
+					},
+				},
+			},
+			expDeployAnnotation: map[string]map[string]string{
+				fmt.Sprintf("%s-0", name): {
+					"konsumerator.lwolf.org/partition":      "0",
+					"konsumerator.lwolf.org/scaling-status": "RUNNING",
+				},
+			},
+			expContainerEnv: map[string]map[string]string{
+				"busybox": {
+					"KONSUMERATOR_PARTITION": "0",
+					"GOMAXPROCS":             "1",
+					"TESTKEY":                "TESTVALUE",
+				},
+				"sidecar": {
+					"KONSUMERATOR_PARTITION": "0",
+					"GOMAXPROCS":             "1",
+					"SIDECAR_KEY":            "SIDECAR_VALUE",
+				},
+			},
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("400m", "400M", "400m", "400M"),
+				"sidecar": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+			},
+		},
 		// "disabled policy for container should be respected":                 {},
 		// "containers should preserve resources set in the consumer if no other policy is set": {},
 	}
