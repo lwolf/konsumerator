@@ -32,6 +32,7 @@ import (
 )
 
 var (
+	Version  string
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
 )
@@ -52,6 +53,13 @@ func main() {
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&isDebug, "verbose", false, "Set log level to debug mode.")
 	flag.Parse()
+	setupLog.Info(
+		"Initializing konsumerator controller",
+		"version", Version,
+		"isDebug", isDebug,
+		"metricsAddr", metricsAddr,
+		"leaderElection", enableLeaderElection,
+	)
 
 	ctrl.SetLogger(zap.Logger(isDebug))
 
