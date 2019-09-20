@@ -64,6 +64,10 @@ var _ = Describe("Consumer", func() {
 					NumPartitions: helpers.Ptr2Int32(1),
 					Name:          "foo",
 					Namespace:     "default",
+					Autoscaler: &AutoscalerSpec{
+						Mode:       "prometheus",
+						Prometheus: nil,
+					},
 					DeploymentTemplate: appsv1.DeploymentSpec{
 						Replicas: helpers.Ptr2Int32(1),
 						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}, MatchExpressions: nil},

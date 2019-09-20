@@ -6,8 +6,8 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
-func NewResourceList(cpu, mem string) corev1.ResourceList {
-	return corev1.ResourceList{
+func NewResourceList(cpu, mem string) *corev1.ResourceList {
+	return &corev1.ResourceList{
 		corev1.ResourceCPU:    resource.MustParse(cpu),
 		corev1.ResourceMemory: resource.MustParse(mem),
 	}
@@ -16,14 +16,14 @@ func NewResourceList(cpu, mem string) corev1.ResourceList {
 func NewContainerResourcePolicy(name, minCpu, minMem, maxCpu, maxMem string) konsumeratorv1alpha1.ContainerResourcePolicy {
 	return konsumeratorv1alpha1.ContainerResourcePolicy{
 		ContainerName: name,
-		MinAllowed:    NewResourceList(minCpu, minMem),
-		MaxAllowed:    NewResourceList(maxCpu, maxMem),
+		MinAllowed:    *NewResourceList(minCpu, minMem),
+		MaxAllowed:    *NewResourceList(maxCpu, maxMem),
 	}
 }
 
 func NewResourceRequirements(reqCpu, reqMem, limCpu, limMem string) *corev1.ResourceRequirements {
 	return &corev1.ResourceRequirements{
-		Requests: NewResourceList(reqCpu, reqMem),
-		Limits:   NewResourceList(limCpu, limMem),
+		Requests: *NewResourceList(reqCpu, reqMem),
+		Limits:   *NewResourceList(limCpu, limMem),
 	}
 }

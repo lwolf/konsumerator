@@ -42,22 +42,20 @@ const (
 // ConsumerSpec defines the desired state of Consumer
 type ConsumerSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	NumPartitions *int32 `json:"numPartitions"` // Number of partitions
-	Name          string `json:"name"`          // Name of the instance to run
-	Namespace     string `json:"namespace"`     // Namespace to run managed instances
-	// +optional
-	Autoscaler *AutoscalerSpec `json:"autoscaler,omitempty"`
+	NumPartitions *int32          `json:"numPartitions"` // Number of partitions
+	Name          string          `json:"name"`          // Name of the instance to run
+	Namespace     string          `json:"namespace"`     // Namespace to run managed instances
+	Autoscaler    *AutoscalerSpec `json:"autoscaler"`    // Auto-scaler configuration
 
 	// +optional
 	PartitionEnvKey    string                `json:"partitionEnvKey,omitempty"`
 	DeploymentTemplate appsv1.DeploymentSpec `json:"deploymentTemplate"`
-	// +optional
-	ResourcePolicy *ResourcePolicy `json:"resourcePolicy,omitempty"`
+	ResourcePolicy     *ResourcePolicy       `json:"resourcePolicy"`
 }
 
 type ResourcePolicy struct {
 	// +optional
-	GlobalPolicy GlobalResourcePolicy `json:"globalPolicy,omitempty"`
+	GlobalPolicy *GlobalResourcePolicy `json:"globalPolicy,omitempty"`
 	// Per-container resource policies.
 	// +optional
 	// +patchMergeKey=containerName
