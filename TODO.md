@@ -34,11 +34,10 @@ v0.5 scaling
 v0.6  - observability
 * [x] Post behaviour updates to Kubernetes events
 * [x] Cleanup logging
-* [ ] Expose metrics about own health and behaviour
-* [ ] Grafana dashboard
-* [ ] Alerts (all operator instances are down)
+* [x] Expose metrics about own health and behaviour
+* [x] Grafana dashboard
 * [x] Update spec to deploy 3 instances of operator
-* [ ] Add totalMaxAllowed which will limit total number of cores available for the consumer
+* [x] Add totalMaxAllowed which will limit total number of cores available for the consumer
 
 v0.7 testing
 * [x] Verify that scaling works with multi-container pods
@@ -59,6 +58,7 @@ v0.8
 
 -------
 Unsorted
+* [ ] Alerts (all operator instances are down)
 * [ ] [BUG] update of the auto-scaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
 * [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive) 
 * [ ] Reset status annotation if MANUAL mode is enabled
