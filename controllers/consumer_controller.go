@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/google/go-cmp/cmp"
 	"github.com/mitchellh/hashstructure"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -125,24 +126,25 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	result := ctrl.Result{RequeueAfter: defaultMinSyncPeriod}
 	reconcileTotal.WithLabelValues(req.Name).Inc()
 
-	var consumer konsumeratorv1alpha1.Consumer
-	if err := r.Get(ctx, req.NamespacedName, &consumer); err != nil {
+	var curCons konsumeratorv1alpha1.Consumer
+	if err := r.Get(ctx, req.NamespacedName, &curCons); err != nil {
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
 		// requeue (we'll need to wait for a new notification), and we can get them
 		// on deleted requests.
 		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, errors.IgnoreNotFound(err)
 	}
+	consumer := curCons.DeepCopy()
 	var managedDeploys appsv1.DeploymentList
 	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(ownerKey, req.Name)); err != nil {
 		eMsg := "unable to list managed deployments"
 		log.Error(err, eMsg)
-		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)
+		r.Recorder.Event(consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)
 		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, err
 	}
 
-	co, err := newConsumerOperator(log, &consumer, managedDeploys)
+	co, err := newConsumerOperator(log, consumer, managedDeploys)
 	if err != nil {
 		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, err
@@ -159,13 +161,18 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		"toEstimate", len(co.toEstimateInstances),
 	)
 
+	if cmp.Equal(curCons.Status, consumer.Status) {
+		log.V(1).Info("no change detected...")
+		return result, nil
+	}
+
 	start = time.Now()
 	if err := r.Status().Update(ctx, co.consumer); err != nil {
 		properError := errors.IgnoreConflict(err)
 		if properError != nil {
 			eMsg := "unable to update Consumer status"
 			log.Error(err, eMsg)
-			r.Recorder.Event(&consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
+			r.Recorder.Event(consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
 			reconcileErrors.WithLabelValues(req.Name).Inc()
 		}
 		return result, properError
