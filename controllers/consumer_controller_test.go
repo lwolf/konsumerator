@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/clock"
 
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 )
@@ -62,7 +63,7 @@ func TestNewConsumerOperator(t *testing.T) {
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
-								partitionAnnotation: "1",
+								PartitionAnnotation: "1",
 							},
 						},
 					},
@@ -94,8 +95,8 @@ func TestNewConsumerOperator(t *testing.T) {
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
-								partitionAnnotation:         "6",
-								disableAutoscalerAnnotation: "true",
+								PartitionAnnotation:         "6",
+								DisableAutoscalerAnnotation: "true",
 							},
 						},
 						Status: appsv1.DeploymentStatus{Replicas: 1},
@@ -103,8 +104,8 @@ func TestNewConsumerOperator(t *testing.T) {
 					{
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
-								partitionAnnotation:         "5",
-								disableAutoscalerAnnotation: "true",
+								PartitionAnnotation:         "5",
+								DisableAutoscalerAnnotation: "true",
 							},
 						},
 						Status: appsv1.DeploymentStatus{Replicas: 1},
@@ -124,7 +125,7 @@ func TestNewConsumerOperator(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			co, err := newConsumerOperator(tlog.NullLogger{}, tc.consumer, tc.deploys)
+			co, err := newConsumerOperator(tlog.NullLogger{}, tc.consumer, tc.deploys, clock.RealClock{})
 			if err != nil {
 				t.Fatalf("unexpected err: %s", err)
 			}
@@ -281,7 +282,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			res, err := shouldUpdateMetrics(tt.consumer)
+			res, err := shouldUpdateMetrics(tt.consumer, time.Now())
 			if res != tt.expResult {
 				t.Fatalf("expected %v, got %v", tt.expResult, res)
 			}
@@ -305,12 +306,12 @@ func TestDeployIsPaused(t *testing.T) {
 		},
 		"status is paused if annotation is set to something": {
 			replicas:    1,
-			annotations: map[string]string{disableAutoscalerAnnotation: "true"},
+			annotations: map[string]string{DisableAutoscalerAnnotation: "true"},
 			want:        true,
 		},
 		"status is paused if annotation is set to empty string": {
 			replicas:    1,
-			annotations: map[string]string{disableAutoscalerAnnotation: ""},
+			annotations: map[string]string{DisableAutoscalerAnnotation: ""},
 			want:        true,
 		},
 		"status not paused if no scaling annotation preset": {
