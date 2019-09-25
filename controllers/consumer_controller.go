@@ -52,7 +52,7 @@ const (
 	GenerationAnnotation          = "konsumerator.lwolf.org/generation"
 	CPUSaturationLevel            = "konsumerator.lwolf.org/cpu-saturation-level"
 	ScalingStatusAnnotation       = "konsumerator.lwolf.org/scaling-status"
-	scalingStatusChangeAnnotation = "konsumerator.lwolf.org/scaling-status-change"
+	ScalingStatusChangeAnnotation = "konsumerator.lwolf.org/scaling-status-change"
 	OwnerKey                      = ".metadata.controller"
 
 	cmpResourcesLt int = -1
@@ -433,7 +433,7 @@ func (co *consumerOperator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.D
 		return nil, false, err
 	}
 	currentState := deploy.Annotations[ScalingStatusAnnotation]
-	lastStateChange, err := helpers.ParseTimeAnnotation(deploy.Annotations[scalingStatusChangeAnnotation])
+	lastStateChange, err := helpers.ParseTimeAnnotation(deploy.Annotations[ScalingStatusChangeAnnotation])
 	if err != nil {
 		return nil, false, err
 	}
@@ -571,7 +571,7 @@ func (co *consumerOperator) updateScalingStatus(d *appsv1.Deployment, newStatus 
 		return false
 	}
 	d.Annotations[ScalingStatusAnnotation] = newStatus
-	d.Annotations[scalingStatusChangeAnnotation] = co.clock.Now().Format(helpers.TimeLayout)
+	d.Annotations[ScalingStatusChangeAnnotation] = co.clock.Now().Format(helpers.TimeLayout)
 	ds := float64(instanceStatusToInt(newStatus))
 	deploymentStatus.WithLabelValues(co.consumer.Name, d.Name).Set(ds)
 	return true
