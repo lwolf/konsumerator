@@ -28,6 +28,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/clock"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -46,13 +47,13 @@ const (
 	InstanceStatusPendingScaleUp   string = "PENDING_SCALE_UP"
 	InstanceStatusPendingScaleDown string = "PENDING_SCALE_DOWN"
 
-	partitionAnnotation           = "konsumerator.lwolf.org/partition"
-	disableAutoscalerAnnotation   = "konsumerator.lwolf.org/disable-autoscaler"
-	generationAnnotation          = "konsumerator.lwolf.org/generation"
-	cpuSaturationLevel            = "konsumerator.lwolf.org/cpu-saturation-level"
-	scalingStatusAnnotation       = "konsumerator.lwolf.org/scaling-status"
-	scalingStatusChangeAnnotation = "konsumerator.lwolf.org/scaling-status-change"
-	ownerKey                      = ".metadata.controller"
+	PartitionAnnotation           = "konsumerator.lwolf.org/partition"
+	DisableAutoscalerAnnotation   = "konsumerator.lwolf.org/disable-autoscaler"
+	GenerationAnnotation          = "konsumerator.lwolf.org/generation"
+	CPUSaturationLevel            = "konsumerator.lwolf.org/cpu-saturation-level"
+	ScalingStatusAnnotation       = "konsumerator.lwolf.org/scaling-status"
+	ScalingStatusChangeAnnotation = "konsumerator.lwolf.org/scaling-status-change"
+	OwnerKey                      = ".metadata.controller"
 
 	cmpResourcesLt int = -1
 	cmpResourcesEq int = 0
@@ -67,13 +68,19 @@ var apiGVStr = konsumeratorv1alpha1.GroupVersion.String()
 // ConsumerReconciler reconciles a Consumer object
 type ConsumerReconciler struct {
 	client.Client
+
 	Log      logr.Logger
 	Recorder record.EventRecorder
 	Scheme   *runtime.Scheme
+	Clock    clock.Clock
 }
 
 func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := mgr.GetFieldIndexer().IndexField(&appsv1.Deployment{}, ownerKey, func(rawObj runtime.Object) []string {
+	if r.Clock == nil {
+		r.Clock = clock.RealClock{}
+	}
+
+	if err := mgr.GetFieldIndexer().IndexField(&appsv1.Deployment{}, OwnerKey, func(rawObj runtime.Object) []string {
 		// grab the object, extract the owner...
 		d := rawObj.(*appsv1.Deployment)
 		owner := metav1.GetControllerOf(d)
@@ -119,7 +126,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, errors.IgnoreNotFound(err)
 	}
 	var managedDeploys appsv1.DeploymentList
-	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(ownerKey, req.Name)); err != nil {
+	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(OwnerKey, req.Name)); err != nil {
 		eMsg := "unable to list managed deployments"
 		log.Error(err, eMsg)
 		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)
@@ -127,7 +134,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	co, err := newConsumerOperator(log, consumer.DeepCopy(), managedDeploys)
+	co, err := newConsumerOperator(log, consumer.DeepCopy(), managedDeploys, r.Clock)
 	if err != nil {
 		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, err
@@ -252,22 +259,28 @@ type consumerOperator struct {
 	toRemoveInstances   []*appsv1.Deployment
 	toUpdateInstances   []*appsv1.Deployment
 	toEstimateInstances []*appsv1.Deployment
+
+	clock clock.Clock
 }
 
-func newConsumerOperator(log logr.Logger, consumer *konsumeratorv1alpha1.Consumer, managedDeploys appsv1.DeploymentList) (*consumerOperator, error) {
+func newConsumerOperator(log logr.Logger, consumer *konsumeratorv1alpha1.Consumer, managedDeploys appsv1.DeploymentList, clock clock.Clock) (*consumerOperator, error) {
 	hash, err := hashstructure.Hash(consumer.Spec.DeploymentTemplate, nil)
 	if err != nil {
 		return nil, err
 	}
 	consumer.Status.ObservedGeneration = helpers.Ptr2Int64(int64(hash))
+	rl := make(corev1.ResourceList, 0)
 	co := &consumerOperator{
-		consumer: consumer,
-		limiter:  limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, log),
-		log:      log,
+		consumer:      consumer,
+		limiter:       limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, log),
+		log:           log,
+		usedResources: &rl,
+		clock:         clock,
 	}
 	// TODO: refactor following list of actions
 	co.mp = co.newMetricsProvider()
 	co.syncDeploys(managedDeploys)
+
 	co.globalLimiter = limiters.NewGlobalLimiter(consumer.Spec.ResourcePolicy, co.usedResources, log)
 	if co.consumer.Spec.Autoscaler == nil || co.consumer.Spec.Autoscaler.Prometheus == nil {
 		return nil, fmt.Errorf("Spec.Autoscaler.Prometheus can't be empty")
@@ -290,18 +303,18 @@ func (co consumerOperator) isLagging(lag time.Duration) bool {
 }
 
 func (co *consumerOperator) isAutoScaleEnabled() bool {
-	_, autoscalerDisabled := co.consumer.Annotations[disableAutoscalerAnnotation]
+	_, autoscalerDisabled := co.consumer.Annotations[DisableAutoscalerAnnotation]
 	return !autoscalerDisabled && co.consumer.Spec.Autoscaler != nil
 }
 
 func (co *consumerOperator) newMetricsProvider() providers.MetricsProvider {
 	defaultProvider := providers.NewDummyMP(*co.consumer.Spec.NumPartitions)
-	shouldUpdate, err := shouldUpdateMetrics(co.consumer)
+	shouldUpdate, err := shouldUpdateMetrics(co.consumer, co.clock.Now())
 	if err != nil {
 		co.log.Error(err, "failed to verify autoscaler configuration")
 		return defaultProvider
 	}
-	if !shouldUpdate || !co.isAutoScaleEnabled() {
+	if !co.isAutoScaleEnabled() {
 		return defaultProvider
 	}
 	switch co.consumer.Spec.Autoscaler.Mode {
@@ -313,14 +326,16 @@ func (co *consumerOperator) newMetricsProvider() providers.MetricsProvider {
 			return defaultProvider
 		}
 		providers.LoadSyncState(mp, co.consumer.Status)
-		if err := mp.Update(); err != nil {
-			co.log.Error(err, "failed to query metrics from Prometheus Metrics Provider")
-		} else {
-			tm := metav1.Now()
-			co.metricsUpdated = true
-			co.consumer.Status.LastSyncTime = &tm
-			co.consumer.Status.LastSyncState = providers.DumpSyncState(*co.consumer.Spec.NumPartitions, mp)
-			co.log.Info("metrics data were updated successfully")
+		if shouldUpdate {
+			if err := mp.Update(); err != nil {
+				co.log.Error(err, "failed to query metrics from Prometheus Metrics Provider")
+			} else {
+				tm := metav1.NewTime(co.clock.Now())
+				co.metricsUpdated = true
+				co.consumer.Status.LastSyncTime = &tm
+				co.consumer.Status.LastSyncState = providers.DumpSyncState(*co.consumer.Spec.NumPartitions, mp)
+				co.log.Info("metrics data were updated successfully")
+			}
 		}
 		return mp
 	default:
@@ -332,7 +347,7 @@ func (co *consumerOperator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 	trackedPartitions := make(map[int32]bool)
 	for i := range managedDeploys.Items {
 		deploy := &managedDeploys.Items[i]
-		partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[partitionAnnotation])
+		partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[PartitionAnnotation])
 		if err != nil {
 			co.log.Error(err, "failed to parse annotation with partition number. Panic!!!")
 			continue
@@ -361,7 +376,7 @@ func (co *consumerOperator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 			co.usedResources.Memory().Add(*r.Memory())
 		}
 
-		if deploy.Annotations[generationAnnotation] != co.observedGeneration() {
+		if deploy.Annotations[GenerationAnnotation] != co.observedGeneration() {
 			co.toUpdateInstances = append(co.toUpdateInstances, deploy)
 			continue
 		}
@@ -410,15 +425,15 @@ func (co *consumerOperator) newDeploy(partition int32) (*appsv1.Deployment, erro
 }
 
 func (co *consumerOperator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, bool, error) {
-	if time.Since(co.consumer.Status.LastSyncTime.Time) >= scaleStatePendingPeriod {
+	if co.clock.Since(co.consumer.Status.LastSyncTime.Time) >= scaleStatePendingPeriod {
 		return deploy, false, nil
 	}
-	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[partitionAnnotation])
+	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[PartitionAnnotation])
 	if err != nil {
 		return nil, false, err
 	}
-	currentState := deploy.Annotations[scalingStatusAnnotation]
-	lastStateChange, err := helpers.ParseTimeAnnotation(deploy.Annotations[scalingStatusChangeAnnotation])
+	currentState := deploy.Annotations[ScalingStatusAnnotation]
+	lastStateChange, err := helpers.ParseTimeAnnotation(deploy.Annotations[ScalingStatusChangeAnnotation])
 	if err != nil {
 		return nil, false, err
 	}
@@ -435,16 +450,18 @@ func (co *consumerOperator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.D
 		case cmpResourcesEq:
 			isChangedAnnotations = co.updateScaleAnnotations(deploy, underProvision)
 		case cmpResourcesGt:
-			if currentState == InstanceStatusPendingScaleUp && scalingAllowed(lastStateChange) {
+			if currentState == InstanceStatusPendingScaleUp && co.scalingAllowed(lastStateChange) {
 				co.updateScaleAnnotations(deploy, underProvision)
 				container.Resources = *resources
 				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
 				needsUpdate = true
+			} else if currentState == InstanceStatusSaturated {
+				isChangedAnnotations = co.updateScaleAnnotations(deploy, underProvision)
 			} else {
 				isChangedAnnotations = co.updateScalingStatus(deploy, InstanceStatusPendingScaleUp)
 			}
 		case cmpResourcesLt:
-			if currentState == InstanceStatusPendingScaleDown && scalingAllowed(lastStateChange) {
+			if currentState == InstanceStatusPendingScaleDown && co.scalingAllowed(lastStateChange) {
 				co.updateScaleAnnotations(deploy, underProvision)
 				container.Resources = *resources
 				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, co.consumer.Spec.PartitionEnvKey, int(partition))
@@ -459,7 +476,7 @@ func (co *consumerOperator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.D
 			"container", container.Name,
 			"cmp", cmpRes,
 			"currentState", currentState,
-			"scalingAllowed", scalingAllowed(lastStateChange),
+			"scalingAllowed", co.scalingAllowed(lastStateChange),
 			"isLagging", isLagging,
 			"saturationLevel", underProvision,
 		)
@@ -471,11 +488,11 @@ func (co *consumerOperator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.D
 }
 
 func (co *consumerOperator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, error) {
-	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[partitionAnnotation])
+	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[PartitionAnnotation])
 	if err != nil {
 		return nil, err
 	}
-	deploy.Annotations[generationAnnotation] = co.observedGeneration()
+	deploy.Annotations[GenerationAnnotation] = co.observedGeneration()
 	deploy.Spec = co.consumer.Spec.DeploymentTemplate
 	for i := range deploy.Spec.Template.Spec.Containers {
 		var resources *corev1.ResourceRequirements
@@ -506,8 +523,8 @@ func (co *consumerOperator) constructDeploy(partition int32) *appsv1.Deployment 
 		},
 		Spec: co.consumer.Spec.DeploymentTemplate,
 	}
-	deploy.Annotations[partitionAnnotation] = strconv.Itoa(int(partition))
-	deploy.Annotations[generationAnnotation] = co.observedGeneration()
+	deploy.Annotations[PartitionAnnotation] = strconv.Itoa(int(partition))
+	deploy.Annotations[GenerationAnnotation] = co.observedGeneration()
 	co.updateScalingStatus(deploy, InstanceStatusRunning)
 	return deploy
 }
@@ -520,111 +537,46 @@ func (co *consumerOperator) allocateResources(container *corev1.Container, parti
 }
 
 func (co *consumerOperator) updateResources(container *corev1.Container, partition int32) (*corev1.ResourceRequirements, int64) {
-	allocatedResources, reqDiff := co.allocateResources(container, partition)
-	rr := container.Resources.Requests.DeepCopy()
+	estimatedResources, reqDiff := co.allocateResources(container, partition)
+	currentResources := container.Resources.DeepCopy()
 
-	// diff between existing and requested CPU
-	cpu := allocatedResources.Requests.Cpu()
-	cpu.Sub(*rr.Cpu())
-
-	// diff between existing and requested Memory
-	mem := allocatedResources.Requests.Memory()
-	mem.Sub(*rr.Memory())
-
-	request := &corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    *cpu,
-			corev1.ResourceMemory: *mem,
-		},
-	}
+	request := resourceRequirementsDiff(estimatedResources, currentResources)
 	requestedResources := co.globalLimiter.ApplyLimits("", request)
 	if requestedResources == nil {
 		// global limiter exhausted
 		// return existing resources
-		return &corev1.ResourceRequirements{
-			Requests: corev1.ResourceList{
-				corev1.ResourceCPU:    *container.Resources.Requests.Cpu(),
-				corev1.ResourceMemory: *container.Resources.Requests.Memory(),
-			},
-		}, reqDiff
+		return &container.Resources, reqDiff
 	}
-	globalDiff := request.Requests.Cpu().MilliValue() - requestedResources.Requests.Cpu().MilliValue()
 
-	// sum-up allocated and requested resources
-	cpu.Add(*allocatedResources.Requests.Cpu())
-	cpu.Add(*requestedResources.Requests.Cpu())
-	mem.Add(*allocatedResources.Requests.Memory())
-	mem.Add(*requestedResources.Requests.Memory())
-	return &corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    *cpu,
-			corev1.ResourceMemory: *mem,
-		},
-	}, reqDiff + globalDiff
+	//// sum-up current and requested resources
+	limitedResources := resourceRequirementsSum(currentResources, requestedResources)
+	globalDiff := request.Requests.Cpu().MilliValue() - requestedResources.Requests.Cpu().MilliValue()
+	return limitedResources, reqDiff + globalDiff
 }
 
 func (co *consumerOperator) updateScaleAnnotations(d *appsv1.Deployment, underProvision int64) bool {
 	if underProvision > 0 {
-		d.Annotations[cpuSaturationLevel] = strconv.Itoa(int(underProvision))
+		d.Annotations[CPUSaturationLevel] = strconv.Itoa(int(underProvision))
 		deploymentSaturation.WithLabelValues(co.consumer.Name, d.Name).Set(float64(underProvision))
 		return co.updateScalingStatus(d, InstanceStatusSaturated)
 	}
-	delete(d.Annotations, cpuSaturationLevel)
+	delete(d.Annotations, CPUSaturationLevel)
 	deploymentSaturation.WithLabelValues(co.consumer.Name, d.Name).Set(float64(0))
 	return co.updateScalingStatus(d, InstanceStatusRunning)
 }
 
 func (co *consumerOperator) updateScalingStatus(d *appsv1.Deployment, newStatus string) bool {
-	curStatus := d.Annotations[scalingStatusAnnotation]
+	curStatus := d.Annotations[ScalingStatusAnnotation]
 	if curStatus == newStatus {
 		return false
 	}
-	d.Annotations[scalingStatusAnnotation] = newStatus
-	d.Annotations[scalingStatusChangeAnnotation] = time.Now().Format(helpers.TimeLayout)
+	d.Annotations[ScalingStatusAnnotation] = newStatus
+	d.Annotations[ScalingStatusChangeAnnotation] = co.clock.Now().Format(helpers.TimeLayout)
 	ds := float64(instanceStatusToInt(newStatus))
 	deploymentStatus.WithLabelValues(co.consumer.Name, d.Name).Set(ds)
 	return true
 }
 
-func scalingAllowed(lastChange time.Time) bool {
-	return time.Since(lastChange) >= scaleStatePendingPeriod
-}
-
-func instanceStatusToInt(status string) int {
-	switch status {
-	case InstanceStatusRunning:
-		return 0
-	case InstanceStatusSaturated:
-		return 1
-	case InstanceStatusPendingScaleUp:
-		return 2
-	case InstanceStatusPendingScaleDown:
-		return 3
-	default:
-		return -1
-	}
-}
-
-func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer) (bool, error) {
-	status := consumer.Status
-	if status.LastSyncTime == nil || status.LastSyncState == nil {
-		return true, nil
-	}
-	if consumer.Spec.Autoscaler == nil {
-		return false, fmt.Errorf("autoscaler is not present in consumer spec")
-	}
-	if consumer.Spec.Autoscaler.Mode == konsumeratorv1alpha1.AutoscalerTypePrometheus &&
-		consumer.Spec.Autoscaler.Prometheus == nil {
-		return false, fmt.Errorf("autoscaler misconfiguration: prometheus setup is missing")
-	}
-	timeToSync := metav1.Now().Sub(status.LastSyncTime.Time) > consumer.Spec.Autoscaler.Prometheus.MinSyncPeriod.Duration
-	if timeToSync {
-		return true, nil
-	}
-	return false, nil
-}
-
-func deployIsPaused(d *appsv1.Deployment) bool {
-	_, pausedAnnotation := d.Annotations[disableAutoscalerAnnotation]
-	return d.Status.Replicas == 0 || pausedAnnotation
+func (co *consumerOperator) scalingAllowed(lastChange time.Time) bool {
+	return co.clock.Since(lastChange) >= scaleStatePendingPeriod
 }

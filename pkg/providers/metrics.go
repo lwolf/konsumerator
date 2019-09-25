@@ -55,7 +55,7 @@ var (
 			Name:      "sub_requests_errors_total",
 			Help:      "Total number of HTTP request errors to Prometheus",
 		},
-		[]string{"addr"},
+		[]string{"consumer", "addr"},
 	)
 	subRequestDuration = prometheus.NewSummaryVec(
 		prometheus.SummaryOpts{
