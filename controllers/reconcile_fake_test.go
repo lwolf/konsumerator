@@ -844,6 +844,10 @@ const vectorResponseFormat = `{
 }`
 
 func (fs *fakePromServer) handler(rw http.ResponseWriter, req *http.Request) {
+	if fs.metric == nil {
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	if req.Method != http.MethodPost {
 		fs.t.Fatalf("expected to receive POST request; got %q", req.Method)
 	}

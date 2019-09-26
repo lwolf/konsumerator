@@ -74,27 +74,29 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	var c controllers.Controller
 	if guestMode {
-		if err = (&controllers.ConfigMapReconciler{
-			Client: mgr.GetClient(),
-			Scheme: mgr.GetScheme(),
-			Log:    ctrl.Log.WithName("controllers").WithName("ConsumerCM"),
-		}).SetupWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "ConsumerCM")
-			os.Exit(1)
+		c = &controllers.ConfigMapReconciler{
+			Client:   mgr.GetClient(),
+			Scheme:   mgr.GetScheme(),
+			Log:      ctrl.Log.WithName("controllers").WithName("ConsumerCM"),
+			Recorder: mgr.GetEventRecorderFor("konsumerator"),
 		}
 	} else {
-		err = (&controllers.ConsumerReconciler{
+		c = &controllers.ConsumerReconciler{
 			Client:   mgr.GetClient(),
 			Log:      ctrl.Log.WithName("controllers").WithName("Consumer"),
 			Scheme:   mgr.GetScheme(),
 			Recorder: mgr.GetEventRecorderFor("konsumerator"),
-		}).SetupWithManager(mgr)
-		if err != nil {
-			setupLog.Error(err, "unable to create controller", "controller", "Consumer")
-			os.Exit(1)
 		}
 	}
+
+	if err := c.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller")
+		os.Exit(1)
+	}
+
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

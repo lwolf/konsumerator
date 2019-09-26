@@ -125,11 +125,15 @@ func TestNewConsumerOperator(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			co, err := newConsumerOperator(tlog.NullLogger{}, tc.consumer, tc.deploys, clock.RealClock{})
+			o := &operator{
+				clock: clock.RealClock{},
+				log:   tlog.NullLogger{},
+			}
+			err := o.init(tc.consumer, tc.deploys)
 			if err != nil {
 				t.Fatalf("unexpected err: %s", err)
 			}
-			testCompareStatus(t, tc.expectedStatus, co.consumer.Status)
+			testCompareStatus(t, tc.expectedStatus, o.consumer.Status)
 		})
 	}
 }
