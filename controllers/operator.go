@@ -26,6 +26,7 @@ import (
 )
 
 type operator struct {
+	owner    metav1.Object
 	consumer *konsumeratorv1alpha1.Consumer
 	// new
 	Recorder record.EventRecorder
@@ -87,7 +88,7 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 			o.log.Error(err, "failed to create new deploy")
 			continue
 		}
-		if err := ctrl.SetControllerReference(o.consumer, newD, o.Scheme); err != nil {
+		if err := ctrl.SetControllerReference(o.owner, newD, o.Scheme); err != nil {
 			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
 			o.log.Error(err, "unable to set owner reference for the new Deployment", "deployment", newD, "partition", partition)
 			continue
@@ -99,12 +100,12 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		}
 		o.log.V(1).Info("created new deployment", "deployment", newD, "partition", partition)
 		deploymentsCreateTotal.WithLabelValues(req.Name).Inc()
-		o.Recorder.Eventf(
-			o.consumer,
-			corev1.EventTypeNormal,
-			"DeployCreate",
-			"deployment for partition was created %d", partition,
-		)
+		// o.Recorder.Eventf(
+		// 	o.consumer,
+		// 	corev1.EventTypeNormal,
+		// 	"DeployCreate",
+		// 	"deployment for partition was created %d", partition,
+		// )
 	}
 
 	for _, deploy := range o.toRemoveInstances {
@@ -114,12 +115,12 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 			continue
 		}
 		deploymentsDeleteTotal.WithLabelValues(req.Name).Inc()
-		o.Recorder.Eventf(
-			o.consumer,
-			corev1.EventTypeNormal,
-			"DeployDelete",
-			"deployment %s was deleted", deploy.Name,
-		)
+		// o.Recorder.Eventf(
+		// 	o.consumer,
+		// 	corev1.EventTypeNormal,
+		// 	"DeployDelete",
+		// 	"deployment %s was deleted", deploy.Name,
+		// )
 	}
 
 	for _, origDeploy := range o.toUpdateInstances {

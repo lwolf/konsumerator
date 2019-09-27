@@ -2,12 +2,16 @@ package controllers
 
 import (
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"math"
+	"strconv"
 	"time"
 
+	"github.com/lwolf/konsumerator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/json"
 
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 )
@@ -98,4 +102,71 @@ func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer, now time.Time)
 func deployIsPaused(d *appsv1.Deployment) bool {
 	_, pausedAnnotation := d.Annotations[DisableAutoscalerAnnotation]
 	return d.Status.Replicas == 0 || pausedAnnotation
+}
+
+func PopulateStatusFromAnnotation(a map[string]string, status *konsumeratorv1alpha1.ConsumerStatus) {
+	am := annotationMngr{a}
+	status.Expected = am.GetInt32(annotationStatusExpected)
+	status.Running = am.GetInt32(annotationStatusRunning)
+	status.Paused = am.GetInt32(annotationStatusPaused)
+	status.Lagging = am.GetInt32(annotationStatusLagging)
+	status.Missing = am.GetInt32(annotationStatusMissing)
+	status.Outdated = am.GetInt32(annotationStatusOutdated)
+	status.LastSyncTime = am.GetTime(annotationStatusLastSyncTime)
+	status.LastSyncState = am.GetMap(annotationStatusLastState)
+}
+
+func UpdateStatusAnnotations(cm *corev1.ConfigMap, status *konsumeratorv1alpha1.ConsumerStatus) error {
+	cm.Annotations[annotationStatusExpected] = fmt.Sprintf("%d", *status.Expected)
+	cm.Annotations[annotationStatusRunning] = fmt.Sprintf("%d", *status.Running)
+	cm.Annotations[annotationStatusPaused] = fmt.Sprintf("%d", *status.Paused)
+	cm.Annotations[annotationStatusLagging] = fmt.Sprintf("%d", *status.Lagging)
+	cm.Annotations[annotationStatusMissing] = fmt.Sprintf("%d", *status.Missing)
+	cm.Annotations[annotationStatusOutdated] = fmt.Sprintf("%d", *status.Outdated)
+	cm.Annotations[annotationStatusLastSyncTime] = status.LastSyncTime.Format(helpers.TimeLayout)
+	state, err := json.Marshal(status.LastSyncState)
+	if err != nil {
+		return err
+	}
+	cm.Annotations[annotationStatusLastState] = string(state)
+	return nil
+}
+
+type annotationMngr struct {
+	a map[string]string
+}
+
+func (am annotationMngr) GetMap(k string) map[string]konsumeratorv1alpha1.InstanceState {
+	v, ok := am.a[k]
+	if !ok {
+		return nil
+	}
+	d := make(map[string]konsumeratorv1alpha1.InstanceState)
+	if err := json.Unmarshal([]byte(v), &d); err != nil {
+		return nil
+	}
+	return d
+
+}
+func (am annotationMngr) GetTime(k string) *metav1.Time {
+	v, ok := am.a[k]
+	if !ok {
+		return nil
+	}
+	t, err := time.Parse(helpers.TimeLayout, v)
+	if err != nil {
+		return nil
+	}
+	return &metav1.Time{Time: t}
+}
+func (am annotationMngr) GetInt32(k string) *int32 {
+	v, ok := am.a[k]
+	if !ok {
+		return helpers.Ptr2Int32(0)
+	}
+	i, err := strconv.Atoi(v)
+	if err != nil {
+		return helpers.Ptr2Int32(0)
+	}
+	return helpers.Ptr2Int32(int32(i))
 }

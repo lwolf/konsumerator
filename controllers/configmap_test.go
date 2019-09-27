@@ -124,8 +124,9 @@ resourcePolicy:
 	var consumer konsumeratorv1alpha1.Consumer
 	br := bytes.NewReader(data)
 	d := yaml.NewYAMLToJSONDecoder(br)
-	if err := d.Decode(&consumer.Status); err != nil {
+	if err := d.Decode(&consumer.Spec); err != nil {
 		t.Fatalf("unexp err: %s", err)
 	}
 	fmt.Println(consumer.Spec)
+	fmt.Println(consumer.Spec.Autoscaler.Prometheus)
 }

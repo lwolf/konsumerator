@@ -19,6 +19,7 @@ import (
 	"context"
 	"github.com/google/go-cmp/cmp"
 	"k8s.io/client-go/tools/record"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -27,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/apimachinery/pkg/util/yaml"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -40,6 +42,15 @@ import (
 const (
 	cfgMapOwnerKey      = ".metadata.controller"
 	AnnotationIsManaged = "konsumerator.lwolf.org/managed"
+
+	annotationStatusExpected     = "konsumerator.lwolf.org/status.expected"
+	annotationStatusRunning      = "konsumerator.lwolf.org/status.running"
+	annotationStatusPaused       = "konsumerator.lwolf.org/status.paused"
+	annotationStatusMissing      = "konsumerator.lwolf.org/status.missing"
+	annotationStatusLagging      = "konsumerator.lwolf.org/status.lagging"
+	annotationStatusOutdated     = "konsumerator.lwolf.org/status.outdated"
+	annotationStatusLastSyncTime = "konsumerator.lwolf.org/status.last-sync-time"
+	annotationStatusLastState    = "konsumerator.lwolf.org/status.last-sync-state"
 )
 
 // ConfigMapReconciler reconciles a ConfigMap object
@@ -53,6 +64,9 @@ type ConfigMapReconciler struct {
 }
 
 func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if r.Clock == nil {
+		r.Clock = clock.RealClock{}
+	}
 	if err := mgr.GetFieldIndexer().
 		IndexField(&appsv1.Deployment{}, cfgMapOwnerKey, func(rawObj runtime.Object) []string {
 			d := rawObj.(*appsv1.Deployment)
@@ -90,27 +104,33 @@ func (r *ConfigMapReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("configmap", req.NamespacedName)
 	result := ctrl.Result{RequeueAfter: defaultMinSyncPeriod}
 
-	var cm corev1.ConfigMap
-	if err := r.Get(ctx, req.NamespacedName, &cm); err != nil {
+	var cfgMap corev1.ConfigMap
+	if err := r.Get(ctx, req.NamespacedName, &cfgMap); err != nil {
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
 		// requeue (we'll need to wait for a new notification), and we can get them
 		// on deleted requests.
 		return ctrl.Result{}, errors.IgnoreNotFound(err)
 	}
+	cm := cfgMap.DeepCopy()
 	_, ok := cm.Annotations[AnnotationIsManaged]
 	if !ok {
 		return ctrl.Result{}, nil
 	}
 
 	var consumer konsumeratorv1alpha1.Consumer
-	if err := r.Get(ctx, req.NamespacedName, &consumer); err != nil {
-		// we'll ignore not-found errors, since they can't be fixed by an immediate
-		// requeue (we'll need to wait for a new notification), and we can get them
-		// on deleted requests.
-		reconcileErrors.WithLabelValues(req.Name).Inc()
-		return ctrl.Result{}, errors.IgnoreNotFound(err)
+	var data string
+	for i := range cm.Data {
+		data = cm.Data[i]
+		break
 	}
-
+	br := strings.NewReader(data)
+	d := yaml.NewYAMLToJSONDecoder(br)
+	if err := d.Decode(&consumer.Spec); err != nil {
+		log.Error(err, "failed to decode consumer")
+		return ctrl.Result{}, nil
+	}
+	consumer.Namespace = cm.Namespace
+	consumer.Name = cm.Name
 	var managedDeploys appsv1.DeploymentList
 	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(cfgMapOwnerKey, req.Name)); err != nil {
 		eMsg := "unable to list managed deployments"
@@ -125,25 +145,33 @@ func (r *ConfigMapReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		clock:    r.Clock,
 		log:      log,
 		Scheme:   r.Scheme,
+		owner:    cm,
 	}
-	err := o.init(consumer.DeepCopy(), managedDeploys)
+	PopulateStatusFromAnnotation(cm.Annotations, &consumer.Status)
+	initialStatus := consumer.Status.DeepCopy()
+	err := o.init(&consumer, managedDeploys)
 	if err != nil {
 		reconcileErrors.WithLabelValues(req.Name).Inc()
 		return ctrl.Result{}, err
 	}
-
-	if cmp.Equal(consumer.Status, o.consumer.Status) {
+	consumer.Status.ObservedGeneration = o.consumer.Status.ObservedGeneration
+	if cmp.Equal(consumer.Status, initialStatus) {
 		log.V(1).Info("no change detected...")
 		return result, nil
 	}
 
 	start = time.Now()
-	if err := r.Status().Update(ctx, o.consumer); err != nil {
+	err = UpdateStatusAnnotations(cm, &consumer.Status)
+	if err != nil {
+		log.Error(err, "unable to populate status annotation")
+		return ctrl.Result{}, err
+	}
+	if err := r.Update(ctx, cm); err != nil {
 		properError := errors.IgnoreConflict(err)
 		if properError != nil {
-			eMsg := "unable to update Consumer status"
+			eMsg := "unable to update ConfigMap annotation status"
 			log.Error(err, eMsg)
-			o.Recorder.Event(o.consumer, corev1.EventTypeWarning, "UpdateConsumerStatus", eMsg)
+			o.Recorder.Event(o.consumer, corev1.EventTypeWarning, "UpdateConfigMapStatus", eMsg)
 			reconcileErrors.WithLabelValues(req.Name).Inc()
 		}
 		return result, properError

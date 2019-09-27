@@ -119,6 +119,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		clock:    r.Clock,
 		log:      log,
 		Scheme:   r.Scheme,
+		owner:    &consumer,
 	}
 	err := o.init(consumer.DeepCopy(), managedDeploys)
 	if err != nil {

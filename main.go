@@ -49,11 +49,13 @@ func main() {
 	var enableLeaderElection bool
 	var isDebug bool
 	var guestMode bool
+	var namespace string
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&guestMode, "guest-mode", false, "Run operator in guest mode, Use configmap instead of CRD, no cluster-roles required")
 	flag.BoolVar(&isDebug, "verbose", false, "Set log level to debug mode.")
+	flag.StringVar(&namespace, "namespace", "", "set namespace")
 	flag.Parse()
 	setupLog.Info(
 		"Initializing konsumerator controller",
@@ -62,6 +64,9 @@ func main() {
 		"metricsAddr", metricsAddr,
 		"leaderElection", enableLeaderElection,
 	)
+	if isDebug && namespace == "" {
+		panic("namespace is required in guest mode")
+	}
 
 	ctrl.SetLogger(zap.Logger(isDebug))
 
@@ -69,6 +74,7 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		Namespace:          namespace,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
