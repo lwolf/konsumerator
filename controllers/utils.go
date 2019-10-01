@@ -101,7 +101,10 @@ func shouldUpdateMetrics(consumer *konsumeratorv1alpha1.Consumer, now time.Time)
 
 func deployIsPaused(d *appsv1.Deployment) bool {
 	_, pausedAnnotation := d.Annotations[DisableAutoscalerAnnotation]
-	return d.Status.Replicas == 0 || pausedAnnotation
+	// TODO: having d.Status.Replicas in the isPaused check makes it
+	// impossible to `unpause` the deployment
+	// return d.Status.Replicas == 0 || pausedAnnotation
+	return pausedAnnotation
 }
 
 func PopulateStatusFromAnnotation(a map[string]string, status *konsumeratorv1alpha1.ConsumerStatus) {

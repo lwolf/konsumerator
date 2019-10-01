@@ -88,11 +88,7 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 			o.log.Error(err, "failed to create new deploy")
 			continue
 		}
-		if err := ctrl.SetControllerReference(o.owner, newD, o.Scheme); err != nil {
-			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
-			o.log.Error(err, "unable to set owner reference for the new Deployment", "deployment", newD, "partition", partition)
-			continue
-		}
+		o.setOwner(newD)
 		if err := cl.Create(ctx, newD); errors.IgnoreAlreadyExists(err) != nil {
 			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
 			o.log.Error(err, "unable to create new Deployment", "deployment", newD, "partition", partition)
@@ -130,6 +126,7 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 			o.log.Error(err, "failed to update deploy")
 			continue
 		}
+		o.setOwner(deploy)
 		if err := cl.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
 			o.log.Error(err, "unable to update deployment", "deployment", deploy)
@@ -148,6 +145,7 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		if !needsUpdate {
 			continue
 		}
+		o.setOwner(deploy)
 		if err := cl.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
 			o.log.Error(err, "unable to update deployment", "deployment", deploy)
@@ -285,6 +283,15 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 		"toUpdate", status.Outdated,
 		"toEstimate", len(o.toEstimateInstances),
 	)
+}
+
+func (o *operator) setOwner(deploy *appsv1.Deployment) {
+	ownerRef := metav1.GetControllerOf(deploy)
+	if ownerRef == nil || ownerRef.UID != o.consumer.UID {
+		if err := ctrl.SetControllerReference(o.owner, deploy, o.Scheme); err != nil {
+			o.log.Error(err, "unable to set owner reference", "deployment", deploy)
+		}
+	}
 }
 
 func (o *operator) newDeploy(partition int32) (*appsv1.Deployment, error) {
