@@ -390,7 +390,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
@@ -408,18 +408,18 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		{
 			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
-				offset:      10,
+				offset:      10e3 * 60 * 6,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "2"),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expContainerEnv:     containerEnv("busybox", "0", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
+				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
-				Lagging:  helpers.Ptr2Int32(0),
+				Lagging:  helpers.Ptr2Int32(1),
 				Missing:  helpers.Ptr2Int32(0),
 				Outdated: helpers.Ptr2Int32(0),
 				Running:  helpers.Ptr2Int32(1),
@@ -428,16 +428,16 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 4
 		{
-			timePassed: time.Minute * 3,
+			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
-				offset:      10e6,
+				offset:      10e3 * 60 * 15,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusSaturated),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
+				"busybox": *tests.NewResourceRequirements("2", "800M", "2", "800M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
@@ -452,14 +452,14 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		{
 			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
-				offset:      10e6,
+				offset:      10e3 * 60 * 10,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotationSaturated(name, "2300"),
+			expDeployAnnotation: deployAnnotationSaturated(name, "2000"),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "860M", "2", "860M"),
+				"busybox": *tests.NewResourceRequirements("2", "800M", "2", "800M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
@@ -474,14 +474,14 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		{
 			timePassed: time.Second * 10,
 			promResponse: &fakeMetrics{
-				offset:      10e6,
+				offset:      10e3 * 60 * 10,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotationSaturated(name, "2300"),
+			expDeployAnnotation: deployAnnotationSaturated(name, "2000"),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "860M", "2", "860M"),
+				"busybox": *tests.NewResourceRequirements("2", "800M", "2", "800M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
@@ -500,10 +500,10 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotationSaturated(name, "2300"),
+			expDeployAnnotation: deployAnnotationSaturated(name, "2000"),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "860M", "2", "860M"),
+				"busybox": *tests.NewResourceRequirements("2", "800M", "2", "800M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
@@ -525,7 +525,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "860M", "2", "860M"),
+				"busybox": *tests.NewResourceRequirements("2", "800M", "2", "800M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),

@@ -11,7 +11,7 @@ kafka consumers.
 > This software is in active development phase, any logic and CRD structure could change between versions.
 > Use on your own risk. 
 
-Operator creates and manages `Consumer` CRD.  
+Operator creates and manages `Consumer` CRD, for this it requires cluster-wide permissions.
 
 ```yaml
 apiVersion: konsumerator.lwolf.org/v1alpha1
@@ -176,6 +176,32 @@ for the container with minAllowed.memory = maxAllowed.memory.
 as much resources as possible to recover during this period.
 It also require `production` and `offset` metrics from the Prometheus. 
 
+## Guest Mode (no cluster wide permissions)
+
+Sometimes you don't have permissions to create CRDs in the cluster, for such cases Konsumerator supports
+a so-called `guest-mode`. When running in guest-mode operator uses configmaps instead of CRDs and it is limited to a 
+single namespace.
+Guest-mode could be activated by setting namespace argument `konsumerator --namespace=default`.
+
+To create an instance of the consumer, you need to create a ConfigMap with `konsumerator.lwolf.org/managed` annotation
+and consumerSpec inside the body. 
+
+```
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: consumer-sample
+  namespace: default
+  annotations:
+    konsumerator.lwolf.org/managed: "true"
+data:
+  consumer.yaml: |
+    numPartitions: 100
+    name: "test-consumer"
+    namespace: "default"
+    autoscaler:
+      ...
+```
 
 ## Installation
 

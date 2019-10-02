@@ -52,7 +52,8 @@ v0.8 bugfixes
 * [ ] Update owner. If operator was restarted it gets new UID, we need to update ownerRef in reconcile
 * [ ] Verify that system works without ResourcePolicy set
 * [ ] [BUG] updating operator spec to scale all deployments down works, but resume doesn't
-* [ ]
+* [ ] Consider scaling up only if there is a lag
+* [ ] make `scaleStatePendingPeriod` configurable
     
 v0.9
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 

@@ -325,24 +325,28 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 		case cmpResourcesEq:
 			isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
 		case cmpResourcesGt:
-			if currentState == InstanceStatusPendingScaleUp && o.scalingAllowed(lastStateChange) {
-				o.updateScaleAnnotations(deploy, underProvision)
-				container.Resources = *resources
-				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, int(partition))
-				needsUpdate = true
-			} else if currentState == InstanceStatusSaturated {
-				isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
-			} else {
-				isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleUp)
+			if isLagging {
+				if currentState == InstanceStatusPendingScaleUp && o.scalingAllowed(lastStateChange) {
+					o.updateScaleAnnotations(deploy, underProvision)
+					container.Resources = *resources
+					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, int(partition))
+					needsUpdate = true
+				} else if currentState == InstanceStatusSaturated {
+					isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
+				} else {
+					isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleUp)
+				}
 			}
 		case cmpResourcesLt:
-			if currentState == InstanceStatusPendingScaleDown && o.scalingAllowed(lastStateChange) {
-				o.updateScaleAnnotations(deploy, underProvision)
-				container.Resources = *resources
-				container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, int(partition))
-				needsUpdate = true
-			} else if !isLagging {
-				isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleDown)
+			if !isLagging {
+				if currentState == InstanceStatusPendingScaleDown && o.scalingAllowed(lastStateChange) {
+					o.updateScaleAnnotations(deploy, underProvision)
+					container.Resources = *resources
+					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, int(partition))
+					needsUpdate = true
+				} else {
+					isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleDown)
+				}
 			}
 		}
 		o.log.Info(
