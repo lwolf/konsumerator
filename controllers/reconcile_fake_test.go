@@ -360,6 +360,7 @@ func TestConsumerReconciliation(t *testing.T) {
 func TestConsumerReconciler_Reconcile(t *testing.T) {
 	name, namespace := "ConsumerReconciler_Reconcile", "Test"
 	testCases := []struct {
+		name                  string
 		timePassed            time.Duration
 		promResponse          *fakeMetrics
 		expDeployAnnotation   map[string]map[string]string
@@ -369,6 +370,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 	}{
 		// step 1
 		{
+			name:                "should have one missing deployment on consumer creation",
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -385,12 +387,13 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 2
 		{
+			name: "should have a single running deployment after the first reconcile",
 			promResponse: &fakeMetrics{
 				offset:      10,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
@@ -406,20 +409,21 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 3
 		{
+			name:       "should set pending scale up status for the lagging deployment",
 			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
-				offset:      10,
+				offset:      10e3 * 60 * 6,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "2"),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expContainerEnv:     containerEnv("busybox", "0", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
+				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
-				Lagging:  helpers.Ptr2Int32(0),
+				Lagging:  helpers.Ptr2Int32(1),
 				Missing:  helpers.Ptr2Int32(0),
 				Outdated: helpers.Ptr2Int32(0),
 				Running:  helpers.Ptr2Int32(1),
@@ -428,16 +432,17 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 4
 		{
-			timePassed: time.Minute * 3,
+			name:       "should scale the deployment",
+			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
-				offset:      10e6,
+				offset:      10e3 * 60 * 15,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusSaturated),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
+				"busybox": *tests.NewResourceRequirements("2", "800M", "2", "800M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
@@ -450,16 +455,17 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 5
 		{
+			name:       "should scale deployment",
 			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
-				offset:      10e6,
+				offset:      10e3 * 60 * 10,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotationSaturated(name, "2300"),
+			expDeployAnnotation: deployAnnotationSaturated(name, "2000"),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "860M", "2", "860M"),
+				"busybox": *tests.NewResourceRequirements("2", "800M", "2", "800M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
@@ -472,16 +478,17 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 6
 		{
+			name:       "should do nothing",
 			timePassed: time.Second * 10,
 			promResponse: &fakeMetrics{
-				offset:      10e6,
+				offset:      10e3 * 60 * 10,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotationSaturated(name, "2300"),
+			expDeployAnnotation: deployAnnotationSaturated(name, "2000"),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "860M", "2", "860M"),
+				"busybox": *tests.NewResourceRequirements("2", "800M", "2", "800M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
@@ -494,20 +501,21 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 7
 		{
+			name:       "should set pending scale down status",
 			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
-				offset:      10e7,
+				offset:      10e3 * 60 * 4,
 				production:  10e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotationSaturated(name, "2300"),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "860M", "2", "860M"),
+				"busybox": *tests.NewResourceRequirements("2", "800M", "2", "800M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
-				Lagging:  helpers.Ptr2Int32(1),
+				Lagging:  helpers.Ptr2Int32(0),
 				Missing:  helpers.Ptr2Int32(0),
 				Outdated: helpers.Ptr2Int32(0),
 				Running:  helpers.Ptr2Int32(1),
@@ -516,16 +524,17 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 8
 		{
+			name:       "should actually scale down",
 			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
-				offset:      40e3,
-				production:  10e3,
+				offset:      5e3 * 60 * 1,
+				production:  5e3,
 				consumption: 10e3,
 			},
-			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "860M", "2", "860M"),
+				"busybox": *tests.NewResourceRequirements("1100m", "220M", "2", "220M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected: helpers.Ptr2Int32(1),
@@ -538,6 +547,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 9
 		{
+			name:       "should be running normally",
 			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
 				offset:      40e3,
@@ -560,6 +570,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 10
 		{
+			name:       "should be pending scale down",
 			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
 				offset:      0,
@@ -582,6 +593,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		},
 		// step 11
 		{
+			name:       "should be running on minimum resources",
 			timePassed: time.Minute * 10,
 			promResponse: &fakeMetrics{
 				offset:      0,
@@ -623,6 +635,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 
 	for step, tc := range testCases {
 		t.Run(fmt.Sprintf("step_%d", step+1), func(t *testing.T) {
+			t.Log(tc.name)
 			fakeClock.Step(tc.timePassed)
 			if tc.promResponse != nil {
 				promServer.setResponse(tc.promResponse)
@@ -636,18 +649,22 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			}
 			tr.mustReconcile()
 			if err := tr.equalConsumerStatus(tc.expConsumerState); err != nil {
-				t.Fatalf("%s", err)
+				t.Logf("%s", err)
+				t.Fail()
 			}
 			deployments := tr.fetchDeployments()
 			for _, deployment := range deployments {
 				if err := deployment.diffAnnotation(tc.expDeployAnnotation); err != nil {
-					t.Fatalf("annotation diff err: %s", err)
+					t.Logf("annotation diff err: %s", err)
+					t.Fail()
 				}
 				if err := deployment.diffEnv(tc.expContainerEnv); err != nil {
-					t.Fatalf("environment diff err: %s", err)
+					t.Logf("environment diff err: %s", err)
+					t.Fail()
 				}
 				if err := deployment.diffResources(tc.expContainerResources); err != nil {
-					t.Fatalf("resources diff err: %s", err)
+					t.Logf("resources diff err: %s", err)
+					t.Fail()
 				}
 			}
 		})
@@ -844,6 +861,10 @@ const vectorResponseFormat = `{
 }`
 
 func (fs *fakePromServer) handler(rw http.ResponseWriter, req *http.Request) {
+	if fs.metric == nil {
+		rw.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 	if req.Method != http.MethodPost {
 		fs.t.Fatalf("expected to receive POST request; got %q", req.Method)
 	}

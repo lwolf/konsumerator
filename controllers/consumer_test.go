@@ -25,7 +25,7 @@ func TestNewConsumerOperator(t *testing.T) {
 		expectedStatus konsumeratorv1alpha1.ConsumerStatus
 	}{
 		{
-			"empty deployments",
+			"empty deployments step 1",
 			&konsumeratorv1alpha1.Consumer{
 				Spec: konsumeratorv1alpha1.ConsumerSpec{
 					NumPartitions: testInt32ToPt(10),
@@ -47,7 +47,7 @@ func TestNewConsumerOperator(t *testing.T) {
 			},
 		},
 		{
-			"empty deployments",
+			"empty deployments step 2",
 			&konsumeratorv1alpha1.Consumer{
 				Spec: konsumeratorv1alpha1.ConsumerSpec{
 					NumPartitions: testInt32ToPt(10),
@@ -71,11 +71,11 @@ func TestNewConsumerOperator(t *testing.T) {
 			},
 			konsumeratorv1alpha1.ConsumerStatus{
 				Expected: testInt32ToPt(10),
-				Running:  testInt32ToPt(0),
-				Paused:   testInt32ToPt(1),
+				Running:  testInt32ToPt(1),
+				Paused:   testInt32ToPt(0),
 				Lagging:  testInt32ToPt(0),
 				Missing:  testInt32ToPt(9),
-				Outdated: testInt32ToPt(0),
+				Outdated: testInt32ToPt(1),
 			},
 		},
 		{
@@ -125,11 +125,15 @@ func TestNewConsumerOperator(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			co, err := newConsumerOperator(tlog.NullLogger{}, tc.consumer, tc.deploys, clock.RealClock{})
+			o := &operator{
+				clock: clock.RealClock{},
+				log:   tlog.NullLogger{},
+			}
+			err := o.init(tc.consumer, tc.deploys)
 			if err != nil {
 				t.Fatalf("unexpected err: %s", err)
 			}
-			testCompareStatus(t, tc.expectedStatus, co.consumer.Status)
+			testCompareStatus(t, tc.expectedStatus, o.consumer.Status)
 		})
 	}
 }
@@ -299,11 +303,11 @@ func TestDeployIsPaused(t *testing.T) {
 		annotations map[string]string
 		want        bool
 	}{
-		"status is paused if scaled to 0": {
-			replicas:    0,
-			annotations: map[string]string{"key": ":value"},
-			want:        true,
-		},
+		// "status is paused if scaled to 0": {
+		// 	replicas:    0,
+		// 	annotations: map[string]string{"key": ":value"},
+		// 	want:        true,
+		// },
 		"status is paused if annotation is set to something": {
 			replicas:    1,
 			annotations: map[string]string{DisableAutoscalerAnnotation: "true"},

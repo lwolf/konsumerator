@@ -48,40 +48,61 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var isDebug bool
+	var namespace string
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&isDebug, "verbose", false, "Set log level to debug mode.")
+	flag.StringVar(&namespace, "namespace", "", "Run operator in guest mode, limit scope to only a single namespace. No CRD will be created")
 	flag.Parse()
 	setupLog.Info(
 		"Initializing konsumerator controller",
 		"version", Version,
 		"isDebug", isDebug,
+		"namespace", namespace,
 		"metricsAddr", metricsAddr,
 		"leaderElection", enableLeaderElection,
 	)
-
 	ctrl.SetLogger(zap.Logger(isDebug))
+	guestMode := namespace != ""
 
-	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+	options := ctrl.Options{
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
-	})
+	}
+	if guestMode {
+		options.Namespace = namespace
+	}
+
+	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
-	err = (&controllers.ConsumerReconciler{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers").WithName("Consumer"),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("konsumerator"),
-	}).SetupWithManager(mgr)
-	if err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Consumer")
+
+	var c controllers.Controller
+	if guestMode {
+		c = &controllers.ConfigMapReconciler{
+			Client:   mgr.GetClient(),
+			Scheme:   mgr.GetScheme(),
+			Log:      ctrl.Log.WithName("controllers").WithName("ConsumerCM"),
+			Recorder: mgr.GetEventRecorderFor("konsumerator"),
+		}
+	} else {
+		c = &controllers.ConsumerReconciler{
+			Client:   mgr.GetClient(),
+			Log:      ctrl.Log.WithName("controllers").WithName("Consumer"),
+			Scheme:   mgr.GetScheme(),
+			Recorder: mgr.GetEventRecorderFor("konsumerator"),
+		}
+	}
+
+	if err := c.SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller")
 		os.Exit(1)
 	}
+
 	// +kubebuilder:scaffold:builder
 
 	setupLog.Info("starting manager")

@@ -40,15 +40,22 @@ v0.6  - observability
 * [x] Add totalMaxAllowed which will limit total number of cores available for the consumer
 
 v0.7 testing
+* [x] Guest-mode. Ability to run operator without cluster-wide permissions
 * [x] Verify that scaling works with multi-container pods
 * [x] Verify that disabling all auto-scaling and setting resources in the deployment itself works 
-* [ ] Verify that system works without ResourcePolicy set
 * [x] Verify that HA mode works
-* [ ] Verify that system operates as expected when autoscaling is disabled 
+* [x] Verify that system operates as expected when autoscaling is disabled 
 * [x] [TEST] Add more integration tests 
 * [x] [TEST] add test to verify that env variables are always set
 
-v0.8
+v0.8 bugfixes
+* [ ] Update owner. If operator was restarted it gets new UID, we need to update ownerRef in reconcile
+* [ ] Verify that system works without ResourcePolicy set
+* [ ] [BUG] updating operator spec to scale all deployments down works, but resume doesn't
+* [ ] Consider scaling up only if there is a lag
+* [ ] make `scaleStatePendingPeriod` configurable
+    
+v0.9
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
