@@ -41,8 +41,9 @@ const (
 	cmpResourcesEq int = 0
 	cmpResourcesGt int = 1
 
-	defaultMinSyncPeriod    = time.Minute
-	scaleStatePendingPeriod = time.Minute * 5
+	defaultMinSyncPeriod               = time.Minute
+	defaultScaleStatePendingUpPeriod   = time.Minute * 5
+	defaultScaleStatePendingDownPeriod = time.Minute * 15
 )
 
 // Consumer reconciles a Consumer object

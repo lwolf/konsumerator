@@ -682,7 +682,9 @@ func newConsumer(name, namespace string) *konsumeratorv1alpha1.Consumer {
 			Name:          name,
 			Namespace:     namespace,
 			Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
-				Mode: konsumeratorv1alpha1.AutoscalerTypePrometheus,
+				Mode:                     konsumeratorv1alpha1.AutoscalerTypePrometheus,
+				PendingScaleUpDuration:   &metav1.Duration{Duration: 5 * time.Minute},
+				PendingScaleDownDuration: &metav1.Duration{Duration: 5 * time.Minute},
 				Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{
 					TolerableLag:  &metav1.Duration{Duration: 5 * time.Minute},
 					MinSyncPeriod: &metav1.Duration{Duration: time.Minute},
