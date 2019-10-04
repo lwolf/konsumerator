@@ -38,7 +38,6 @@ autoscaler:
     recoveryTime: "30m"
     # prometheus addresses to query
     address:
-#        - "http://prometheus-server.kube-system:9090"
       - "http://172.17.0.3:30666"
     # Offset query should return number of messages that is not
     # processed yet a.k.a lag per partitionLabel
@@ -112,7 +111,6 @@ resourcePolicy:
       cpu: "1"
       memory: "100M"
   - containerName: busybox-info
-#      mode: Off
     minAllowed:
       cpu: "100m"
       memory: "100M"

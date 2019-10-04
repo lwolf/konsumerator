@@ -55,6 +55,7 @@ v0.8 bugfixes
 * [ ] Verify that system works without ResourcePolicy set
 * [x] make `scaleStatePendingPeriod` configurable
 * [ ] profile slow reconcile (15s for ~300 deployments)
+* [x] Fix statuses after the change in scaling logic (scale based on lag) 
     
 v0.9
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations
