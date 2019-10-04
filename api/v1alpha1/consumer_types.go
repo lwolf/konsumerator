@@ -93,6 +93,10 @@ type ContainerResourcePolicy struct {
 type AutoscalerSpec struct {
 	Mode AutoscalerType `json:"mode"`
 	// +optional
+	PendingScaleUpDuration *metav1.Duration `json:"pendingScaleUpDuration,omitempty"`
+	// +optional
+	PendingScaleDownDuration *metav1.Duration `json:"pendingScaleDownDuration,omitempty"`
+	// +optional
 	Prometheus *PrometheusAutoscalerSpec `json:"prometheus,omitempty"`
 }
 

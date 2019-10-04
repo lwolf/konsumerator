@@ -418,6 +418,10 @@ spec:
               properties:
                 mode:
                   type: string
+                pendingScaleDownDuration:
+                  type: string
+                pendingScaleUpDuration:
+                  type: string
                 prometheus:
                   properties:
                     address:

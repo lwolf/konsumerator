@@ -300,7 +300,8 @@ func (o *operator) newDeploy(partition int32) (*appsv1.Deployment, error) {
 }
 
 func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, bool, error) {
-	if o.clock.Since(o.consumer.Status.LastSyncTime.Time) >= scaleStatePendingPeriod {
+	// TODO: compare with the minium of (scaleUpPendingPeriod, scaleDownPendingPeriod)
+	if o.clock.Since(o.consumer.Status.LastSyncTime.Time) >= o.scaleUpPendingPeriod() {
 		return deploy, false, nil
 	}
 	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[PartitionAnnotation])
@@ -326,7 +327,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 			isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
 		case cmpResourcesGt:
 			if isLagging {
-				if currentState == InstanceStatusPendingScaleUp && o.scalingAllowed(lastStateChange) {
+				if currentState == InstanceStatusPendingScaleUp && o.scalingUpAllowed(lastStateChange) {
 					o.updateScaleAnnotations(deploy, underProvision)
 					container.Resources = *resources
 					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, int(partition))
@@ -339,7 +340,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 			}
 		case cmpResourcesLt:
 			if !isLagging {
-				if currentState == InstanceStatusPendingScaleDown && o.scalingAllowed(lastStateChange) {
+				if currentState == InstanceStatusPendingScaleDown && o.scalingDownAllowed(lastStateChange) {
 					o.updateScaleAnnotations(deploy, underProvision)
 					container.Resources = *resources
 					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, int(partition))
@@ -355,7 +356,8 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 			"container", container.Name,
 			"cmp", cmpRes,
 			"currentState", currentState,
-			"scalingAllowed", o.scalingAllowed(lastStateChange),
+			"scalingUpAllowed", o.scalingUpAllowed(lastStateChange),
+			"scalingDownAllowed", o.scalingDownAllowed(lastStateChange),
 			"isLagging", isLagging,
 			"saturationLevel", underProvision,
 		)
@@ -456,6 +458,24 @@ func (o *operator) updateScalingStatus(d *appsv1.Deployment, newStatus string) b
 	return true
 }
 
-func (o *operator) scalingAllowed(lastChange time.Time) bool {
-	return o.clock.Since(lastChange) >= scaleStatePendingPeriod
+func (o *operator) scaleUpPendingPeriod() time.Duration {
+	if o.consumer.Spec.Autoscaler.PendingScaleUpDuration != nil {
+		return o.consumer.Spec.Autoscaler.PendingScaleUpDuration.Duration
+	}
+	return defaultScaleStatePendingUpPeriod
+}
+
+func (o *operator) scaleDownPendingPeriod() time.Duration {
+	if o.consumer.Spec.Autoscaler.PendingScaleDownDuration != nil {
+		return o.consumer.Spec.Autoscaler.PendingScaleDownDuration.Duration
+	}
+	return defaultScaleStatePendingDownPeriod
+}
+
+func (o *operator) scalingUpAllowed(lastChange time.Time) bool {
+	return o.clock.Since(lastChange) >= o.scaleUpPendingPeriod()
+}
+
+func (o *operator) scalingDownAllowed(lastChange time.Time) bool {
+	return o.clock.Since(lastChange) >= o.scaleDownPendingPeriod()
 }

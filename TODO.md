@@ -45,23 +45,23 @@ v0.7 testing
 * [x] Verify that disabling all auto-scaling and setting resources in the deployment itself works 
 * [x] Verify that HA mode works
 * [x] Verify that system operates as expected when autoscaling is disabled 
+* [x] Scaling up only if there is a lag, down if there is no lag
+* [x] Update owner. If operator was restarted it gets new UID, we need to update ownerRef in reconcile
 * [x] [TEST] Add more integration tests 
 * [x] [TEST] add test to verify that env variables are always set
+* [x] [BUG] updating operator spec to scale all deployments down works, but resume doesn't
 
 v0.8 bugfixes
-* [ ] Update owner. If operator was restarted it gets new UID, we need to update ownerRef in reconcile
 * [ ] Verify that system works without ResourcePolicy set
-* [ ] [BUG] updating operator spec to scale all deployments down works, but resume doesn't
-* [ ] Consider scaling up only if there is a lag
-* [ ] make `scaleStatePendingPeriod` configurable
+* [x] make `scaleStatePendingPeriod` configurable
+* [ ] profile slow reconcile (15s for ~300 deployments)
     
 v0.9
-* [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations 
+* [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations
+      Ability to set additional deployment-level annotations/labels  
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
       Now, it requires manual deleting of all deployments.
-* [ ] Add ignore list of container names (do not do anything with sidecars)
-      Current workaround - set resource policy for those containers with min=max resources
 
 -------
 Unsorted
@@ -71,13 +71,11 @@ Unsorted
 * [ ] Reset status annotation if MANUAL mode is enabled
 
 * [ ] [Feature] implement defaulting/validating webhooks
-* [ ] [Feature] call webhooks on scaling events
+* [ ] [Feature] call external webhooks on scaling events
 * [ ] [Feature] Vertical auto-scaling of balanced workloads (single deployment)
 * [ ] [Feature] Fully dynamic resource allocations based on historic data
 * [ ] [Feature] ? consider adding support for VPA/HPA 
-* [ ] [Feature] ? Use `scale` as a way to pause/resume the consumer
 * [ ] [Feature] ? Tool for operations `consumerctl stop/start consumer`
-* [ ] [Feature] ? Ability to set additional deployment-level annotations/labels ?
 * [ ] [Feature] ? Consider getting all the pods to estimate uptime and avoid to frequent restarts
 * [ ] [Feature] Implement second metrics provider (Kafka)
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
