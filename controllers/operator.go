@@ -153,6 +153,11 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		}
 		deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
 	}
+
+	if err := o.managePodHealth(cl); err != nil {
+		o.log.Error(err, "unable to manage pod health")
+	}
+
 	return nil
 }
 
@@ -395,6 +400,22 @@ func (o *operator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, 
 	return deploy, nil
 }
 
+func (o *operator) managePodHealth(cl client.Client, conditions ...string) error {
+	podList := corev1.PodList{}
+	cl.List(context.Background(), &podList, client.MatchingLabels(map[string]string{KonsumeratorManagerAnnotation : "true"}))
+	for _, pod := range podList.Items {
+		if pod.Status.Phase == corev1.PodUnknown {
+			if err := cl.Delete(context.Background(), &pod); err != nil {
+				return fmt.Errorf("error: %v while deleting pod %s in unknown state in namespace %s",
+					err,
+					pod.Name,
+					pod.Namespace)
+			}
+		}
+	}
+	return nil
+}
+
 func (o *operator) constructDeploy(partition int32) *appsv1.Deployment {
 	deployLabels := make(map[string]string)
 	deployAnnotations := make(map[string]string)
@@ -410,6 +431,7 @@ func (o *operator) constructDeploy(partition int32) *appsv1.Deployment {
 	}
 	deploy.Annotations[PartitionAnnotation] = strconv.Itoa(int(partition))
 	deploy.Annotations[GenerationAnnotation] = o.observedGeneration()
+	deploy.Spec.Template.ObjectMeta.Labels = map[string]string{KonsumeratorManagerAnnotation: "true"}
 	o.updateScalingStatus(deploy, InstanceStatusRunning)
 	return deploy
 }

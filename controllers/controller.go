@@ -17,6 +17,7 @@ const (
 	CPUSaturationLevel            = "konsumerator.lwolf.org/cpu-saturation-level"
 	ScalingStatusAnnotation       = "konsumerator.lwolf.org/scaling-status"
 	ScalingStatusChangeAnnotation = "konsumerator.lwolf.org/scaling-status-change"
+	KonsumeratorManagerAnnotation = "konsumerator.lwolf.org/managed"
 )
 
 var apiGVStr = konsumeratorv1alpha1.GroupVersion.String()
