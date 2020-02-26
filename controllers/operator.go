@@ -154,8 +154,8 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
 	}
 
-	if err := o.managePodHealth(cl); err != nil {
-		o.log.Error(err, "unable to manage pod health")
+	if err := o.deletePodsWithStatusUnknown(cl); err != nil {
+		o.log.Error(err, "unable to delete pod with status unknown")
 	}
 
 	return nil
@@ -400,17 +400,17 @@ func (o *operator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, 
 	return deploy, nil
 }
 
-func (o *operator) managePodHealth(cl client.Client, conditions ...string) error {
+func (o *operator) deletePodsWithStatusUnknown(cl client.Client, conditions ...string) error {
 	podList := corev1.PodList{}
-	cl.List(context.Background(), &podList, client.MatchingLabels(map[string]string{KonsumeratorManagerAnnotation : "true"}))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cl.List(ctx, &podList, client.MatchingLabels(map[string]string{ManagedByLabel: "true"}))
 	for _, pod := range podList.Items {
-		if pod.Status.Phase == corev1.PodUnknown {
-			if err := cl.Delete(context.Background(), &pod); err != nil {
-				return fmt.Errorf("error: %v while deleting pod %s in unknown state in namespace %s",
-					err,
-					pod.Name,
-					pod.Namespace)
-			}
+		if pod.Status.Phase != corev1.PodUnknown {
+			continue
+		}
+		if err := cl.Delete(ctx, &pod); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -431,7 +431,8 @@ func (o *operator) constructDeploy(partition int32) *appsv1.Deployment {
 	}
 	deploy.Annotations[PartitionAnnotation] = strconv.Itoa(int(partition))
 	deploy.Annotations[GenerationAnnotation] = o.observedGeneration()
-	deploy.Spec.Template.ObjectMeta.Labels = map[string]string{KonsumeratorManagerAnnotation: "true"}
+	deploy.ObjectMeta.Labels = map[string]string{ManagedByLabel: "true"}
+	deploy.Spec.Template.ObjectMeta.Labels = map[string]string{ManagedByLabel: "true"}
 	o.updateScalingStatus(deploy, InstanceStatusRunning)
 	return deploy
 }
