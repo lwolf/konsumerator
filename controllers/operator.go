@@ -43,7 +43,10 @@ type operator struct {
 	mp  providers.MetricsProvider
 
 	// XXX: should it be a part of mp?
-	metricsUpdated bool
+	metricsUpdated     bool
+	deleteUnknownPods  bool
+	deletePodFrequency int
+	deletePodDeadline  time.Duration
 
 	missingIds          []int32
 	pausedIds           []int32
@@ -154,10 +157,18 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
 	}
 
-	if err := o.deletePodsWithStatusUnknown(cl); err != nil {
-		o.log.Error(err, "unable to delete pod with status unknown")
+	// if deleteUnknownPods option is set to true, then pods stuck in unknown state are deleted.
+	// deletePodFrequency is an integer that controls the rate of reconciliation (can be expensive).
+	// deletePodFrequency=5 means trigger deletePodsWithStatusUnknown every 5th minute of the hour and so on .
+	if o.deleteUnknownPods {
+		t := time.Now()
+		if t.Minute()%o.deletePodFrequency == 0 {
+			o.log.Info("deleting pods stuck in Unknown status", "minute of hour:", t.Minute())
+			if err := o.deletePodsWithStatusUnknown(cl); err != nil {
+				o.log.Error(err, "unable to delete pod with status unknown")
+			}
+		}
 	}
-
 	return nil
 }
 
@@ -409,11 +420,38 @@ func (o *operator) deletePodsWithStatusUnknown(cl client.Client, conditions ...s
 		if pod.Status.Phase != corev1.PodUnknown {
 			continue
 		}
-		if err := cl.Delete(ctx, &pod); err != nil {
-			return err
+		if o.deleteConditionMet(pod.Status.Conditions) {
+			if err := cl.Delete(ctx, &pod); err != nil {
+				o.log.Info("deleting pod stuck in unknown state.",
+					"pod.name", pod.Name,
+					"pod.Namespace", pod.Namespace,
+				)
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+// deleteConditionMet returns True or False based on a set of pod conditions.
+// There are 4 types of pod conditions: PodScheduled, Ready, Initialized, ContainersReady.
+// When a pod gets stuck scheduling, the condition Type to observe is the type PodScheduled.
+// For each condition type, there are 3 possible condition statuses: True, False and Unknown.
+// Delete Pod if pod condition PodScheduled is Unknown or False (TODO: False necessary?)
+// Additionally only do the above if the LastTransitionTime has been n mins - configurable.
+// https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-conditions
+func (o *operator) deleteConditionMet(conditions []corev1.PodCondition) bool {
+	for _, condition := range conditions {
+		if condition.Type != corev1.PodScheduled {
+			continue
+		}
+		if condition.Status == corev1.ConditionUnknown || condition.Status == corev1.ConditionFalse {
+			if condition.LastTransitionTime.Add(time.Minute * o.deletePodDeadline).After(time.Now().UTC()) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (o *operator) constructDeploy(partition int32) *appsv1.Deployment {

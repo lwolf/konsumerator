@@ -54,6 +54,10 @@ type ConsumerReconciler struct {
 	Recorder record.EventRecorder
 	Scheme   *runtime.Scheme
 	Clock    clock.Clock
+
+	DeleteUnknownPods  bool
+	DeletePodFrequency int
+	DeletePodDeadline  time.Duration
 }
 
 func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -116,11 +120,14 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	o := &operator{
-		Recorder: r.Recorder,
-		clock:    r.Clock,
-		log:      log,
-		Scheme:   r.Scheme,
-		owner:    &consumer,
+		Recorder:           r.Recorder,
+		clock:              r.Clock,
+		log:                log,
+		Scheme:             r.Scheme,
+		owner:              &consumer,
+		deleteUnknownPods:  r.DeleteUnknownPods,
+		deletePodFrequency: r.DeletePodFrequency,
+		deletePodDeadline:  r.DeletePodDeadline,
 	}
 	err := o.init(consumer.DeepCopy(), managedDeploys)
 	if err != nil {

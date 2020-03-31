@@ -61,6 +61,10 @@ type ConfigMapReconciler struct {
 	Recorder record.EventRecorder
 	Scheme   *runtime.Scheme
 	Clock    clock.Clock
+
+	DeleteUnknownPods  bool
+	DeletePodFrequency int
+	DeletePodDeadline  time.Duration
 }
 
 func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -139,11 +143,14 @@ func (r *ConfigMapReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	}
 
 	o := &operator{
-		Recorder: r.Recorder,
-		clock:    r.Clock,
-		log:      log,
-		Scheme:   r.Scheme,
-		owner:    cm,
+		Recorder:           r.Recorder,
+		clock:              r.Clock,
+		log:                log,
+		Scheme:             r.Scheme,
+		owner:              cm,
+		deleteUnknownPods:  r.DeleteUnknownPods,
+		deletePodFrequency: r.DeletePodFrequency,
+		deletePodDeadline:  r.DeletePodDeadline,
 	}
 	PopulateStatusFromAnnotation(cm.Annotations, &consumer.Status)
 	initialStatus := consumer.Status.DeepCopy()

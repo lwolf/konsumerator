@@ -50,6 +50,9 @@ func initReconciler(consumer *konsumeratorv1alpha1.Consumer) (client.Client, *co
 		recorder,
 		s,
 		fakeClock,
+		true,
+		1,
+		time.Minute,
 	}
 }
 

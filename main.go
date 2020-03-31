@@ -18,6 +18,7 @@ package main
 import (
 	"flag"
 	"os"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -47,13 +48,20 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	var deleteUnknownPods bool
 	var isDebug bool
 	var namespace string
+	var deletePodFrequency int
+	var deletePodDeadline time.Duration
+
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&isDebug, "verbose", false, "Set log level to debug mode.")
 	flag.StringVar(&namespace, "namespace", "", "Run operator in guest mode, limit scope to only a single namespace. No CRD will be created")
+	flag.BoolVar(&deleteUnknownPods, "delete-unknown-pods", false, "Enabling this would delete pods stuck in unknown state.")
+	flag.IntVar(&deletePodFrequency, "delete-pod-frequency", 10, "Set frequency to delete pods stuck in unknown state every nth minute.")
+	flag.DurationVar(&deletePodDeadline, "delete-pod-deadline", time.Minute*10, "Set time to wait between the current time and last pod transition time before deleting.")
 	flag.Parse()
 	setupLog.Info(
 		"Initializing konsumerator controller",
@@ -62,6 +70,9 @@ func main() {
 		"namespace", namespace,
 		"metricsAddr", metricsAddr,
 		"leaderElection", enableLeaderElection,
+		"deleteUnknownPods", deleteUnknownPods,
+		"deletePodFrequency", deletePodFrequency,
+		"deletePodDeadline", deletePodDeadline,
 	)
 	ctrl.SetLogger(zap.Logger(isDebug))
 	guestMode := namespace != ""
@@ -84,17 +95,23 @@ func main() {
 	var c controllers.Controller
 	if guestMode {
 		c = &controllers.ConfigMapReconciler{
-			Client:   mgr.GetClient(),
-			Scheme:   mgr.GetScheme(),
-			Log:      ctrl.Log.WithName("controllers").WithName("ConsumerCM"),
-			Recorder: mgr.GetEventRecorderFor("konsumerator"),
+			Client:             mgr.GetClient(),
+			Scheme:             mgr.GetScheme(),
+			Log:                ctrl.Log.WithName("controllers").WithName("ConsumerCM"),
+			Recorder:           mgr.GetEventRecorderFor("konsumerator"),
+			DeleteUnknownPods:  deleteUnknownPods,
+			DeletePodFrequency: deletePodFrequency,
+			DeletePodDeadline:  deletePodDeadline,
 		}
 	} else {
 		c = &controllers.ConsumerReconciler{
-			Client:   mgr.GetClient(),
-			Log:      ctrl.Log.WithName("controllers").WithName("Consumer"),
-			Scheme:   mgr.GetScheme(),
-			Recorder: mgr.GetEventRecorderFor("konsumerator"),
+			Client:             mgr.GetClient(),
+			Log:                ctrl.Log.WithName("controllers").WithName("Consumer"),
+			Scheme:             mgr.GetScheme(),
+			Recorder:           mgr.GetEventRecorderFor("konsumerator"),
+			DeleteUnknownPods:  deleteUnknownPods,
+			DeletePodFrequency: deletePodFrequency,
+			DeletePodDeadline:  deletePodDeadline,
 		}
 	}
 
