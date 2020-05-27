@@ -248,7 +248,7 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 		partitions := o.assignments[consumerId]
 		if !cmp.Equal(parsedPartitions, partitions) {
 			o.log.Info("assignment mismatch: Partitions from annotation differ from those that should be assigned")
-			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
+			o.toUpdateInstances = append(o.toUpdateInstances, deploy)
 			continue
 		}
 		for _, partition := range partitions {
