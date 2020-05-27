@@ -100,14 +100,16 @@ func runConsumer(client *redis.Client, partition int, ratePerCore int) {
 	}
 }
 
-func RunConsumer(redisClient *redis.Client, partition int, ratePerCore int, port int) {
+func RunConsumer(redisClient *redis.Client, partitions []int, ratePerCore int, port int) {
 	prometheus.MustRegister(consumptionOffsetMetric)
 	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		runConsumer(redisClient, partition, ratePerCore)
-		wg.Done()
-	}()
+	for _, p := range partitions {
+		wg.Add(1)
+		go func(p int) {
+			runConsumer(redisClient, p, ratePerCore)
+			wg.Done()
+		}(p)
+	}
 	wg.Add(1)
 	go func() {
 		runServer(port)
