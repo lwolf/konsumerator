@@ -231,12 +231,13 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 		consumerId, err := helpers.ParseIntAnnotation(deploy.Annotations[ConsumerAnnotation])
 		if err != nil {
 			o.log.Error(err, "failed to parse annotation with consumerId. Old deploy?")
-			// TODO: delete and recreate
+			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
+			continue
 		}
 		parsedPartitions, err := helpers.ParsePartitionsListAnnotation(deploy.Annotations[PartitionAnnotation])
 		if err != nil {
-			o.log.Error(err, "failed to parse annotation with partition number. Panic!!!")
-			// TODO: delete and recreate
+			o.log.Error(err, "failed to parse annotation with partition number.")
+			o.toUpdateInstances = append(o.toUpdateInstances, deploy)
 			continue
 		}
 		trackedConsumers[consumerId] = true

@@ -41,10 +41,10 @@ func ParseIntAnnotation(key string) (int32, error) {
 }
 
 func ParsePartitionsListAnnotation(partitions string) ([]int32, error) {
-	parts := strings.Split(partitions, ",")
 	if len(partitions) == 0 {
 		return nil, fmt.Errorf("partitions not found in string %s, have to be a comma-separated list of ids", partitions)
 	}
+	parts := strings.Split(partitions, ",")
 	var res []int32
 	for _, p := range parts {
 		partition, err := ParseIntAnnotation(p)

@@ -270,3 +270,44 @@ func TestGetBucketId(t *testing.T) {
 		})
 	}
 }
+
+func TestParsePartitionsListAnnotation(t *testing.T) {
+	testCases := map[string]struct {
+		in     string
+		expIds []int32
+		expErr bool
+	}{
+		"should return error on empty string": {
+			"", nil, true,
+		},
+		"should parse a single id": {
+			"1", []int32{1}, false,
+		},
+		"should parse a multiple ids": {
+			"0,1", []int32{0, 1}, false,
+		},
+		"should error on incorrect data": {
+			"0-1", nil, true,
+		},
+		"should error on incorrect data 2": {
+			"0,1,a", nil, true,
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			res, err := ParsePartitionsListAnnotation(tc.in)
+			if err != nil {
+				if !tc.expErr {
+					t.Fatalf("got unexpected error: %v", err)
+				}
+			} else {
+				if tc.expErr {
+					t.Fatalf("expected to get an error, but haven't get one")
+				}
+			}
+			if !cmp.Equal(tc.expIds, res) {
+				t.Fatalf("expected %v, got %v", tc.expIds, res)
+			}
+		})
+	}
+}
