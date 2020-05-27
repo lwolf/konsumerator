@@ -219,8 +219,11 @@ func (o *operator) newMetricsProvider() providers.MetricsProvider {
 }
 
 func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
-	// XXX: make sure that we recreate all the instances when `NumPartitionsPerInstance` change
 	// TODO: check that maximum partition is not greater than configured in the spec and ?warn?change?
+	// TODO: consider making `numPartitions` optional and just get it from the production rate metrics
+	//		* upside: no need to manual intervention when number of kafka partitions increases
+	//		* downside: if prometheus is unavailable, we'll be unable to start consumption
+	//		* unknown: is it possible to get inconsistent data from Prometheus between syncs? (100,100,95,100)
 	buckets := int32(len(o.assignments))
 	trackedConsumers := make(map[int32]bool)
 	for i := range managedDeploys.Items {

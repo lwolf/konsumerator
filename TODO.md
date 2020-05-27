@@ -57,11 +57,16 @@ v0.8 bugfixes
 * [x] profile slow reconcile (15s for ~300 deployments)
 * [x] Fix statuses after the change in scaling logic (scale based on lag) 
     
-v0.9
-* [ ] Multi-partition assignment
+v0.9 Multi-partition assignment
+* [x] Static multi-partition assignment
 * [ ] Consider making number of partitions optional in the spec
 
 v
+* [ ] Dynamic multi-partition assignment. Instead of static `numPartitionsPerInstance`:
+      Configure min/max values for `numPartitionsPerInstance`
+      Configure min/max number of pods per consumer
+      Based on production rate decide the value of partitions to assign. Scale each one vertically until fits.
+      If per-pod resource limit is exhausted, but global one is not, scale horizontally and reduce number of partitions per instance.  
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations
       Ability to set additional deployment-level annotations/labels  
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`
