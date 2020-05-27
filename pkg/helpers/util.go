@@ -127,23 +127,53 @@ func CmpResourceRequirements(a corev1.ResourceRequirements, b corev1.ResourceReq
 
 // SplitIntoBuckets takes array size and group size and returns array of arrays
 // e.g.
-// 	SplitIntoBuckets(10, 3) -> [0,1,2],[3,4,5][6,7,8][9]
+// 	SplitIntoBuckets(10, 3) -> [0,1,2],[3,4,5][6,7][8,9]
 // 	SplitIntoBuckets(12, 3) -> [0,1,2],[3,4,5][6,7,8][9,10,11]
-func SplitIntoBuckets(size int32, groupSize int32) (buckets [][]int32) {
-	if size == 0 || groupSize == 0 {
+func SplitIntoBuckets(size int32, bucketSize int32) (buckets [][]int32) {
+	if size == 0 || bucketSize == 0 {
 		return
 	}
-	for i := int32(0); i < size; i += groupSize {
-		end := i + groupSize
-		if end > size {
-			end = size
-		}
-		var ids []int32
-		for j := i; j < end; j++ {
-			ids = append(ids, j)
-		}
-		buckets = append(buckets, ids)
+
+	numBuckets := size / bucketSize
+	if size%bucketSize > 0 {
+		// Not every size is divisible by bucket size. So sometimes we
+		// need an extra bucket.
+		numBuckets++
 	}
+
+	buckets = make([][]int32, numBuckets)
+
+	// For the same reason as above, the average bucket size can be a
+	// non-integer. But we want to only operate on integer values. It is
+	// possible to do if we premultiply all terms by the number of buckets.
+	//
+	// The original algorithm with fractions would look like this:
+	//
+	//     avgGroupSize := size / numBuckets
+	//
+	//     bucket := 0
+	//     itemsInBucket := int32(0)
+	//     for i := int32(0); i < size; i++ {
+	//         if itemsInBucket >= avgGroupSize {
+	//             bucket++
+	//             itemsInBucket -= avgGroupSize
+	//         }
+	//         buckets[bucket] = append(buckets[bucket], i)
+	//         itemsInBucket += 1
+	//     }
+	//
+	// Now multiply everything by numBuckets and end up with this:
+	bucket := 0
+	itemsInBucketPremultiplied := int32(0)
+	for i := int32(0); i < size; i++ {
+		if itemsInBucketPremultiplied >= size {
+			bucket++
+			itemsInBucketPremultiplied -= size
+		}
+		buckets[bucket] = append(buckets[bucket], i)
+		itemsInBucketPremultiplied += numBuckets
+	}
+
 	return buckets
 }
 
