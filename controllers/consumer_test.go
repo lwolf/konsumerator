@@ -64,6 +64,7 @@ func TestNewConsumerOperator(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								PartitionAnnotation: "1",
+								ConsumerAnnotation:  "1",
 							},
 						},
 					},
@@ -96,6 +97,7 @@ func TestNewConsumerOperator(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								PartitionAnnotation:         "6",
+								ConsumerAnnotation:          "6",
 								DisableAutoscalerAnnotation: "true",
 							},
 						},
@@ -105,6 +107,7 @@ func TestNewConsumerOperator(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								PartitionAnnotation:         "5",
+								ConsumerAnnotation:          "5",
 								DisableAutoscalerAnnotation: "true",
 							},
 						},
@@ -118,7 +121,7 @@ func TestNewConsumerOperator(t *testing.T) {
 				Paused:   testInt32ToPt(2),
 				Lagging:  testInt32ToPt(0),
 				Missing:  testInt32ToPt(8),
-				Outdated: testInt32ToPt(0),
+				Outdated: testInt32ToPt(2),
 			},
 		},
 	}
@@ -202,7 +205,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 					NumPartitions: testInt32ToPt(1),
 					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
 						Mode:       "prometheus",
-						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+						Prometheus: newPrometheusAutoscalerSpec(5 * time.Minute),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
@@ -220,7 +223,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 					NumPartitions: testInt32ToPt(1),
 					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
 						Mode:       "prometheus",
-						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+						Prometheus: newPrometheusAutoscalerSpec(5 * time.Minute),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
@@ -238,7 +241,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 					NumPartitions: testInt32ToPt(1),
 					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
 						Mode:       "prometheus",
-						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+						Prometheus: newPrometheusAutoscalerSpec(5 * time.Minute),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},

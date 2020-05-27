@@ -5,5 +5,5 @@ import (
 )
 
 type Predictor interface {
-	Estimate(containerName string, partition int32) *corev1.ResourceRequirements
+	Estimate(containerName string, partition []int32) *corev1.ResourceRequirements
 }

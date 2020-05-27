@@ -5186,6 +5186,9 @@ spec:
                 this file'
               format: int32
               type: integer
+            numPartitionsPerInstance:
+              format: int32
+              type: integer
             partitionEnvKey:
               type: string
             resourcePolicy:

@@ -151,14 +151,14 @@ func TestEstimateResources(t *testing.T) {
 		containerName     string
 		promSpec          konsumeratorv1alpha1.PrometheusAutoscalerSpec
 		lagStore          providers.MetricsProvider
-		partition         int32
+		partitions        []int32
 		expectedResources corev1.ResourceRequirements
 	}{
 		"base estimation": {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 20000}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
-			partition:     0,
+			partitions:    []int32{0},
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("2"),
@@ -174,7 +174,7 @@ func TestEstimateResources(t *testing.T) {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
-			partition:     0,
+			partitions:    []int32{0},
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("100m"),
@@ -190,7 +190,7 @@ func TestEstimateResources(t *testing.T) {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
-			partition:     0,
+			partitions:    []int32{0},
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("0"),
@@ -206,7 +206,7 @@ func TestEstimateResources(t *testing.T) {
 			containerName:     "test",
 			promSpec:          *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:          NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
-			partition:         0,
+			partitions:        []int32{0},
 			expectedResources: corev1.ResourceRequirements{},
 		},
 	}
@@ -217,7 +217,7 @@ func TestEstimateResources(t *testing.T) {
 				promSpec:  &tt.promSpec,
 				log:       testLogger(),
 			}
-			resources := estimator.Estimate(tt.containerName, tt.partition)
+			resources := estimator.Estimate(tt.containerName, tt.partitions)
 			if helpers.CmpResourceRequirements(*resources, tt.expectedResources) != 0 {
 				t.Fatalf("Resource estimation mismatch, expected %v, got %v", tt.expectedResources, resources)
 			}

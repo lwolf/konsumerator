@@ -42,10 +42,11 @@ const (
 // ConsumerSpec defines the desired state of Consumer
 type ConsumerSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
-	NumPartitions *int32          `json:"numPartitions"` // Number of partitions
-	Name          string          `json:"name"`          // Name of the instance to run
-	Namespace     string          `json:"namespace"`     // Namespace to run managed instances
-	Autoscaler    *AutoscalerSpec `json:"autoscaler"`    // Auto-scaler configuration
+	NumPartitions            *int32          `json:"numPartitions"`                      // Number of partitions
+	NumPartitionsPerInstance *int32          `json:"numPartitionsPerInstance,omitempty"` // Number of partitions to assing to each consumer
+	Name                     string          `json:"name"`                               // Name of the instance to run
+	Namespace                string          `json:"namespace"`                          // Namespace to run managed instances
+	Autoscaler               *AutoscalerSpec `json:"autoscaler"`                         // Auto-scaler configuration
 
 	// +optional
 	PartitionEnvKey    string                `json:"partitionEnvKey,omitempty"`
@@ -123,6 +124,7 @@ type OffsetQuerySpec struct {
 }
 
 type ProductionQuerySpec struct {
+	// TODO: check that maximum partition is not greater than configured in the spec and ?warn?change?
 	Query          string `json:"query"`
 	PartitionLabel string `json:"partitionLabel"`
 }

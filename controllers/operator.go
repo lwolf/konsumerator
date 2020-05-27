@@ -3,22 +3,24 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/lwolf/konsumerator/pkg/errors"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/google/go-cmp/cmp"
 	"github.com/mitchellh/hashstructure"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	"github.com/lwolf/konsumerator/pkg/errors"
 	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/limiters"
 	"github.com/lwolf/konsumerator/pkg/predictors"
@@ -45,6 +47,8 @@ type operator struct {
 	// XXX: should it be a part of mp?
 	metricsUpdated bool
 
+	// partition assignments, indicates relation of consumerId to partitions
+	assignments         [][]int32
 	missingIds          []int32
 	pausedIds           []int32
 	runningIds          []int32
@@ -67,6 +71,11 @@ func (o *operator) init(consumer *konsumeratorv1alpha1.Consumer, managedDeploys 
 	o.consumer = consumer
 	o.usedResources = &rl
 	o.mp = o.newMetricsProvider()
+	var groupSize int32 = 1
+	if o.consumer.Spec.NumPartitionsPerInstance != nil {
+		groupSize = *o.consumer.Spec.NumPartitionsPerInstance
+	}
+	o.assignments = helpers.SplitIntoBuckets(*o.consumer.Spec.NumPartitions, groupSize)
 	o.syncDeploys(managedDeploys)
 
 	o.limiter = limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, o.log)
@@ -210,31 +219,48 @@ func (o *operator) newMetricsProvider() providers.MetricsProvider {
 }
 
 func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
-	trackedPartitions := make(map[int32]bool)
+	// XXX: make sure that we recreate all the instances when `NumPartitionsPerInstance` change
+	buckets := int32(len(o.assignments))
+	trackedConsumers := make(map[int32]bool)
 	for i := range managedDeploys.Items {
 		deploy := &managedDeploys.Items[i]
-		partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[PartitionAnnotation])
+		consumerId, err := helpers.ParseIntAnnotation(deploy.Annotations[ConsumerAnnotation])
+		if err != nil {
+			o.log.Error(err, "failed to parse annotation with consumerId. Old deploy?")
+			// TODO: delete and recreate
+		}
+		parsedPartitions, err := helpers.ParsePartitionsListAnnotation(deploy.Annotations[PartitionAnnotation])
 		if err != nil {
 			o.log.Error(err, "failed to parse annotation with partition number. Panic!!!")
+			// TODO: delete and recreate
 			continue
 		}
-		trackedPartitions[partition] = true
-		lag := o.mp.GetLagByPartition(partition)
-		o.log.V(1).Info("lag per partition", "partition", partition, "lag", lag)
-		if deployIsPaused(deploy) {
-			o.pausedIds = append(o.pausedIds, partition)
-			continue
-		} else {
-			o.runningIds = append(o.runningIds, partition)
-		}
-		if o.isLagging(lag) {
-			o.laggingIds = append(o.laggingIds, partition)
-		}
-		if partition >= *o.consumer.Spec.NumPartitions {
+		trackedConsumers[consumerId] = true
+		if consumerId > buckets {
+			o.log.Error(fmt.Errorf("assignment missmatch"), "consumerId is out of range")
 			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
 			continue
 		}
+		partitions := o.assignments[consumerId]
+		if !cmp.Equal(parsedPartitions, partitions) {
+			o.log.Error(fmt.Errorf("assignment missmatch"), "Partitions from annotation differ from those that should be assigned")
+			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
+			continue
+		}
+		for _, partition := range partitions {
+			lag := o.mp.GetLagByPartition(partition)
+			o.log.V(1).Info("lag per partition", "partition", partition, "lag", lag)
 
+			if deployIsPaused(deploy) {
+				o.pausedIds = append(o.pausedIds, partition)
+				continue
+			} else {
+				o.runningIds = append(o.runningIds, partition)
+			}
+			if o.isLagging(lag) {
+				o.laggingIds = append(o.laggingIds, partition)
+			}
+		}
 		// count used resources by each container in deployment
 		for _, container := range deploy.Spec.Template.Spec.Containers {
 			r := container.Resources.Requests
@@ -250,8 +276,8 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 			o.toEstimateInstances = append(o.toEstimateInstances, deploy)
 		}
 	}
-	for i := int32(0); i < *o.consumer.Spec.NumPartitions; i++ {
-		if _, ok := trackedPartitions[i]; !ok {
+	for i := int32(0); i < buckets; i++ {
+		if _, ok := trackedConsumers[i]; !ok {
 			o.missingIds = append(o.missingIds, i)
 		}
 	}
@@ -261,7 +287,7 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 	status.Paused = helpers.Ptr2Int32(int32(len(o.pausedIds)))
 	status.Lagging = helpers.Ptr2Int32(int32(len(o.laggingIds)))
 	status.Outdated = helpers.Ptr2Int32(int32(len(o.toUpdateInstances)))
-	status.Expected = o.consumer.Spec.NumPartitions
+	status.Expected = &buckets
 	status.Missing = helpers.Ptr2Int32(int32(len(o.missingIds)))
 
 	name := o.consumer.Name
@@ -294,8 +320,8 @@ func (o *operator) setOwner(deploy *appsv1.Deployment) {
 	}
 }
 
-func (o *operator) newDeploy(partition int32) (*appsv1.Deployment, error) {
-	deploy := o.constructDeploy(partition)
+func (o *operator) newDeploy(consumerId int32) (*appsv1.Deployment, error) {
+	deploy := o.constructDeploy(consumerId)
 	return o.updateDeploy(deploy)
 }
 
@@ -304,7 +330,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 	if o.clock.Since(o.consumer.Status.LastSyncTime.Time) >= o.scaleUpPendingPeriod() {
 		return deploy, false, nil
 	}
-	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[PartitionAnnotation])
+	consumerId, err := helpers.ParseIntAnnotation(deploy.Annotations[ConsumerAnnotation])
 	if err != nil {
 		return nil, false, err
 	}
@@ -314,13 +340,20 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 		return nil, false, err
 	}
 
-	lag := o.mp.GetLagByPartition(partition)
-	isLagging := o.isLagging(lag)
+	partitions := o.assignments[consumerId]
+	var isLagging bool
+	for _, p := range partitions {
+		lag := o.mp.GetLagByPartition(p)
+		if o.isLagging(lag) {
+			isLagging = true
+			break
+		}
+	}
 	needsUpdate := false
 	for i := range deploy.Spec.Template.Spec.Containers {
 		isChangedAnnotations := false
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		resources, underProvision := o.updateResources(container, partition)
+		resources, underProvision := o.updateResources(container, partitions)
 		cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, *resources)
 		switch cmpRes {
 		case cmpResourcesEq:
@@ -330,7 +363,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 				if o.scalingUpAllowed(lastStateChange, currentState) {
 					o.updateScaleAnnotations(deploy, underProvision)
 					container.Resources = *resources
-					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, int(partition))
+					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, partitions)
 					needsUpdate = true
 				} else if currentState == InstanceStatusSaturated {
 					isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
@@ -345,7 +378,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 				if o.scalingDownAllowed(lastStateChange, currentState) {
 					o.updateScaleAnnotations(deploy, underProvision)
 					container.Resources = *resources
-					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, int(partition))
+					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, partitions)
 					needsUpdate = true
 				} else {
 					isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleDown)
@@ -356,7 +389,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 		}
 		o.log.Info(
 			"cmp resource",
-			"partition", partition,
+			"partitions", partitions,
 			"container", container.Name,
 			"cmp", cmpRes,
 			"currentState", currentState,
@@ -373,10 +406,11 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 }
 
 func (o *operator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, error) {
-	partition, err := helpers.ParsePartitionAnnotation(deploy.Annotations[PartitionAnnotation])
+	consumerId, err := helpers.ParseIntAnnotation(deploy.Annotations[ConsumerAnnotation])
 	if err != nil {
 		return nil, err
 	}
+	partitions := o.assignments[consumerId]
 	deploy.Annotations[GenerationAnnotation] = o.observedGeneration()
 	deploy.Spec = o.consumer.Spec.DeploymentTemplate
 	for i := range deploy.Spec.Template.Spec.Containers {
@@ -384,18 +418,20 @@ func (o *operator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, 
 		var underProvision int64
 		container := &deploy.Spec.Template.Spec.Containers[i]
 		if container.Resources.Requests.Cpu().IsZero() {
-			resources, underProvision = o.allocateResources(container, partition)
+			resources, underProvision = o.allocateResources(container, partitions)
 		} else {
-			resources, underProvision = o.updateResources(container, partition)
+			resources, underProvision = o.updateResources(container, partitions)
 		}
 		o.updateScaleAnnotations(deploy, underProvision)
 		container.Resources = *resources
-		container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, int(partition))
+		container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, partitions)
 	}
 	return deploy, nil
 }
 
-func (o *operator) constructDeploy(partition int32) *appsv1.Deployment {
+func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
+	partitionIds := o.assignments[consumerId]
+	partitions := strings.Join(helpers.Int2Str(partitionIds), "-")
 	deployLabels := make(map[string]string)
 	deployAnnotations := make(map[string]string)
 	deploy := &appsv1.Deployment{
@@ -403,26 +439,27 @@ func (o *operator) constructDeploy(partition int32) *appsv1.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      deployLabels,
 			Annotations: deployAnnotations,
-			Name:        fmt.Sprintf("%s-%d", o.consumer.Spec.Name, partition),
+			Name:        fmt.Sprintf("%s-%s", o.consumer.Spec.Name, partitions),
 			Namespace:   o.consumer.Spec.Namespace,
 		},
 		Spec: o.consumer.Spec.DeploymentTemplate,
 	}
-	deploy.Annotations[PartitionAnnotation] = strconv.Itoa(int(partition))
+	deploy.Annotations[PartitionAnnotation] = partitions
+	deploy.Annotations[ConsumerAnnotation] = strconv.Itoa(int(consumerId))
 	deploy.Annotations[GenerationAnnotation] = o.observedGeneration()
 	o.updateScalingStatus(deploy, InstanceStatusRunning)
 	return deploy
 }
 
-func (o *operator) allocateResources(container *corev1.Container, partition int32) (*corev1.ResourceRequirements, int64) {
-	estimates := o.predictor.Estimate(container.Name, partition)
+func (o *operator) allocateResources(container *corev1.Container, partitions []int32) (*corev1.ResourceRequirements, int64) {
+	estimates := o.predictor.Estimate(container.Name, partitions)
 	resources := o.limiter.ApplyLimits(container.Name, estimates)
 	reqDiff := estimates.Requests.Cpu().MilliValue() - resources.Requests.Cpu().MilliValue()
 	return resources, reqDiff
 }
 
-func (o *operator) updateResources(container *corev1.Container, partition int32) (*corev1.ResourceRequirements, int64) {
-	estimatedResources, reqDiff := o.allocateResources(container, partition)
+func (o *operator) updateResources(container *corev1.Container, partitions []int32) (*corev1.ResourceRequirements, int64) {
+	estimatedResources, reqDiff := o.allocateResources(container, partitions)
 	currentResources := container.Resources.DeepCopy()
 
 	request := resourceRequirementsDiff(estimatedResources, currentResources)
