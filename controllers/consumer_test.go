@@ -47,6 +47,29 @@ func TestNewConsumerOperator(t *testing.T) {
 			},
 		},
 		{
+			"empty deployments with group of 2",
+			&konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions:            testInt32ToPt(10),
+					NumPartitionsPerInstance: testInt32ToPt(2),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "",
+						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{},
+					},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
+				},
+			},
+			appsv1.DeploymentList{},
+			konsumeratorv1alpha1.ConsumerStatus{
+				Expected: testInt32ToPt(5),
+				Running:  testInt32ToPt(0),
+				Paused:   testInt32ToPt(0),
+				Lagging:  testInt32ToPt(0),
+				Missing:  testInt32ToPt(5),
+				Outdated: testInt32ToPt(0),
+			},
+		},
+		{
 			"empty deployments step 2",
 			&konsumeratorv1alpha1.Consumer{
 				Spec: konsumeratorv1alpha1.ConsumerSpec{

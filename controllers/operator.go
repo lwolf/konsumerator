@@ -220,6 +220,7 @@ func (o *operator) newMetricsProvider() providers.MetricsProvider {
 
 func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 	// XXX: make sure that we recreate all the instances when `NumPartitionsPerInstance` change
+	// TODO: check that maximum partition is not greater than configured in the spec and ?warn?change?
 	buckets := int32(len(o.assignments))
 	trackedConsumers := make(map[int32]bool)
 	for i := range managedDeploys.Items {
@@ -236,14 +237,14 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 			continue
 		}
 		trackedConsumers[consumerId] = true
-		if consumerId > buckets {
-			o.log.Error(fmt.Errorf("assignment missmatch"), "consumerId is out of range")
+		if consumerId > buckets-1 {
+			o.log.Error(fmt.Errorf("assignment mismatch"), "consumerId is out of range")
 			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
 			continue
 		}
 		partitions := o.assignments[consumerId]
 		if !cmp.Equal(parsedPartitions, partitions) {
-			o.log.Error(fmt.Errorf("assignment missmatch"), "Partitions from annotation differ from those that should be assigned")
+			o.log.Info("assignment mismatch: Partitions from annotation differ from those that should be assigned")
 			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
 			continue
 		}
@@ -431,7 +432,6 @@ func (o *operator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, 
 
 func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
 	partitionIds := o.assignments[consumerId]
-	partitions := strings.Join(helpers.Int2Str(partitionIds), "-")
 	deployLabels := make(map[string]string)
 	deployAnnotations := make(map[string]string)
 	deploy := &appsv1.Deployment{
@@ -439,12 +439,12 @@ func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      deployLabels,
 			Annotations: deployAnnotations,
-			Name:        fmt.Sprintf("%s-%s", o.consumer.Spec.Name, partitions),
+			Name:        fmt.Sprintf("%s-%s", o.consumer.Spec.Name, strings.Join(helpers.Int2Str(partitionIds), "-")),
 			Namespace:   o.consumer.Spec.Namespace,
 		},
 		Spec: o.consumer.Spec.DeploymentTemplate,
 	}
-	deploy.Annotations[PartitionAnnotation] = partitions
+	deploy.Annotations[PartitionAnnotation] = strings.Join(helpers.Int2Str(partitionIds), ",")
 	deploy.Annotations[ConsumerAnnotation] = strconv.Itoa(int(consumerId))
 	deploy.Annotations[GenerationAnnotation] = o.observedGeneration()
 	o.updateScalingStatus(deploy, InstanceStatusRunning)

@@ -52,12 +52,16 @@ v0.7 testing
 * [x] [BUG] updating operator spec to scale all deployments down works, but resume doesn't
 
 v0.8 bugfixes
-* [ ] Verify that system works without ResourcePolicy set
+* [x] Verify that system works without ResourcePolicy set
 * [x] make `scaleStatePendingPeriod` configurable
-* [ ] profile slow reconcile (15s for ~300 deployments)
+* [x] profile slow reconcile (15s for ~300 deployments)
 * [x] Fix statuses after the change in scaling logic (scale based on lag) 
     
 v0.9
+* [ ] Multi-partition assignment
+* [ ] Consider making number of partitions optional in the spec
+
+v
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations
       Ability to set additional deployment-level annotations/labels  
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`
