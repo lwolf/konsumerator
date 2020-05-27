@@ -213,7 +213,8 @@ func TestSplitIntoBuckets(t *testing.T) {
 		"zero size and non-zero groupSize":  {0, 10, nil},
 		"non-zero size with zero groupSize": {10, 0, nil},
 		"one element":                       {1, 1, [][]int32{{0}}},
-		"non equal group":                   {10, 3, [][]int32{{0, 1, 2}, {3, 4}, {5, 6, 7}, {8, 9}}},
+		"size less than groupSize":          {3, 5, [][]int32{{0, 1, 2}}},
+		"non equal group":                   {10, 3, [][]int32{{0, 1, 2}, {3, 4, 5}, {6, 7}, {8, 9}}},
 		"equal groupping":                   {9, 3, [][]int32{{0, 1, 2}, {3, 4, 5}, {6, 7, 8}}},
 		"1 partition per group":             {5, 1, [][]int32{{0}, {1}, {2}, {3}, {4}}},
 	}
