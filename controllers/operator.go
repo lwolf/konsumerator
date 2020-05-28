@@ -77,18 +77,18 @@ func (o *operator) init(consumer *konsumeratorv1alpha1.Consumer, managedDeploys 
 	o.usedResources = &rl
 	o.mp = o.newMetricsProvider()
 	var groupSize int32 = 1
-	if o.consumer.Spec.NumPartitionsPerInstance != nil {
+	if o.consumer.Spec.NumPartitionsPerInstance != nil && *o.consumer.Spec.NumPartitionsPerInstance > 0 {
 		groupSize = *o.consumer.Spec.NumPartitionsPerInstance
 	}
 	o.assignments = helpers.SplitIntoBuckets(*o.consumer.Spec.NumPartitions, groupSize)
 
-	o.missingIds = make(map[int32]bool, 0)
-	o.pausedIds = make(map[int32]bool, 0)
-	o.runningIds = make(map[int32]bool, 0)
-	o.laggingIds = make(map[int32]bool, 0)
-	o.toRemoveInstances = make(map[string]*appsv1.Deployment, 0)
-	o.toUpdateInstances = make(map[int32]*appsv1.Deployment, 0)
-	o.toEstimateInstances = make(map[int32]*appsv1.Deployment, 0)
+	o.missingIds = make(map[int32]bool)
+	o.pausedIds = make(map[int32]bool)
+	o.runningIds = make(map[int32]bool)
+	o.laggingIds = make(map[int32]bool)
+	o.toRemoveInstances = make(map[string]*appsv1.Deployment)
+	o.toUpdateInstances = make(map[int32]*appsv1.Deployment)
+	o.toEstimateInstances = make(map[int32]*appsv1.Deployment)
 
 	o.syncDeploys(managedDeploys)
 
@@ -104,8 +104,8 @@ func (o *operator) init(consumer *konsumeratorv1alpha1.Consumer, managedDeploys 
 
 func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 	ctx := context.Background()
-	for partition := range o.missingIds {
-		newD, err := o.newDeploy(partition)
+	for consumerId := range o.missingIds {
+		newD, err := o.newDeploy(consumerId)
 		if err != nil {
 			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
 			o.log.Error(err, "failed to create new deploy")
@@ -114,10 +114,10 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		o.setOwner(newD)
 		if err := cl.Create(ctx, newD); errors.IgnoreAlreadyExists(err) != nil {
 			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
-			o.log.Error(err, "unable to create new Deployment", "deployment", newD, "partition", partition)
+			o.log.Error(err, "unable to create new Deployment", "deployment", newD, "consumerId", consumerId)
 			continue
 		}
-		o.log.V(1).Info("created new deployment", "deployment", newD, "partition", partition)
+		o.log.V(1).Info("created new deployment", "deployment", newD, "consumerId", consumerId)
 		deploymentsCreateTotal.WithLabelValues(req.Name).Inc()
 	}
 
@@ -316,11 +316,6 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 	consumerStatus.WithLabelValues(name, "missing").Set(float64(*status.Missing))
 	consumerStatus.WithLabelValues(name, "redundant").Set(float64(*status.Redundant))
 
-	if len(o.missingIds) > 0 {
-		o.log.Info(
-			"deployments to create", "ids", helpers.MapToArray(o.missingIds))
-	}
-
 	o.log.V(1).Info(
 		"deployments count",
 		"metricsUpdated", o.metricsUpdated,
@@ -330,6 +325,7 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 		"missing", status.Missing,
 		"lagging", status.Lagging,
 		"toUpdate", status.Outdated,
+		"redundant", status.Redundant,
 		"toEstimate", len(o.toEstimateInstances),
 	)
 }
