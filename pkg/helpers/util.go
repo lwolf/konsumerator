@@ -173,15 +173,6 @@ func SplitIntoBuckets(size int32, desiredBucketSize int32) (buckets [][]int32) {
 	return buckets
 }
 
-// GetBucketId takes array of arrays of partitions and returns the bucketId holding it or error if id is out of range
-func GetBucketId(buckets [][]int32, groupSize int32, targetId int32) (int32, error) {
-	lastBucket := buckets[len(buckets)-1]
-	if targetId > lastBucket[len(lastBucket)-1] {
-		return 0, fmt.Errorf("targetId is out of range")
-	}
-	return targetId / groupSize, nil
-}
-
 func Int2Str(ints []int32) []string {
 	result := make([]string, len(ints))
 	for i, d := range ints {

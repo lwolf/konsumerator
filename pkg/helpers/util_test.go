@@ -228,49 +228,6 @@ func TestSplitIntoBuckets(t *testing.T) {
 	}
 }
 
-func TestGetBucketId(t *testing.T) {
-	testCases := map[string]struct {
-		buckets   [][]int32
-		groupSize int32
-		id        int32
-		expId     int32
-		expErr    bool
-	}{
-		"correct bucket from the groups with 1 id": {
-			[][]int32{{0}, {1}, {2}, {3}, {4}}, 1, 3, 3, false,
-		},
-		"correct bucket from the groups with 2 ids": {
-			[][]int32{{0, 1}, {2, 3}, {3, 4}, {5, 6}, {7, 8}}, 2, 3, 1, false,
-		},
-		"correct bucket for the first element": {
-			[][]int32{{0, 1}, {2, 3}, {3, 4}, {5, 6}, {7, 8}}, 2, 0, 0, false,
-		},
-		"correct bucket for the last element": {
-			[][]int32{{0, 1}, {2, 3}, {3, 4}, {5, 6}, {7, 8}}, 2, 8, 4, false,
-		},
-		"should return error if id is out of range ": {
-			[][]int32{{0, 1}, {2, 3}, {3, 4}, {5, 6}, {7, 8}}, 2, 10, 0, true,
-		},
-	}
-	for testName, tc := range testCases {
-		t.Run(testName, func(t *testing.T) {
-			res, err := GetBucketId(tc.buckets, tc.groupSize, tc.id)
-			if err != nil {
-				if !tc.expErr {
-					t.Fatalf("got unexpected error %v", err)
-				}
-			} else {
-				if tc.expErr {
-					t.Fatalf("expected to get an error, but haven't get one")
-				}
-			}
-			if tc.expId != res {
-				t.Fatalf("expected %v, got %v", tc.expId, res)
-			}
-		})
-	}
-}
-
 func TestParsePartitionsListAnnotation(t *testing.T) {
 	testCases := map[string]struct {
 		in     string

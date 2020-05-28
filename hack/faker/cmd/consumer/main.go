@@ -110,10 +110,6 @@ func RunConsumer(redisClient *redis.Client, partitions []int, ratePerCore int, p
 			wg.Done()
 		}(p)
 	}
-	wg.Add(1)
-	go func() {
-		runServer(port)
-		wg.Done()
-	}()
+	runServer(port)
 	wg.Wait()
 }
