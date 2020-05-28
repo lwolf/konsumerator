@@ -188,6 +188,11 @@ func (in *ConsumerStatus) DeepCopyInto(out *ConsumerStatus) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.Redundant != nil {
+		in, out := &in.Redundant, &out.Redundant
+		*out = new(int32)
+		**out = **in
+	}
 	if in.LastSyncTime != nil {
 		in, out := &in.LastSyncTime, &out.LastSyncTime
 		*out = new(metav1.Time)

@@ -48,14 +48,19 @@ type operator struct {
 	metricsUpdated bool
 
 	// partition assignments, indicates relation of consumerId to partitions
-	assignments         [][]int32
-	missingIds          []int32
-	pausedIds           []int32
-	runningIds          []int32
-	laggingIds          []int32
-	toRemoveInstances   []*appsv1.Deployment
-	toUpdateInstances   []*appsv1.Deployment
-	toEstimateInstances []*appsv1.Deployment
+	// these arrays are operate on deployments, not partitions
+	assignments [][]int32
+	missingIds  map[int32]bool
+	pausedIds   map[int32]bool
+	runningIds  map[int32]bool
+	laggingIds  map[int32]bool
+
+	// toRemove is a map of deployment name to the deployment.
+	// we can't use consumerId here, because deployment could be without it
+	toRemoveInstances map[string]*appsv1.Deployment
+	// toUpdate and toEstimate are maps of consumerId to deployment
+	toUpdateInstances   map[int32]*appsv1.Deployment
+	toEstimateInstances map[int32]*appsv1.Deployment
 
 	clock clock.Clock
 }
@@ -76,6 +81,15 @@ func (o *operator) init(consumer *konsumeratorv1alpha1.Consumer, managedDeploys 
 		groupSize = *o.consumer.Spec.NumPartitionsPerInstance
 	}
 	o.assignments = helpers.SplitIntoBuckets(*o.consumer.Spec.NumPartitions, groupSize)
+
+	o.missingIds = make(map[int32]bool, 0)
+	o.pausedIds = make(map[int32]bool, 0)
+	o.runningIds = make(map[int32]bool, 0)
+	o.laggingIds = make(map[int32]bool, 0)
+	o.toRemoveInstances = make(map[string]*appsv1.Deployment, 0)
+	o.toUpdateInstances = make(map[int32]*appsv1.Deployment, 0)
+	o.toEstimateInstances = make(map[int32]*appsv1.Deployment, 0)
+
 	o.syncDeploys(managedDeploys)
 
 	o.limiter = limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, o.log)
@@ -90,7 +104,7 @@ func (o *operator) init(consumer *konsumeratorv1alpha1.Consumer, managedDeploys 
 
 func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 	ctx := context.Background()
-	for _, partition := range o.missingIds {
+	for partition := range o.missingIds {
 		newD, err := o.newDeploy(partition)
 		if err != nil {
 			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
@@ -105,27 +119,20 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		}
 		o.log.V(1).Info("created new deployment", "deployment", newD, "partition", partition)
 		deploymentsCreateTotal.WithLabelValues(req.Name).Inc()
-		// o.Recorder.Eventf(
-		// 	o.consumer,
-		// 	corev1.EventTypeNormal,
-		// 	"DeployCreate",
-		// 	"deployment for partition was created %d", partition,
-		// )
 	}
 
+	var deleted int
 	for _, deploy := range o.toRemoveInstances {
 		if err := cl.Delete(ctx, deploy); errors.IgnoreNotFound(err) != nil {
 			o.log.Error(err, "unable to delete deployment", "deployment", deploy)
 			deploymentsDeleteErrors.WithLabelValues(req.Name).Inc()
 			continue
 		}
+		deleted += 1
 		deploymentsDeleteTotal.WithLabelValues(req.Name).Inc()
-		// o.Recorder.Eventf(
-		// 	o.consumer,
-		// 	corev1.EventTypeNormal,
-		// 	"DeployDelete",
-		// 	"deployment %s was deleted", deploy.Name,
-		// )
+	}
+	if deleted > 0 {
+		o.log.Info("deployments were deleted", "count", deleted)
 	}
 
 	for _, origDeploy := range o.toUpdateInstances {
@@ -231,25 +238,29 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 		consumerId, err := helpers.ParseIntAnnotation(deploy.Annotations[ConsumerAnnotation])
 		if err != nil {
 			o.log.Error(err, "failed to parse annotation with consumerId. Old deploy?")
-			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
+			o.toRemoveInstances[deploy.Name] = deploy
 			continue
 		}
 		parsedPartitions, err := helpers.ParsePartitionsListAnnotation(deploy.Annotations[PartitionAnnotation])
 		if err != nil {
 			o.log.Error(err, "failed to parse annotation with partition number.")
-			o.toUpdateInstances = append(o.toUpdateInstances, deploy)
+			o.toRemoveInstances[deploy.Name] = deploy
 			continue
 		}
 		trackedConsumers[consumerId] = true
 		if consumerId > buckets-1 {
-			o.log.Error(fmt.Errorf("assignment mismatch"), "consumerId is out of range")
-			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
+			o.log.Info("deployment with consumerId out of range", "consumerId", consumerId)
+			o.toRemoveInstances[deploy.Name] = deploy
 			continue
 		}
 		partitions := o.assignments[consumerId]
 		if !cmp.Equal(parsedPartitions, partitions) {
-			o.log.Info("assignment mismatch: Partitions from annotation differ from those that should be assigned")
-			o.toUpdateInstances = append(o.toUpdateInstances, deploy)
+			o.log.Info(
+				"partitions from annotation differ from those that should be assigned",
+				"expected", partitions,
+				"annotation", parsedPartitions,
+			)
+			o.toRemoveInstances[deploy.Name] = deploy
 			continue
 		}
 		for _, partition := range partitions {
@@ -257,13 +268,13 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 			o.log.V(1).Info("lag per partition", "partition", partition, "lag", lag)
 
 			if deployIsPaused(deploy) {
-				o.pausedIds = append(o.pausedIds, partition)
+				o.pausedIds[consumerId] = true
 				continue
 			} else {
-				o.runningIds = append(o.runningIds, partition)
+				o.runningIds[consumerId] = true
 			}
 			if o.isLagging(lag) {
-				o.laggingIds = append(o.laggingIds, partition)
+				o.laggingIds[consumerId] = true
 			}
 		}
 		// count used resources by each container in deployment
@@ -274,16 +285,16 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 		}
 
 		if deploy.Annotations[GenerationAnnotation] != o.observedGeneration() {
-			o.toUpdateInstances = append(o.toUpdateInstances, deploy)
+			o.toUpdateInstances[consumerId] = deploy
 			continue
 		}
 		if o.metricsUpdated {
-			o.toEstimateInstances = append(o.toEstimateInstances, deploy)
+			o.toEstimateInstances[consumerId] = deploy
 		}
 	}
 	for i := int32(0); i < buckets; i++ {
 		if _, ok := trackedConsumers[i]; !ok {
-			o.missingIds = append(o.missingIds, i)
+			o.missingIds[i] = true
 		}
 	}
 
@@ -292,8 +303,9 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 	status.Paused = helpers.Ptr2Int32(int32(len(o.pausedIds)))
 	status.Lagging = helpers.Ptr2Int32(int32(len(o.laggingIds)))
 	status.Outdated = helpers.Ptr2Int32(int32(len(o.toUpdateInstances)))
-	status.Expected = &buckets
 	status.Missing = helpers.Ptr2Int32(int32(len(o.missingIds)))
+	status.Redundant = helpers.Ptr2Int32(int32(len(o.toRemoveInstances)))
+	status.Expected = &buckets
 
 	name := o.consumer.Name
 	consumerStatus.WithLabelValues(name, "running").Set(float64(*status.Running))
@@ -302,6 +314,12 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 	consumerStatus.WithLabelValues(name, "outdated").Set(float64(*status.Outdated))
 	consumerStatus.WithLabelValues(name, "expected").Set(float64(*status.Expected))
 	consumerStatus.WithLabelValues(name, "missing").Set(float64(*status.Missing))
+	consumerStatus.WithLabelValues(name, "redundant").Set(float64(*status.Redundant))
+
+	if len(o.missingIds) > 0 {
+		o.log.Info(
+			"deployments to create", "ids", helpers.MapToArray(o.missingIds))
+	}
 
 	o.log.V(1).Info(
 		"deployments count",
@@ -394,6 +412,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 		}
 		o.log.Info(
 			"cmp resource",
+			"consumerId", consumerId,
 			"partitions", partitions,
 			"container", container.Name,
 			"cmp", cmpRes,

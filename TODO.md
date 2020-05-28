@@ -59,7 +59,7 @@ v0.8 bugfixes
     
 v0.9 Multi-partition assignment
 * [x] Static multi-partition assignment
-* [ ] Consider making number of partitions optional in the spec
+* [x] Improve logging
 
 v
 * [ ] Dynamic multi-partition assignment. Instead of static `numPartitionsPerInstance`:
@@ -79,6 +79,7 @@ Unsorted
 * [ ] [BUG] update of the auto-scaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
 * [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive) 
 * [ ] Reset status annotation if MANUAL mode is enabled
+* [ ] Consider making number of partitions optional in the spec
 
 * [ ] [Feature] implement defaulting/validating webhooks
 * [ ] [Feature] call external webhooks on scaling events

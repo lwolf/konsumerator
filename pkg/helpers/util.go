@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -22,6 +23,15 @@ func Ptr2Int32(i int32) *int32 {
 
 func Ptr2Int64(i int64) *int64 {
 	return &i
+}
+
+func MapToArray(data map[int32]bool) []int32 {
+	var res []int32
+	for key := range data {
+		res = append(res, key)
+	}
+	sort.Slice(res, func(i, j int) bool { return res[i] < res[j] })
+	return res
 }
 
 func ParseTimeAnnotation(ts string) (time.Time, error) {

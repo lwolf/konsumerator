@@ -151,6 +151,8 @@ type ConsumerStatus struct {
 	// +optional
 	Outdated *int32 `json:"outdated,omitempty"`
 	// +optional
+	Redundant *int32 `json:"redundant,omitempty"`
+	// +optional
 	LastSyncTime *metav1.Time `json:"lastSyncTime,omitempty"`
 	// +optional
 	LastSyncState map[string]InstanceState `json:"lastSyncState,omitempty"`

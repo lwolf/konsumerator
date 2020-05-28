@@ -5283,6 +5283,9 @@ spec:
             paused:
               format: int32
               type: integer
+            redundant:
+              format: int32
+              type: integer
             running:
               format: int32
               type: integer
