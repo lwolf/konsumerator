@@ -9,10 +9,6 @@ env:
 services:
   - docker
 
-before_script:
-  - echo "$QUAY_PASSWORD" | docker login -u "$QUAY_LOGIN" quay.io --password-stdin
-  - echo "$GITHUB_TOKEN" | docker login -u "$GITHUB_LOGIN" docker.pkg.github.com --password-stdin
-
 jobs:
   include:
     - stage: Integration Tests
@@ -53,6 +49,9 @@ jobs:
 #      on:
 #        tags: false
     - stage: GitHub Release
+      before_script:
+        - echo "$QUAY_PASSWORD" | docker login -u "$QUAY_LOGIN" quay.io --password-stdin
+        - echo "$GITHUB_TOKEN" | docker login -u "$GITHUB_LOGIN" docker.pkg.github.com --password-stdin
       deploy:
         provider: script
         skip_cleanup: true
