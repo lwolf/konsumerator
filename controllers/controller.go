@@ -12,6 +12,7 @@ const (
 	InstanceStatusPendingScaleDown string = "PENDING_SCALE_DOWN"
 
 	PartitionAnnotation           = "konsumerator.lwolf.org/partition"
+	ConsumerAnnotation            = "konsumerator.lwolf.org/consumer-id"
 	DisableAutoscalerAnnotation   = "konsumerator.lwolf.org/disable-autoscaler"
 	GenerationAnnotation          = "konsumerator.lwolf.org/generation"
 	CPUSaturationLevel            = "konsumerator.lwolf.org/cpu-saturation-level"

@@ -3,6 +3,8 @@ package main
 import (
 	"github.com/alexflint/go-arg"
 	"github.com/prometheus/common/log"
+	"strconv"
+	"strings"
 
 	"github.com/lwolf/konsumerator/hack/faker/cmd/consumer"
 	"github.com/lwolf/konsumerator/hack/faker/cmd/producer"
@@ -10,8 +12,8 @@ import (
 )
 
 type ConsumerCmd struct {
-	Partition   int `arg:"env:KONSUMERATOR_PARTITION"`
-	RatePerCore int `arg:"--rpc"`
+	Partition   string `arg:"env:KONSUMERATOR_PARTITION"`
+	RatePerCore int    `arg:"--rpc"`
 }
 type ProducerCmd struct {
 	NumPartitions int `arg:"--num-partitions"`
@@ -36,7 +38,15 @@ func main() {
 	switch {
 	case args.Consumer != nil:
 		log.Info("running consumer")
-		consumer.RunConsumer(redisClient, args.Consumer.Partition, args.Consumer.RatePerCore, args.Port)
+		var partitions []int
+		for _, p := range strings.Split(args.Consumer.Partition, ",") {
+			partition, err := strconv.Atoi(p)
+			if err != nil {
+				log.Fatalf("failed to parse partitions ids from %s: %v", args.Consumer.Partition, err)
+			}
+			partitions = append(partitions, partition)
+		}
+		consumer.RunConsumer(redisClient, partitions, args.Consumer.RatePerCore, args.Port)
 	case args.Producer != nil:
 		log.Info("running producer")
 		producer.RunProducer(

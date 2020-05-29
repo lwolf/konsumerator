@@ -122,6 +122,11 @@ func (in *ConsumerSpec) DeepCopyInto(out *ConsumerSpec) {
 		*out = new(int32)
 		**out = **in
 	}
+	if in.NumPartitionsPerInstance != nil {
+		in, out := &in.NumPartitionsPerInstance, &out.NumPartitionsPerInstance
+		*out = new(int32)
+		**out = **in
+	}
 	if in.Autoscaler != nil {
 		in, out := &in.Autoscaler, &out.Autoscaler
 		*out = new(AutoscalerSpec)
@@ -180,6 +185,11 @@ func (in *ConsumerStatus) DeepCopyInto(out *ConsumerStatus) {
 	}
 	if in.Outdated != nil {
 		in, out := &in.Outdated, &out.Outdated
+		*out = new(int32)
+		**out = **in
+	}
+	if in.Redundant != nil {
+		in, out := &in.Redundant, &out.Redundant
 		*out = new(int32)
 		**out = **in
 	}

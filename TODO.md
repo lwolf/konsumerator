@@ -52,12 +52,21 @@ v0.7 testing
 * [x] [BUG] updating operator spec to scale all deployments down works, but resume doesn't
 
 v0.8 bugfixes
-* [ ] Verify that system works without ResourcePolicy set
+* [x] Verify that system works without ResourcePolicy set
 * [x] make `scaleStatePendingPeriod` configurable
-* [ ] profile slow reconcile (15s for ~300 deployments)
+* [x] profile slow reconcile (15s for ~300 deployments)
 * [x] Fix statuses after the change in scaling logic (scale based on lag) 
     
-v0.9
+v0.9 Multi-partition assignment
+* [x] Static multi-partition assignment
+* [x] Improve logging
+
+v
+* [ ] Dynamic multi-partition assignment. Instead of static `numPartitionsPerInstance`:
+      Configure min/max values for `numPartitionsPerInstance`
+      Configure min/max number of pods per consumer
+      Based on production rate decide the value of partitions to assign. Scale each one vertically until fits.
+      If per-pod resource limit is exhausted, but global one is not, scale horizontally and reduce number of partitions per instance.  
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations
       Ability to set additional deployment-level annotations/labels  
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`
@@ -70,6 +79,7 @@ Unsorted
 * [ ] [BUG] update of the auto-scaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
 * [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive) 
 * [ ] Reset status annotation if MANUAL mode is enabled
+* [ ] Consider making number of partitions optional in the spec
 
 * [ ] [Feature] implement defaulting/validating webhooks
 * [ ] [Feature] call external webhooks on scaling events

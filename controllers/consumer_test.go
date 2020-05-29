@@ -38,12 +38,37 @@ func TestNewConsumerOperator(t *testing.T) {
 			},
 			appsv1.DeploymentList{},
 			konsumeratorv1alpha1.ConsumerStatus{
-				Expected: testInt32ToPt(10),
-				Running:  testInt32ToPt(0),
-				Paused:   testInt32ToPt(0),
-				Lagging:  testInt32ToPt(0),
-				Missing:  testInt32ToPt(10),
-				Outdated: testInt32ToPt(0),
+				Expected:  testInt32ToPt(10),
+				Running:   testInt32ToPt(0),
+				Paused:    testInt32ToPt(0),
+				Lagging:   testInt32ToPt(0),
+				Missing:   testInt32ToPt(10),
+				Outdated:  testInt32ToPt(0),
+				Redundant: testInt32ToPt(0),
+			},
+		},
+		{
+			"empty deployments with group of 2",
+			&konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions:            testInt32ToPt(10),
+					NumPartitionsPerInstance: testInt32ToPt(2),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "",
+						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{},
+					},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
+				},
+			},
+			appsv1.DeploymentList{},
+			konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  testInt32ToPt(5),
+				Running:   testInt32ToPt(0),
+				Paused:    testInt32ToPt(0),
+				Lagging:   testInt32ToPt(0),
+				Missing:   testInt32ToPt(5),
+				Outdated:  testInt32ToPt(0),
+				Redundant: testInt32ToPt(0),
 			},
 		},
 		{
@@ -64,18 +89,20 @@ func TestNewConsumerOperator(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								PartitionAnnotation: "1",
+								ConsumerAnnotation:  "1",
 							},
 						},
 					},
 				},
 			},
 			konsumeratorv1alpha1.ConsumerStatus{
-				Expected: testInt32ToPt(10),
-				Running:  testInt32ToPt(1),
-				Paused:   testInt32ToPt(0),
-				Lagging:  testInt32ToPt(0),
-				Missing:  testInt32ToPt(9),
-				Outdated: testInt32ToPt(1),
+				Expected:  testInt32ToPt(10),
+				Running:   testInt32ToPt(1),
+				Paused:    testInt32ToPt(0),
+				Lagging:   testInt32ToPt(0),
+				Missing:   testInt32ToPt(9),
+				Outdated:  testInt32ToPt(1),
+				Redundant: testInt32ToPt(0),
 			},
 		},
 		{
@@ -96,6 +123,7 @@ func TestNewConsumerOperator(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								PartitionAnnotation:         "6",
+								ConsumerAnnotation:          "6",
 								DisableAutoscalerAnnotation: "true",
 							},
 						},
@@ -105,6 +133,7 @@ func TestNewConsumerOperator(t *testing.T) {
 						ObjectMeta: metav1.ObjectMeta{
 							Annotations: map[string]string{
 								PartitionAnnotation:         "5",
+								ConsumerAnnotation:          "5",
 								DisableAutoscalerAnnotation: "true",
 							},
 						},
@@ -113,12 +142,85 @@ func TestNewConsumerOperator(t *testing.T) {
 				},
 			},
 			konsumeratorv1alpha1.ConsumerStatus{
-				Expected: testInt32ToPt(10),
-				Running:  testInt32ToPt(0),
-				Paused:   testInt32ToPt(2),
-				Lagging:  testInt32ToPt(0),
-				Missing:  testInt32ToPt(8),
-				Outdated: testInt32ToPt(0),
+				Expected:  testInt32ToPt(10),
+				Running:   testInt32ToPt(0),
+				Paused:    testInt32ToPt(2),
+				Lagging:   testInt32ToPt(0),
+				Missing:   testInt32ToPt(8),
+				Outdated:  testInt32ToPt(2),
+				Redundant: testInt32ToPt(0),
+			},
+		},
+		{
+			"deployment should be recreated if `NumPartitionsPerInstance` change",
+			&konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions:            testInt32ToPt(10),
+					NumPartitionsPerInstance: testInt32ToPt(3),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "",
+						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{},
+					},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
+				},
+			},
+			appsv1.DeploymentList{
+				Items: []appsv1.Deployment{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								PartitionAnnotation: "0",
+								ConsumerAnnotation:  "0",
+							},
+						},
+						Status: appsv1.DeploymentStatus{Replicas: 1},
+					},
+				},
+			},
+			konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  testInt32ToPt(4),
+				Running:   testInt32ToPt(0),
+				Paused:    testInt32ToPt(0),
+				Lagging:   testInt32ToPt(0),
+				Missing:   testInt32ToPt(3),
+				Outdated:  testInt32ToPt(0),
+				Redundant: testInt32ToPt(1),
+			},
+		},
+		{
+			"deployment with consumerId outside of range should be deleted",
+			&konsumeratorv1alpha1.Consumer{
+				Spec: konsumeratorv1alpha1.ConsumerSpec{
+					NumPartitions:            testInt32ToPt(10),
+					NumPartitionsPerInstance: testInt32ToPt(3),
+					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
+						Mode:       "",
+						Prometheus: &konsumeratorv1alpha1.PrometheusAutoscalerSpec{},
+					},
+					DeploymentTemplate: appsv1.DeploymentSpec{},
+				},
+			},
+			appsv1.DeploymentList{
+				Items: []appsv1.Deployment{
+					{
+						ObjectMeta: metav1.ObjectMeta{
+							Annotations: map[string]string{
+								PartitionAnnotation: "10",
+								ConsumerAnnotation:  "10",
+							},
+						},
+						Status: appsv1.DeploymentStatus{Replicas: 1},
+					},
+				},
+			},
+			konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  testInt32ToPt(4),
+				Running:   testInt32ToPt(0),
+				Paused:    testInt32ToPt(0),
+				Lagging:   testInt32ToPt(0),
+				Missing:   testInt32ToPt(4),
+				Outdated:  testInt32ToPt(0),
+				Redundant: testInt32ToPt(1),
 			},
 		},
 	}
@@ -155,6 +257,7 @@ func testCompareStatus(t *testing.T, a, b konsumeratorv1alpha1.ConsumerStatus) {
 	equalInt32("Lagging", *a.Lagging, *b.Lagging)
 	equalInt32("Missing", *a.Missing, *b.Missing)
 	equalInt32("Outdated", *a.Outdated, *b.Outdated)
+	equalInt32("Redundant", *a.Redundant, *b.Redundant)
 }
 
 func newPrometheusAutoscalerSpec(minSyncPeriod time.Duration) *konsumeratorv1alpha1.PrometheusAutoscalerSpec {
@@ -202,7 +305,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 					NumPartitions: testInt32ToPt(1),
 					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
 						Mode:       "prometheus",
-						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+						Prometheus: newPrometheusAutoscalerSpec(5 * time.Minute),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
@@ -220,7 +323,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 					NumPartitions: testInt32ToPt(1),
 					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
 						Mode:       "prometheus",
-						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+						Prometheus: newPrometheusAutoscalerSpec(5 * time.Minute),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
@@ -238,7 +341,7 @@ func TestShouldUpdateMetrics(t *testing.T) {
 					NumPartitions: testInt32ToPt(1),
 					Autoscaler: &konsumeratorv1alpha1.AutoscalerSpec{
 						Mode:       "prometheus",
-						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
+						Prometheus: newPrometheusAutoscalerSpec(5 * time.Minute),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},

@@ -4,4 +4,4 @@ metadata:
   name: controller-manager
   namespace: system
 spec:
-  replicas: 3
+  replicas: 1

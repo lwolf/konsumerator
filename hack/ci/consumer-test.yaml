@@ -4,6 +4,7 @@ metadata:
   name: consumer-sample
 spec:
   numPartitions: 2
+  numPartitionsPerInstance: 2
   name: "test-consumer"
   namespace: "default"
   autoscaler:

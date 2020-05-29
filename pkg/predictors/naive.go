@@ -47,14 +47,17 @@ func (s *NaivePredictor) estimateMemory(consumption int64, ramPerCore int64, cpu
 	return requests, limit
 }
 
-func (s *NaivePredictor) Estimate(containerName string, partition int32) *corev1.ResourceRequirements {
-	expectedConsumption := s.expectedConsumption(partition)
+func (s *NaivePredictor) Estimate(containerName string, partitions []int32) *corev1.ResourceRequirements {
+	var expectedConsumption int64
+	for _, p := range partitions {
+		expectedConsumption = s.expectedConsumption(p)
+	}
 	cpuReq, cpuLimit := s.estimateCpu(expectedConsumption, *s.promSpec.RatePerCore)
 	memoryReq, memoryLimit := s.estimateMemory(expectedConsumption, s.promSpec.RamPerCore.MilliValue(), cpuReq, cpuLimit)
 	s.log.V(1).Info(
 		"resource estimation results",
 		"containerName", containerName,
-		"partition", partition,
+		"partitions", partitions,
 		"expected consumption", expectedConsumption,
 		"cpuReq", cpuReq,
 		"cpuLimit", cpuLimit,
