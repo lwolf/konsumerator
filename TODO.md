@@ -62,6 +62,8 @@ v0.9 Multi-partition assignment
 * [x] Improve logging
 
 v
+* [ ] Implement `bounce` mode, keep track of the last few node names per instance and add antiaffinitity rule to deployment
+      to avoid scheduling to that node during the next scale up. 
 * [ ] Dynamic multi-partition assignment. Instead of static `numPartitionsPerInstance`:
       Configure min/max values for `numPartitionsPerInstance`
       Configure min/max number of pods per consumer
