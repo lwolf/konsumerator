@@ -50,7 +50,7 @@ func (s *NaivePredictor) estimateMemory(consumption int64, ramPerCore int64, cpu
 func (s *NaivePredictor) Estimate(containerName string, partitions []int32) *corev1.ResourceRequirements {
 	var expectedConsumption int64
 	for _, p := range partitions {
-		expectedConsumption = s.expectedConsumption(p)
+		expectedConsumption += s.expectedConsumption(p)
 	}
 	cpuReq, cpuLimit := s.estimateCpu(expectedConsumption, *s.promSpec.RatePerCore)
 	memoryReq, memoryLimit := s.estimateMemory(expectedConsumption, s.promSpec.RamPerCore.MilliValue(), cpuReq, cpuLimit)
