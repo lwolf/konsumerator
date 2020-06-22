@@ -13,6 +13,9 @@ import (
 
 const (
 	defaultPartitionEnvKey = "KONSUMERATOR_PARTITION"
+	instanceEnvKey         = "KONSUMERATOR_INSTANCE"
+	numInstancesEnvKey     = "KONSUMERATOR_NUM_INSTANCES"
+	numPartitionsEnvKey    = "KONSUMERATOR_NUM_PARTITIONS"
 	gomaxprocsEnvKey       = "GOMAXPROCS"
 	TimeLayout             = time.RFC3339
 )
@@ -88,7 +91,7 @@ func SetEnv(env []corev1.EnvVar, key string, value string) []corev1.EnvVar {
 	return env
 }
 
-func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequirements, envKey string, partitions []int32) []corev1.EnvVar {
+func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequirements, envKey string, partitions []int32, id, numPartitions, numInstances int) []corev1.EnvVar {
 	var partitionKey string
 	if envKey != "" {
 		partitionKey = envKey
@@ -99,6 +102,9 @@ func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequireme
 	copy(env, currentEnv)
 	env = SetEnv(env, partitionKey, strings.Join(Int2Str(partitions), ","))
 	env = SetEnv(env, gomaxprocsEnvKey, GomaxprocsFromResource(resources.Limits.Cpu()))
+	env = SetEnv(env, instanceEnvKey, strconv.Itoa(id))
+	env = SetEnv(env, numPartitionsEnvKey, strconv.Itoa(numPartitions))
+	env = SetEnv(env, numInstancesEnvKey, strconv.Itoa(numInstances))
 
 	return env
 }

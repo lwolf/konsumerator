@@ -382,7 +382,15 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 				if o.scalingUpAllowed(lastStateChange, currentState) {
 					o.updateScaleAnnotations(deploy, underProvision)
 					container.Resources = *resources
-					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, partitions)
+					container.Env = helpers.PopulateEnv(
+						container.Env,
+						&container.Resources,
+						o.consumer.Spec.PartitionEnvKey,
+						partitions,
+						int(consumerId),
+						int(*o.consumer.Spec.NumPartitions),
+						len(o.assignments),
+					)
 					needsUpdate = true
 				} else if currentState == InstanceStatusSaturated {
 					isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
@@ -397,7 +405,15 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 				if o.scalingDownAllowed(lastStateChange, currentState) {
 					o.updateScaleAnnotations(deploy, underProvision)
 					container.Resources = *resources
-					container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, partitions)
+					container.Env = helpers.PopulateEnv(
+						container.Env,
+						&container.Resources,
+						o.consumer.Spec.PartitionEnvKey,
+						partitions,
+						int(consumerId),
+						int(*o.consumer.Spec.NumPartitions),
+						len(o.assignments),
+					)
 					needsUpdate = true
 				} else {
 					isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleDown)
@@ -444,7 +460,15 @@ func (o *operator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, 
 		}
 		o.updateScaleAnnotations(deploy, underProvision)
 		container.Resources = *resources
-		container.Env = helpers.PopulateEnv(container.Env, &container.Resources, o.consumer.Spec.PartitionEnvKey, partitions)
+		container.Env = helpers.PopulateEnv(
+			container.Env,
+			&container.Resources,
+			o.consumer.Spec.PartitionEnvKey,
+			partitions,
+			int(consumerId),
+			int(*o.consumer.Spec.NumPartitions),
+			len(o.assignments),
+		)
 	}
 	return deploy, nil
 }

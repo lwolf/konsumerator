@@ -10,11 +10,14 @@ import (
 
 func TestPopulateEnv(t *testing.T) {
 	tests := map[string]struct {
-		initialEnv []corev1.EnvVar
-		resources  *corev1.ResourceRequirements
-		envKey     string
-		partitions []int32
-		expEnv     []corev1.EnvVar
+		initialEnv    []corev1.EnvVar
+		resources     *corev1.ResourceRequirements
+		envKey        string
+		partitions    []int32
+		instanceId    int
+		numPartitions int
+		numInstances  int
+		expEnv        []corev1.EnvVar
 	}{
 		"simple case": {
 			initialEnv: nil,
@@ -28,15 +31,31 @@ func TestPopulateEnv(t *testing.T) {
 					corev1.ResourceMemory: resource.MustParse("2G"),
 				},
 			},
-			envKey:     "",
-			partitions: []int32{0},
+			envKey:        "",
+			partitions:    []int32{0},
+			instanceId:    0,
+			numPartitions: 1,
+			numInstances:  1,
 			expEnv: []corev1.EnvVar{
 				{
 					Name:  defaultPartitionEnvKey,
 					Value: "0",
-				}, {
+				},
+				{
 					Name:  gomaxprocsEnvKey,
 					Value: "2",
+				},
+				{
+					Name:  instanceEnvKey,
+					Value: "0",
+				},
+				{
+					Name:  numPartitionsEnvKey,
+					Value: "1",
+				},
+				{
+					Name:  numInstancesEnvKey,
+					Value: "1",
 				},
 			},
 		},
@@ -52,14 +71,30 @@ func TestPopulateEnv(t *testing.T) {
 					corev1.ResourceMemory: resource.MustParse("2G"),
 				},
 			},
-			envKey:     "TEST_PARTITION",
-			partitions: []int32{0},
+			envKey:        "TEST_PARTITION",
+			partitions:    []int32{0},
+			instanceId:    0,
+			numPartitions: 1,
+			numInstances:  1,
 			expEnv: []corev1.EnvVar{
 				{
 					Name:  "TEST_PARTITION",
 					Value: "0",
-				}, {
+				},
+				{
 					Name:  gomaxprocsEnvKey,
+					Value: "1",
+				},
+				{
+					Name:  instanceEnvKey,
+					Value: "0",
+				},
+				{
+					Name:  numPartitionsEnvKey,
+					Value: "1",
+				},
+				{
+					Name:  numInstancesEnvKey,
 					Value: "1",
 				},
 			},
@@ -68,7 +103,7 @@ func TestPopulateEnv(t *testing.T) {
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			backupEnv := append(tt.initialEnv[:0:0], tt.initialEnv...) // backup original env
-			got := PopulateEnv(tt.initialEnv, tt.resources, tt.envKey, tt.partitions)
+			got := PopulateEnv(tt.initialEnv, tt.resources, tt.envKey, tt.partitions, tt.instanceId, tt.numPartitions, tt.numInstances)
 			if diff := cmp.Diff(tt.expEnv, got); diff != "" {
 				t.Errorf("%s PopulateEnv() mismatch (-tt.expEnv +got):\n%s", testName, diff)
 			}
