@@ -8,9 +8,6 @@
 **Konsumerator** is a Kubernetes operator intended to automate management and resource allocations for 
 kafka consumers. 
 
-> This software is in active development phase, any logic and CRD structure could change between versions.
-> Use on your own risk. 
-
 Operator creates and manages `Consumer` CRD, for this it requires cluster-wide permissions.
 
 ```yaml
@@ -20,6 +17,7 @@ metadata:
   name: consumer-sample
 spec:
   numPartitions: 100
+  numPartitionsPerInstance: 1
   name: "test-consumer"
   namespace: "default"
   autoscaler:
@@ -125,9 +123,12 @@ It does not make sense to set resource field, since it will be overridden by aut
 * Deployment will be named `{consumerName}-{index}` where consumerName is `.spec.name` and index is in range
 from 0 to `.spec.numPartitions`. 
 * Resource requests/limits for each deployment will be estimated based on metrics and configuration
-* Each container in the deployment will get few environment variables set: `KONSUMERATOR_PARTITION` `GOMAXPROCS`.
-First one contains kafka partition number assigned to this deployment. Name of this variable is configurable.
-Second is golang specific setting, always equals to the `resources.limit.cpu`.
+* Each container in the deployment will get few environment variables set:
+    `KONSUMERATOR_PARTITION` - contains comma-separated list of kafka partition numbers assigned to this deployment. Name of this variable is configurable. 
+    `KONSUMERATOR_NUM_PARTITIONS` - total number of kafka partitions 
+    `KONSUMERATOR_INSTANCE` - ordinal of the instance 
+    `KONSUMERATOR_NUM_INSTANCES` - total number of instances 
+    `GOMAXPROCS` - golang specific setting, always equals to the `resources.limit.cpu`. 
 
 ## Metrics Providers
 
