@@ -24,15 +24,15 @@ func testLogger() logr.Logger {
 	return ctrl.Log.WithName("naive_test")
 }
 
-func genPromSpec(ratePerCode int64, ramPerCode resource.Quantity) *konsumeratorv1alpha1.PrometheusAutoscalerSpec {
+func genPromSpec(ratePerCore int64, ramPerCore resource.Quantity) *konsumeratorv1alpha1.PrometheusAutoscalerSpec {
 	return &konsumeratorv1alpha1.PrometheusAutoscalerSpec{
 		Address:       nil,
 		MinSyncPeriod: nil,
 		Offset:        konsumeratorv1alpha1.OffsetQuerySpec{},
 		Production:    konsumeratorv1alpha1.ProductionQuerySpec{},
 		Consumption:   konsumeratorv1alpha1.ConsumptionQuerySpec{},
-		RatePerCore:   &ratePerCode,
-		RamPerCore:    ramPerCode,
+		RatePerCore:   &ratePerCore,
+		RamPerCore:    ramPerCore,
 		TolerableLag:  nil,
 		CriticalLag:   nil,
 		RecoveryTime:  &metav1.Duration{Duration: time.Minute * 30},
@@ -96,11 +96,19 @@ func TestEstimateMemory(t *testing.T) {
 			expectedMemoryR: 2000,
 			expectedMemoryL: 2000,
 		},
+		"memory should based on the CPU limits": {
+			consumption:     20000,
+			ramPerCore:      1000,
+			cpuR:            1200,
+			cpuL:            2000,
+			expectedMemoryR: 2000,
+			expectedMemoryL: 2000,
+		},
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			estimator := NaivePredictor{log: testLogger()}
-			memoryR, memoryL := estimator.estimateMemory(tt.consumption, tt.ramPerCore, tt.cpuR, tt.cpuL)
+			memoryR, memoryL := estimator.estimateMemory(tt.ramPerCore, tt.cpuL)
 			if memoryR != tt.expectedMemoryR {
 				t.Fatalf("expected Request Memory %d, got %d", tt.expectedMemoryR, memoryR)
 			}
@@ -194,7 +202,7 @@ func TestEstimateResources(t *testing.T) {
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("100m"),
-					corev1.ResourceMemory: resource.MustParse("100M"),
+					corev1.ResourceMemory: resource.MustParse("1G"),
 				},
 				Limits: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("1"),

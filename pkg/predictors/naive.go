@@ -41,10 +41,9 @@ func (s *NaivePredictor) estimateCpu(consumption int64, ratePerCore int64) (int6
 	cpuReq := math.Ceil(float64(consumption)/float64(ratePerCore)*10) / 10
 	return int64(cpuReq * 1000), int64(math.Ceil(cpuReq)) * 1000
 }
-func (s *NaivePredictor) estimateMemory(consumption int64, ramPerCore int64, cpuR int64, cpuL int64) (int64, int64) {
-	requests := cpuR * (ramPerCore / 1000)
+func (s *NaivePredictor) estimateMemory(ramPerCore int64, cpuL int64) (int64, int64) {
 	limit := cpuL * (ramPerCore / 1000)
-	return requests, limit
+	return limit, limit
 }
 
 func (s *NaivePredictor) Estimate(containerName string, partitions []int32) *corev1.ResourceRequirements {
@@ -53,7 +52,7 @@ func (s *NaivePredictor) Estimate(containerName string, partitions []int32) *cor
 		expectedConsumption += s.expectedConsumption(p)
 	}
 	cpuReq, cpuLimit := s.estimateCpu(expectedConsumption, *s.promSpec.RatePerCore)
-	memoryReq, memoryLimit := s.estimateMemory(expectedConsumption, s.promSpec.RamPerCore.MilliValue(), cpuReq, cpuLimit)
+	memoryReq, memoryLimit := s.estimateMemory(s.promSpec.RamPerCore.MilliValue(), cpuLimit)
 	s.log.V(1).Info(
 		"resource estimation results",
 		"containerName", containerName,

@@ -462,7 +462,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("1300m", "260M", "2", "260M"),
+				"busybox": *tests.NewResourceRequirements("1300m", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -485,7 +485,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("1300m", "260M", "2", "260M"),
+				"busybox": *tests.NewResourceRequirements("1300m", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -508,7 +508,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotationSaturated(name, "400"),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "480M", "2", "480M"),
+				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -531,7 +531,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotationSaturated(name, "200"),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "480M", "2", "480M"),
+				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -554,7 +554,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("2", "480M", "2", "480M"),
+				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -577,7 +577,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("1100m", "220M", "2", "220M"),
+				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -600,7 +600,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("1100m", "220M", "2", "220M"),
+				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -623,7 +623,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("1100m", "220M", "2", "220M"),
+				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -646,7 +646,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("1100m", "220M", "2", "220M"),
+				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -669,7 +669,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("1.1", "220M", "2", "220M"),
+				"busybox": *tests.NewResourceRequirements("1.1", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -692,7 +692,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("1.1", "220M", "2", "220M"),
+				"busybox": *tests.NewResourceRequirements("1.1", "400M", "2", "400M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -715,7 +715,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
-				"busybox": *tests.NewResourceRequirements("100m", "100M", "1", "100M"),
+				"busybox": *tests.NewResourceRequirements("100m", "200M", "1", "200M"),
 			},
 			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
@@ -740,7 +740,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 	}
 	c.Spec.ResourcePolicy = &konsumeratorv1alpha1.ResourcePolicy{
 		ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
-			tests.NewContainerResourcePolicy("busybox", "100m", "100M", "2", "1.6G"),
+			tests.NewContainerResourcePolicy("busybox", "100m", "100M", "2", "400M"),
 		},
 	}
 	c.Spec.Autoscaler.Prometheus.Address = []string{promServer.URL}
