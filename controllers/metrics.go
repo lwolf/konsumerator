@@ -124,7 +124,7 @@ var (
 			Subsystem: "deployment",
 			Name:      "status",
 			Help: "Current deployment status. " +
-				"0 - RUNNING, 1 - SATURATED, 2 - PENDING_SCALE_UP, 3 - PENDING_SCALE_DOWN, -1 - UNKNOWN",
+				"1 - RUNNING, 2 - SATURATED, 3 - PENDING_SCALE_UP, 4 - PENDING_SCALE_DOWN, 0 - UNKNOWN",
 		},
 		[]string{"consumer", "deployment"},
 	)

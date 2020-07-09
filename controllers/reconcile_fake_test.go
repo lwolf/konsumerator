@@ -180,20 +180,20 @@ func TestConsumerReconciliation(t *testing.T) {
 			},
 			expContainerEnv: map[string]map[string]string{
 				"busybox": {
-					"KONSUMERATOR_PARTITION": "0",
-					"GOMAXPROCS":             "1",
+					"KONSUMERATOR_PARTITION":      "0",
+					"GOMAXPROCS":                  "1",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
-					"TESTKEY":                "TESTVALUE",
+					"TESTKEY":                     "TESTVALUE",
 				},
 				"sidecar": {
-					"KONSUMERATOR_PARTITION": "0",
-					"GOMAXPROCS":             "1",
+					"KONSUMERATOR_PARTITION":      "0",
+					"GOMAXPROCS":                  "1",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
-					"SIDECAR_KEY":            "SIDECAR_VALUE",
+					"SIDECAR_KEY":                 "SIDECAR_VALUE",
 				},
 			},
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -243,20 +243,20 @@ func TestConsumerReconciliation(t *testing.T) {
 			},
 			expContainerEnv: map[string]map[string]string{
 				"busybox": {
-					"KONSUMERATOR_PARTITION": "0",
-					"GOMAXPROCS":             "1",
+					"KONSUMERATOR_PARTITION":      "0",
+					"GOMAXPROCS":                  "1",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
-					"TESTKEY":                "TESTVALUE",
+					"TESTKEY":                     "TESTVALUE",
 				},
 				"sidecar": {
-					"KONSUMERATOR_PARTITION": "0",
-					"GOMAXPROCS":             "1",
+					"KONSUMERATOR_PARTITION":      "0",
+					"GOMAXPROCS":                  "1",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
-					"SIDECAR_KEY":            "SIDECAR_VALUE",
+					"SIDECAR_KEY":                 "SIDECAR_VALUE",
 				},
 			},
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -310,20 +310,20 @@ func TestConsumerReconciliation(t *testing.T) {
 			},
 			expContainerEnv: map[string]map[string]string{
 				"busybox": {
-					"KONSUMERATOR_PARTITION": "0",
-					"GOMAXPROCS":             "1",
+					"KONSUMERATOR_PARTITION":      "0",
+					"GOMAXPROCS":                  "1",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
-					"TESTKEY":                "TESTVALUE",
+					"TESTKEY":                     "TESTVALUE",
 				},
 				"sidecar": {
-					"KONSUMERATOR_PARTITION": "0",
-					"GOMAXPROCS":             "1",
+					"KONSUMERATOR_PARTITION":      "0",
+					"GOMAXPROCS":                  "1",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
-					"SIDECAR_KEY":            "SIDECAR_VALUE",
+					"SIDECAR_KEY":                 "SIDECAR_VALUE",
 				},
 			},
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -1013,11 +1013,11 @@ type fakeMetrics struct {
 func containerEnv(name, partition, gomaxprocs, instance, numP, numI string) map[string]map[string]string {
 	return map[string]map[string]string{
 		name: {
-			"KONSUMERATOR_PARTITION": partition,
-			"KONSUMERATOR_INSTANCE": instance,
-			"KONSUMERATOR_NUM_INSTANCES": numI,
+			"KONSUMERATOR_PARTITION":      partition,
+			"KONSUMERATOR_INSTANCE":       instance,
+			"KONSUMERATOR_NUM_INSTANCES":  numI,
 			"KONSUMERATOR_NUM_PARTITIONS": numP,
-			"GOMAXPROCS":             gomaxprocs,
+			"GOMAXPROCS":                  gomaxprocs,
 		},
 	}
 }
