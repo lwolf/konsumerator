@@ -68,15 +68,15 @@ func resourceListDiff(a, b corev1.ResourceList) corev1.ResourceList {
 func instanceStatusToInt(status string) int {
 	switch status {
 	case InstanceStatusRunning:
-		return 0
-	case InstanceStatusSaturated:
 		return 1
-	case InstanceStatusPendingScaleUp:
+	case InstanceStatusSaturated:
 		return 2
-	case InstanceStatusPendingScaleDown:
+	case InstanceStatusPendingScaleUp:
 		return 3
+	case InstanceStatusPendingScaleDown:
+		return 4
 	default:
-		return -1
+		return 0
 	}
 }
 

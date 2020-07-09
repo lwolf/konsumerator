@@ -182,7 +182,7 @@ func TestEstimateResources(t *testing.T) {
 			containerName: "test",
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 20000, 1: 20000}, map[int32]int64{0: 20001, 1: 20001}, map[int32]int64{0: 0}),
-			partitions:    []int32{0,1},
+			partitions:    []int32{0, 1},
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("4"),
