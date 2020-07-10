@@ -123,6 +123,7 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 
 	var deleted int
 	for _, deploy := range o.toRemoveInstances {
+		deploymentStatus.WithLabelValues(o.consumer.Name, deploy.Name).Set(0)
 		if err := cl.Delete(ctx, deploy); errors.IgnoreNotFound(err) != nil {
 			o.log.Error(err, "unable to delete deployment", "deployment", deploy)
 			deploymentsDeleteErrors.WithLabelValues(req.Name).Inc()
