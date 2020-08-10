@@ -248,6 +248,7 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 			o.toRemoveInstances[deploy.Name] = deploy
 			continue
 		}
+		updateDeploymentMetrics(deploy, o.consumer.Name)
 		trackedConsumers[consumerId] = true
 		if consumerId > buckets-1 {
 			o.log.Info("deployment with consumerId out of range", "consumerId", consumerId)
@@ -329,6 +330,24 @@ func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
 		"redundant", status.Redundant,
 		"toEstimate", len(o.toEstimateInstances),
 	)
+}
+
+// updateDeploymentMetrics updates deployment metrics to make sure that we do not have
+// missing or stale metrics between app restarts.
+func updateDeploymentMetrics(deploy *appsv1.Deployment, consumerName string) {
+	status := deploy.Annotations[ScalingStatusAnnotation]
+	ds := float64(instanceStatusToInt(status))
+	deploymentStatus.WithLabelValues(consumerName, deploy.Name).Set(ds)
+
+	var saturation float64
+	saturationStr := deploy.Annotations[CPUSaturationLevel]
+	s, err := strconv.Atoi(saturationStr)
+	if err != nil {
+		saturation = 0
+	} else {
+		saturation = float64(s)
+	}
+	deploymentSaturation.WithLabelValues(consumerName, deploy.Name).Set(saturation)
 }
 
 func (o *operator) setOwner(deploy *appsv1.Deployment) {
