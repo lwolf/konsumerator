@@ -33,7 +33,8 @@ spec:
       recoveryTime: "30m"
       # prometheus addresses to query
       address:
-#        - "http://prometheus-server.kube-system:9090"
+        - "http://prometheus-server.kube-system:9090"
+        - "http://172.17.0.1:30666"
         - "http://172.17.0.3:30666"
       # Offset query should return number of messages that is not
       # processed yet a.k.a lag per partitionLabel
