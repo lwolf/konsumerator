@@ -505,7 +505,7 @@ func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      deployLabels,
 			Annotations: deployAnnotations,
-			Name:        fmt.Sprintf("%s-%s", o.consumer.Spec.Name, strings.Join(helpers.Int2Str(partitionIds), "-")),
+			Name:        fmt.Sprintf("%s-%d", o.consumer.Spec.Name, consumerId),
 			Namespace:   o.consumer.Spec.Namespace,
 		},
 		Spec: o.consumer.Spec.DeploymentTemplate,
