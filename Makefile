@@ -79,8 +79,8 @@ kind-destroy:
 kind-create: docker-build kind-destroy
 	kind create cluster --name "konsumerator" --config ./hack/ci/kind.yaml
 	make kind-load-image
-	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make kind-apply
-	KUBECONFIG=$$(kind get kubeconfig-path --name="konsumerator") make deploy
+	make kind-apply
+	make deploy
 
 kind-load-image:
 	kind load docker-image --name "konsumerator" ${IMG}
@@ -88,8 +88,8 @@ kind-load-image:
 kind-update: docker-build kind-load-image deploy
 
 kind-apply:
-	kubectl apply -f ./hack/ci/prom.yaml -n kube-system
-	kubectl apply -f ./hack/ci/konsumerator-dashboard.yaml -n kube-system
-	kubectl apply -f ./hack/ci/konsumerator-overview-dashboard.yaml -n kube-system
-	kubectl apply -f ./hack/ci/grafana.yaml -n kube-system
+	kubectl --context=kind-konsumerator apply -f ./hack/ci/prom.yaml -n kube-system
+	kubectl --context=kind-konsumerator apply -f ./hack/ci/konsumerator-dashboard.yaml -n kube-system
+	kubectl --context=kind-konsumerator apply -f ./hack/ci/konsumerator-overview-dashboard.yaml -n kube-system
+	kubectl --context=kind-konsumerator apply -f ./hack/ci/grafana.yaml -n kube-system
 

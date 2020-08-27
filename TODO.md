@@ -61,35 +61,39 @@ v0.9 Multi-partition assignment
 * [x] Static multi-partition assignment
 * [x] Improve logging
 
-v
+vNext
+* [x] Resync all metrics on reconcile. Status metric is wrong (seems to be updated only during creating of deployments)
+* [ ] Implement progressive updates (canary).
+* [ ] Rework configuration of RAM estimation, make it possible to provide some formula, i.e. (fixed + ramPerCore)  
 * [ ] Implement `bounce` mode, keep track of the last few node names per instance and add antiaffinitity rule to deployment
       to avoid scheduling to that node during the next scale up. 
+* [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations
+      Ability to set additional deployment-level annotations/labels  
+* [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
+      Now, it requires manual deleting of all deployments.
+* [ ] Use annotations to pause/resume configmap-based consumers
+
+-------
+Unsorted
+* [ ] Consider using number of messages in all estimates instead of `projected lag time`
+* [ ] Add jitter to the scaling time
+* [ ] Log not only scaling cmp value (-1, 0, 1), but also how many cores were estimated per partition
 * [ ] Dynamic multi-partition assignment. Instead of static `numPartitionsPerInstance`:
       Configure min/max values for `numPartitionsPerInstance`
       Configure min/max number of pods per consumer
       Based on production rate decide the value of partitions to assign. Scale each one vertically until fits.
       If per-pod resource limit is exhausted, but global one is not, scale horizontally and reduce number of partitions per instance.  
-* [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations
-      Ability to set additional deployment-level annotations/labels  
-* [ ] Consider using number of messages in all estimates instead of `projected lag time`
-* [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec
-      Now, it requires manual deleting of all deployments.
-
--------
-Unsorted
-* [ ] Alerts (all operator instances are down)
 * [ ] [BUG] update of the auto-scaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
 * [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive) 
 * [ ] Reset status annotation if MANUAL mode is enabled
 * [ ] Consider making number of partitions optional in the spec
-
 * [ ] [Feature] implement defaulting/validating webhooks
 * [ ] [Feature] call external webhooks on scaling events
 * [ ] [Feature] Vertical auto-scaling of balanced workloads (single deployment)
 * [ ] [Feature] Fully dynamic resource allocations based on historic data
 * [ ] [Feature] ? consider adding support for VPA/HPA 
 * [ ] [Feature] ? Tool for operations `consumerctl stop/start consumer`
-* [ ] [Feature] ? Consider getting all the pods to estimate uptime and avoid to frequent restarts
+* [ ] [Feature] ? Consider getting all the pods to estimate uptime and avoid frequent restarts.
 * [ ] [Feature] Implement second metrics provider (Kafka)
 * [ ] [Feature] scale up without restart [blocked](https://github.com/kubernetes/kubernetes/issues/5774)
 * [ ] [Feature] Get kafka lag directly from the prometheus [blocked](https://cwiki.apache.org/confluence/display/KAFKA/489%3A+Kafka+Consumer+Record+Latency+Metric)
