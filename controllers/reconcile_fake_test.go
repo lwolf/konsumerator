@@ -727,6 +727,78 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				Paused:    helpers.Ptr2Int32(0),
 			},
 		},
+		// Test for the case when traffic increases in multiple times,
+		// which makes konsumerator set status to saturated immediately without
+		// even scaling up
+		{
+			name:       "should set scaling status to PENDING_SCALE_UP instead of saturated",
+			timePassed: time.Minute * 10,
+			promResponse: &fakeMetrics{
+				offset:      5e3 * 60 * 60 * 24,
+				production:  5e3,
+				consumption: 10,
+			},
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("100m", "200M", "1", "200M"),
+			},
+			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  helpers.Ptr2Int32(1),
+				Lagging:   helpers.Ptr2Int32(1),
+				Missing:   helpers.Ptr2Int32(0),
+				Outdated:  helpers.Ptr2Int32(0),
+				Running:   helpers.Ptr2Int32(1),
+				Redundant: helpers.Ptr2Int32(0),
+				Paused:    helpers.Ptr2Int32(0),
+			},
+		},
+		{
+			name:       "should assign maximum resources and set status saturated",
+			timePassed: time.Minute * 10,
+			promResponse: &fakeMetrics{
+				offset:      5e3 * 60 * 60 * 24,
+				production:  5e3,
+				consumption: 10,
+			},
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusSaturated),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
+			},
+			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  helpers.Ptr2Int32(1),
+				Lagging:   helpers.Ptr2Int32(1),
+				Missing:   helpers.Ptr2Int32(0),
+				Outdated:  helpers.Ptr2Int32(0),
+				Running:   helpers.Ptr2Int32(1),
+				Redundant: helpers.Ptr2Int32(0),
+				Paused:    helpers.Ptr2Int32(0),
+			},
+		},
+		{
+			name:       "still nothing to do, after all the resources are allocated",
+			timePassed: time.Minute * 10,
+			promResponse: &fakeMetrics{
+				offset:      5e3 * 60 * 60 * 24,
+				production:  5e3,
+				consumption: 10,
+			},
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusSaturated),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
+			},
+			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  helpers.Ptr2Int32(1),
+				Lagging:   helpers.Ptr2Int32(1),
+				Missing:   helpers.Ptr2Int32(0),
+				Outdated:  helpers.Ptr2Int32(0),
+				Running:   helpers.Ptr2Int32(1),
+				Redundant: helpers.Ptr2Int32(0),
+				Paused:    helpers.Ptr2Int32(0),
+			},
+		},
 	}
 
 	promServer := newFakePromServer(t)

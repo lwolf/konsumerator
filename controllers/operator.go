@@ -399,23 +399,26 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 			isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
 		case cmpResourcesGt:
 			if isLagging {
-				if o.scalingUpAllowed(lastStateChange, currentState) {
-					o.updateScaleAnnotations(deploy, underProvision)
-					container.Resources = *resources
-					container.Env = helpers.PopulateEnv(
-						container.Env,
-						&container.Resources,
-						o.consumer.Spec.PartitionEnvKey,
-						partitions,
-						int(consumerId),
-						int(*o.consumer.Spec.NumPartitions),
-						len(o.assignments),
-					)
-					needsUpdate = true
-				} else if currentState == InstanceStatusSaturated {
-					isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
-				} else {
+				switch currentState {
+				case InstanceStatusRunning:
 					isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleUp)
+				case InstanceStatusPendingScaleUp:
+					if o.scalingUpAllowed(lastStateChange, currentState) {
+						o.updateScaleAnnotations(deploy, underProvision)
+						container.Resources = *resources
+						container.Env = helpers.PopulateEnv(
+							container.Env,
+							&container.Resources,
+							o.consumer.Spec.PartitionEnvKey,
+							partitions,
+							int(consumerId),
+							int(*o.consumer.Spec.NumPartitions),
+							len(o.assignments),
+						)
+						needsUpdate = true
+					}
+				case InstanceStatusSaturated:
+					isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
 				}
 			} else {
 				isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
