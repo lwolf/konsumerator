@@ -26,6 +26,22 @@ func NewInstanceLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, log logr.Lo
 	}
 }
 
+func (il *InstanceLimiter) MinAllowed(containerName string) *corev1.ResourceList {
+	policy, ok := il.registry[containerName]
+	if !ok {
+		return nil
+	}
+	return &policy.MinAllowed
+}
+
+func (il *InstanceLimiter) MaxAllowed(containerName string) *corev1.ResourceList {
+	policy, ok := il.registry[containerName]
+	if !ok {
+		return nil
+	}
+	return &policy.MaxAllowed
+}
+
 func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.ResourceRequirements) *corev1.ResourceRequirements {
 	limits, ok := il.registry[containerName]
 	if !ok {

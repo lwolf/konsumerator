@@ -48,6 +48,18 @@ func NewGlobalLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, used *corev1.
 	return l
 }
 
+// nop
+func (l *GlobalLimiter) MinAllowed(_ string) *corev1.ResourceList {
+	return nil
+}
+
+func (l *GlobalLimiter) MaxAllowed(_ string) *corev1.ResourceList {
+	return &corev1.ResourceList{
+		corev1.ResourceCPU:    *resource.NewMilliQuantity(l.availCPU.MilliValue(), resource.DecimalSI),
+		corev1.ResourceMemory: *resource.NewMilliQuantity(l.availMem.MilliValue(), resource.DecimalSI),
+	}
+}
+
 func (l *GlobalLimiter) ApplyLimits(_ string, resources *corev1.ResourceRequirements) *corev1.ResourceRequirements {
 	if l.availMem == nil || l.availCPU == nil {
 		// no limits were applied - returning as is
