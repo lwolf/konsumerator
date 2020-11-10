@@ -45,11 +45,11 @@ func initReconciler(consumer *konsumeratorv1alpha1.Consumer) (client.Client, *co
 	eventSource := corev1.EventSource{Component: "eventTest"}
 	recorder := broadcaster.NewRecorder(s, eventSource)
 	return cl, &controllers.ConsumerReconciler{
-		cl,
-		tlog.NullLogger{},
-		recorder,
-		s,
-		fakeClock,
+		Client:   cl,
+		Log:      tlog.NullLogger{},
+		Recorder: recorder,
+		Scheme:   s,
+		Clock:    fakeClock,
 	}
 }
 
@@ -407,12 +407,8 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "should have a single running deployment after the first reconcile",
-			promResponse: &fakeMetrics{
-				offset:      10,
-				production:  10,
-				consumption: 10,
-			},
+			name:                "should have a single running deployment after the first reconcile",
+			promResponse:        promMetricsForLag(0),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -429,13 +425,9 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name:       "lag detected, should set pending scale up status for the lagging deployment",
-			timePassed: time.Minute * 10,
-			promResponse: &fakeMetrics{
-				offset:      5e3 * 60 * 6,
-				production:  5e3,
-				consumption: 5e3,
-			},
+			name:                "lag detected, should set pending scale up status for the lagging deployment",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(6),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
 			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -452,13 +444,9 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name:       "should scale the deployment",
-			timePassed: time.Minute * 10,
-			promResponse: &fakeMetrics{
-				offset:      5e3 * 60 * 15,
-				production:  5e3,
-				consumption: 5e3,
-			},
+			name:                "should scale the deployment",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(15),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -475,13 +463,9 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name:       "lag still present, pending scale up again",
-			timePassed: time.Minute * 10,
-			promResponse: &fakeMetrics{
-				offset:      5e3 * 60 * 20,
-				production:  5e3,
-				consumption: 5e3,
-			},
+			name:                "lag still present, pending scale up again",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(20),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -544,13 +528,9 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name:       "lag consumed, pending scale down",
-			timePassed: time.Minute * 10,
-			promResponse: &fakeMetrics{
-				offset:      5e3 * 60 * 2,
-				production:  5e3,
-				consumption: 5e3,
-			},
+			name:                "lag consumed, pending scale down",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(2),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -567,13 +547,9 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name:       "lag consumed, back to normal",
-			timePassed: time.Minute * 10,
-			promResponse: &fakeMetrics{
-				offset:      5e3 * 60 * 1,
-				production:  5e3,
-				consumption: 5e3,
-			},
+			name:                "lag consumed, back to normal",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(1),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -636,13 +612,9 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name:       "should actually scale down",
-			timePassed: time.Minute * 10,
-			promResponse: &fakeMetrics{
-				offset:      5e3 * 60 * 1,
-				production:  5e3,
-				consumption: 5e3,
-			},
+			name:                "should actually scale down",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(1),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -659,13 +631,9 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name:       "should be running normally",
-			timePassed: time.Minute * 10,
-			promResponse: &fakeMetrics{
-				offset:      40e3,
-				production:  5e3,
-				consumption: 5e3,
-			},
+			name:                "should be running normally",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(1),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -754,13 +722,9 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name:       "should assign maximum resources and set status saturated",
-			timePassed: time.Minute * 10,
-			promResponse: &fakeMetrics{
-				offset:      5e3 * 60 * 60 * 24,
-				production:  5e3,
-				consumption: 10,
-			},
+			name:                "should assign maximum resources and set status saturated",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(60 * 3), // 3h lag
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusSaturated),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -777,13 +741,9 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
-			name:       "still nothing to do, after all the resources are allocated",
-			timePassed: time.Minute * 10,
-			promResponse: &fakeMetrics{
-				offset:      5e3 * 60 * 60 * 24,
-				production:  5e3,
-				consumption: 10,
-			},
+			name:                "still nothing to do, after all the resources are allocated",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(60 * 3), // 3h lag,
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusSaturated),
 			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
@@ -803,6 +763,196 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 
 	promServer := newFakePromServer(t)
 	c := newConsumer(name, namespace)
+	c.Spec.DeploymentTemplate.Template = corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "busybox", Image: "busybox-image"},
+			},
+		},
+	}
+	c.Spec.ResourcePolicy = &konsumeratorv1alpha1.ResourcePolicy{
+		ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			tests.NewContainerResourcePolicy("busybox", "100m", "100M", "2", "400M"),
+		},
+	}
+	c.Spec.Autoscaler.Prometheus.Address = []string{promServer.URL}
+	tr := newTestReconciler(t, c)
+
+	for step, tc := range testCases {
+		t.Run(fmt.Sprintf("step_%d", step+1), func(t *testing.T) {
+			t.Log(tc.name)
+			fakeClock.Step(tc.timePassed)
+			if tc.promResponse != nil {
+				promServer.setResponse(tc.promResponse)
+				tc.expConsumerState.LastSyncState = map[string]konsumeratorv1alpha1.InstanceState{
+					"0": {
+						ProductionRate:  tc.promResponse.production,
+						ConsumptionRate: tc.promResponse.consumption,
+						MessagesBehind:  tc.promResponse.offset,
+					},
+				}
+			}
+			tr.mustReconcile()
+			if err := tr.equalConsumerStatus(tc.expConsumerState); err != nil {
+				t.Logf("%s", err)
+				t.Fail()
+			}
+			deployments := tr.fetchDeployments()
+			for _, deployment := range deployments {
+				if err := deployment.diffAnnotation(tc.expDeployAnnotation); err != nil {
+					t.Logf("annotation diff err: %s", err)
+					t.Fail()
+				}
+				if err := deployment.diffEnv(tc.expContainerEnv); err != nil {
+					t.Logf("environment diff err: %s", err)
+					t.Fail()
+				}
+				if err := deployment.diffResources(tc.expContainerResources); err != nil {
+					t.Logf("resources diff err: %s", err)
+					t.Fail()
+				}
+			}
+		})
+	}
+}
+
+func promMetricsForLag(lagMinutes int64) *fakeMetrics {
+	if lagMinutes < 1 {
+		lagMinutes = 1
+	}
+	return &fakeMetrics{
+		offset:      5e3 * 60 * lagMinutes,
+		production:  5e3,
+		consumption: 5e3,
+	}
+}
+
+func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
+	name, namespace := "ConsumerReconciler_Reconcile", "Test"
+	testCases := []struct {
+		name                  string
+		timePassed            time.Duration
+		promResponse          *fakeMetrics
+		expDeployAnnotation   map[string]map[string]string
+		expContainerResources map[string]corev1.ResourceRequirements
+		expContainerEnv       map[string]map[string]string
+		expConsumerState      konsumeratorv1alpha1.ConsumerStatus
+	}{
+		{
+			name:                "should have one missing deployment on consumer creation",
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+			},
+			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  helpers.Ptr2Int32(1),
+				Lagging:   helpers.Ptr2Int32(0),
+				Missing:   helpers.Ptr2Int32(1),
+				Outdated:  helpers.Ptr2Int32(0),
+				Running:   helpers.Ptr2Int32(0),
+				Redundant: helpers.Ptr2Int32(0),
+				Paused:    helpers.Ptr2Int32(0),
+			},
+		},
+		{
+			name:                "should have a single running deployment after the first reconcile",
+			promResponse:        promMetricsForLag(0),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+			},
+			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  helpers.Ptr2Int32(1),
+				Lagging:   helpers.Ptr2Int32(0),
+				Missing:   helpers.Ptr2Int32(0),
+				Outdated:  helpers.Ptr2Int32(0),
+				Running:   helpers.Ptr2Int32(1),
+				Redundant: helpers.Ptr2Int32(0),
+				Paused:    helpers.Ptr2Int32(0),
+			},
+		},
+		{
+			name:                "lag detected, should set pending scale up status for the lagging deployment",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(6),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+			},
+			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  helpers.Ptr2Int32(1),
+				Lagging:   helpers.Ptr2Int32(1),
+				Missing:   helpers.Ptr2Int32(0),
+				Outdated:  helpers.Ptr2Int32(0),
+				Running:   helpers.Ptr2Int32(1),
+				Redundant: helpers.Ptr2Int32(0),
+				Paused:    helpers.Ptr2Int32(0),
+			},
+		},
+		{
+			name:                "should scale the deployment",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(6),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
+			},
+			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  helpers.Ptr2Int32(1),
+				Lagging:   helpers.Ptr2Int32(1),
+				Missing:   helpers.Ptr2Int32(0),
+				Outdated:  helpers.Ptr2Int32(0),
+				Running:   helpers.Ptr2Int32(1),
+				Redundant: helpers.Ptr2Int32(0),
+				Paused:    helpers.Ptr2Int32(0),
+			},
+		},
+		{
+			name:                "lag still present, pending scale up again",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(10),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
+			},
+			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  helpers.Ptr2Int32(1),
+				Lagging:   helpers.Ptr2Int32(1),
+				Missing:   helpers.Ptr2Int32(0),
+				Outdated:  helpers.Ptr2Int32(0),
+				Running:   helpers.Ptr2Int32(1),
+				Redundant: helpers.Ptr2Int32(0),
+				Paused:    helpers.Ptr2Int32(0),
+			},
+		},
+		{
+			name:                "lag reached `criticalLag` value, allocate maximum resources",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(15),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
+			},
+			expConsumerState: konsumeratorv1alpha1.ConsumerStatus{
+				Expected:  helpers.Ptr2Int32(1),
+				Lagging:   helpers.Ptr2Int32(1),
+				Missing:   helpers.Ptr2Int32(0),
+				Outdated:  helpers.Ptr2Int32(0),
+				Running:   helpers.Ptr2Int32(1),
+				Redundant: helpers.Ptr2Int32(0),
+				Paused:    helpers.Ptr2Int32(0),
+			},
+		},
+	}
+	promServer := newFakePromServer(t)
+	c := newConsumer(name, namespace)
+	c.Spec.Autoscaler.Prometheus.CriticalLag = &metav1.Duration{Duration: time.Minute * 15}
 	c.Spec.DeploymentTemplate.Template = corev1.PodTemplateSpec{
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{

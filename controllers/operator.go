@@ -520,8 +520,44 @@ func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
 	return deploy
 }
 
+func (o *operator) getMaxLag(partitions []int32) time.Duration {
+	var maxLag time.Duration
+	for _, p := range partitions {
+		lag := o.mp.GetLagByPartition(p)
+		if lag > maxLag {
+			maxLag = lag
+		}
+	}
+	return maxLag
+}
+
+func (o *operator) isCritReached(maxLag time.Duration) bool {
+	crit := o.consumer.Spec.Autoscaler.Prometheus.CriticalLag
+	// critical lag is not set in the spec
+	if crit == nil {
+		return false
+	}
+	// metricsProvider is unavailable or not set
+	if o.mp == nil {
+		return false
+	}
+	return maxLag.Seconds() >= crit.Seconds()
+}
+
 func (o *operator) allocateResources(container *corev1.Container, partitions []int32) (*corev1.ResourceRequirements, int64) {
-	estimates := o.predictor.Estimate(container.Name, partitions)
+	var estimates *corev1.ResourceRequirements
+	// Respect criticalLag value. If lag reached criticalLag, allocate maximum allowed resources
+	if o.isCritReached(o.getMaxLag(partitions)) {
+		maxAllowed := o.limiter.MaxAllowed(container.Name)
+		estimates = &corev1.ResourceRequirements{
+			Limits:   *maxAllowed,
+			Requests: *maxAllowed,
+		}
+	}
+	if estimates == nil {
+		estimates = o.predictor.Estimate(container.Name, partitions)
+	}
+
 	resources := o.limiter.ApplyLimits(container.Name, estimates)
 	reqDiff := estimates.Requests.Cpu().MilliValue() - resources.Requests.Cpu().MilliValue()
 	return resources, reqDiff
