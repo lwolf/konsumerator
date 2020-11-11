@@ -29,8 +29,7 @@ changelog:
     - '^docs:'
     - '^test:'
 dockers:
-  -
-    binaries:
+  - binaries:
       - konsumerator
     dockerfile: Dockerfile-releaser
     image_templates:
