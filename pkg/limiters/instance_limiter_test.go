@@ -4,11 +4,89 @@ import (
 	"testing"
 
 	tlog "github.com/go-logr/logr/testing"
+	corev1 "k8s.io/api/core/v1"
+
 	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/helpers/tests"
-	corev1 "k8s.io/api/core/v1"
 )
+
+func TestInstanceLimiter_MinAllowed(t *testing.T) {
+	testCases := map[string]struct {
+		containerName string
+		policy        konsumeratorv1alpha1.ResourcePolicy
+		expLimits     *corev1.ResourceList
+	}{
+		"should return min allowed by containerName": {
+			containerName: "test",
+			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
+			}},
+			expLimits: tests.NewResourceList("100m", "100M"),
+		},
+		"should return nil if no such policy exists": {
+			containerName: "not-test",
+			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
+			}},
+			expLimits: nil,
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			limiter := NewInstanceLimiter(&tc.policy, tlog.NullLogger{})
+			limits := limiter.MinAllowed(tc.containerName)
+			if tc.expLimits != nil && limits != nil {
+				if helpers.CmpResourceList(*limits, *tc.expLimits) != 0 {
+					t.Errorf("MinAllowed() results mismatch. want %v, got %v", tc.expLimits, limits)
+				}
+			} else {
+				if tc.expLimits != limits {
+					t.Errorf("MinAllowed() results mismatch. want %v, got %v", tc.expLimits, limits)
+				}
+			}
+
+		})
+	}
+}
+
+func TestInstanceLimiter_MaxAllowed(t *testing.T) {
+	testCases := map[string]struct {
+		containerName string
+		policy        konsumeratorv1alpha1.ResourcePolicy
+		expLimits     *corev1.ResourceList
+	}{
+		"should return max allowed by containerName": {
+			containerName: "test",
+			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
+			}},
+			expLimits: tests.NewResourceList("2", "150M"),
+		},
+		"should return nil if no such policy exists": {
+			containerName: "not-test",
+			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
+			}},
+			expLimits: nil,
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			limiter := NewInstanceLimiter(&tc.policy, tlog.NullLogger{})
+			limits := limiter.MaxAllowed(tc.containerName)
+			if tc.expLimits != nil && limits != nil {
+				if helpers.CmpResourceList(*limits, *tc.expLimits) != 0 {
+					t.Errorf("MaxAllowed() results mismatch. want %v, got %v", tc.expLimits, limits)
+				}
+			} else {
+				if tc.expLimits != limits {
+					t.Errorf("MaxAllowed() results mismatch. want %v, got %v", tc.expLimits, limits)
+				}
+			}
+		})
+	}
+}
 
 func TestInstanceLimiter_ApplyLimits(t *testing.T) {
 	testCases := map[string]struct {

@@ -124,6 +124,10 @@ func TestGlobalLimiter_ApplyLimits2(t *testing.T) {
 		if helpers.CmpResourceList(*state, *step.expState) != 0 {
 			t.Fatalf("step %d - limiter state results mismatch. \nWant: \n%v; \nGot: \n%v", i+1, step.expState, r)
 		}
+		// verify that ".MaxAllowed()" returns the same amount of "free"  resources as expected
+		if helpers.CmpResourceList(*limiter.MaxAllowed(""), *step.expState) != 0 {
+			t.Fatalf("step %d - limiter state results mismatch. \nWant: \n%v; \nGot: \n%v", i+1, step.expState, r)
+		}
 	}
 }
 
