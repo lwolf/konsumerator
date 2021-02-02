@@ -51,7 +51,7 @@ vet:
 
 # Generate code
 generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt,year=2020 paths=./api/...
+	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt,year=2021 paths=./api/...
 
 # Build the docker image
 docker-build: build test
