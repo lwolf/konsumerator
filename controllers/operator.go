@@ -498,9 +498,11 @@ func (o *operator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, 
 
 func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
 	partitionIds := o.assignments[consumerId]
+	partitionsList := strings.Join(helpers.Int2Str(partitionIds), ",")
 	deployLabels := map[string]string{
 		"app":        o.consumer.Spec.Name,
 		"controller": o.consumer.Name,
+		"partitions": partitionsList,
 	}
 	deployAnnotations := make(map[string]string)
 	deploy := &appsv1.Deployment{
@@ -513,7 +515,7 @@ func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
 		},
 		Spec: o.consumer.Spec.DeploymentTemplate,
 	}
-	deploy.Annotations[PartitionAnnotation] = strings.Join(helpers.Int2Str(partitionIds), ",")
+	deploy.Annotations[PartitionAnnotation] = partitionsList
 	deploy.Annotations[ConsumerAnnotation] = strconv.Itoa(int(consumerId))
 	deploy.Annotations[GenerationAnnotation] = o.observedGeneration()
 	o.updateScalingStatus(deploy, InstanceStatusRunning)
