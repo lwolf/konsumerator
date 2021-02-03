@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 )
 
 type MetricsProvider interface {
@@ -16,10 +16,10 @@ type MetricsProvider interface {
 	Load(map[int32]int64, map[int32]int64, map[int32]int64)
 }
 
-func DumpSyncState(n int32, prov MetricsProvider) map[string]konsumeratorv1alpha1.InstanceState {
-	state := make(map[string]konsumeratorv1alpha1.InstanceState, n)
+func DumpSyncState(n int32, prov MetricsProvider) map[string]konsumeratorv1.InstanceState {
+	state := make(map[string]konsumeratorv1.InstanceState, n)
 	for i := int32(0); i < n; i++ {
-		state[strconv.Itoa(int(i))] = konsumeratorv1alpha1.InstanceState{
+		state[strconv.Itoa(int(i))] = konsumeratorv1.InstanceState{
 			ProductionRate:  prov.GetProductionRate(i),
 			ConsumptionRate: prov.GetConsumptionRate(i),
 			MessagesBehind:  prov.GetMessagesBehind(i),
@@ -28,7 +28,7 @@ func DumpSyncState(n int32, prov MetricsProvider) map[string]konsumeratorv1alpha
 	return state
 }
 
-func LoadSyncState(mp MetricsProvider, status konsumeratorv1alpha1.ConsumerStatus) {
+func LoadSyncState(mp MetricsProvider, status konsumeratorv1.ConsumerStatus) {
 	if status.LastSyncState == nil {
 		return
 	}

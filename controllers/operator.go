@@ -19,7 +19,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 	"github.com/lwolf/konsumerator/pkg/errors"
 	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/limiters"
@@ -29,7 +29,7 @@ import (
 
 type operator struct {
 	owner    metav1.Object
-	consumer *konsumeratorv1alpha1.Consumer
+	consumer *konsumeratorv1.Consumer
 	// new
 	Recorder record.EventRecorder
 	Scheme   *runtime.Scheme
@@ -65,7 +65,7 @@ type operator struct {
 	clock clock.Clock
 }
 
-func (o *operator) init(consumer *konsumeratorv1alpha1.Consumer, managedDeploys appsv1.DeploymentList) error {
+func (o *operator) init(consumer *konsumeratorv1.Consumer, managedDeploys appsv1.DeploymentList) error {
 	hash, err := hashstructure.Hash(consumer.Spec.DeploymentTemplate, nil)
 	if err != nil {
 		return err
@@ -201,7 +201,7 @@ func (o *operator) newMetricsProvider() providers.MetricsProvider {
 		return defaultProvider
 	}
 	switch o.consumer.Spec.Autoscaler.Mode {
-	case konsumeratorv1alpha1.AutoscalerTypePrometheus:
+	case konsumeratorv1.AutoscalerTypePrometheus:
 		// setup prometheus metrics provider
 		mp, err := providers.NewPrometheusMP(o.log, o.consumer.Spec.Autoscaler.Prometheus, o.consumer.Name)
 		if err != nil {

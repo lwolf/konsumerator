@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -16,11 +16,11 @@ func TestPopulateStatusFromAnnotation(t *testing.T) {
 	mtm := metav1.NewTime(tm)
 	testCases := map[string]struct {
 		in     map[string]string
-		status *konsumeratorv1alpha1.ConsumerStatus
+		status *konsumeratorv1.ConsumerStatus
 	}{
 		"expect to get empty status": {
 			in: map[string]string{},
-			status: &konsumeratorv1alpha1.ConsumerStatus{
+			status: &konsumeratorv1.ConsumerStatus{
 				Expected:      helpers.Ptr2Int32(0),
 				Running:       helpers.Ptr2Int32(0),
 				Paused:        helpers.Ptr2Int32(0),
@@ -40,7 +40,7 @@ func TestPopulateStatusFromAnnotation(t *testing.T) {
 				annotationStatusMissing:  "4",
 				annotationStatusOutdated: "5",
 			},
-			status: &konsumeratorv1alpha1.ConsumerStatus{
+			status: &konsumeratorv1.ConsumerStatus{
 				Expected:      helpers.Ptr2Int32(6),
 				Running:       helpers.Ptr2Int32(1),
 				Paused:        helpers.Ptr2Int32(2),
@@ -62,7 +62,7 @@ func TestPopulateStatusFromAnnotation(t *testing.T) {
 				annotationStatusLastSyncTime: "2019-10-03T13:38:03Z",
 				annotationStatusLastState:    "bad state",
 			},
-			status: &konsumeratorv1alpha1.ConsumerStatus{
+			status: &konsumeratorv1.ConsumerStatus{
 				Expected:      helpers.Ptr2Int32(6),
 				Running:       helpers.Ptr2Int32(1),
 				Paused:        helpers.Ptr2Int32(2),
@@ -76,7 +76,7 @@ func TestPopulateStatusFromAnnotation(t *testing.T) {
 	}
 	for testName, tc := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			status := &konsumeratorv1alpha1.ConsumerStatus{}
+			status := &konsumeratorv1.ConsumerStatus{}
 			PopulateStatusFromAnnotation(tc.in, status)
 			if diff := cmp.Diff(status, tc.status); diff != "" {
 				t.Fatalf("status mismatch (-status +tc.status):\n%s", diff)
@@ -89,7 +89,7 @@ func TestUpdateStatusAnnotations(t *testing.T) {
 	tm, _ := time.Parse(helpers.TimeLayout, "2019-10-03T13:38:03Z")
 	mtm := metav1.NewTime(tm)
 	testCases := map[string]struct {
-		status    *konsumeratorv1alpha1.ConsumerStatus
+		status    *konsumeratorv1.ConsumerStatus
 		configMap *corev1.ConfigMap
 		expErr    bool
 	}{
@@ -106,7 +106,7 @@ func TestUpdateStatusAnnotations(t *testing.T) {
 					},
 				},
 			},
-			status: &konsumeratorv1alpha1.ConsumerStatus{
+			status: &konsumeratorv1.ConsumerStatus{
 				Expected:     helpers.Ptr2Int32(6),
 				Running:      helpers.Ptr2Int32(1),
 				Paused:       helpers.Ptr2Int32(2),
@@ -114,8 +114,8 @@ func TestUpdateStatusAnnotations(t *testing.T) {
 				Missing:      helpers.Ptr2Int32(4),
 				Outdated:     helpers.Ptr2Int32(5),
 				LastSyncTime: &mtm,
-				LastSyncState: map[string]konsumeratorv1alpha1.InstanceState{
-					"0": konsumeratorv1alpha1.InstanceState{ProductionRate: 20, ConsumptionRate: 10, MessagesBehind: 1000},
+				LastSyncState: map[string]konsumeratorv1.InstanceState{
+					"0": konsumeratorv1.InstanceState{ProductionRate: 20, ConsumptionRate: 10, MessagesBehind: 1000},
 				},
 			},
 		},

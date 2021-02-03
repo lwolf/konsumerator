@@ -11,7 +11,7 @@ kafka consumers.
 Operator creates and manages `Consumer` CRD, for this it requires cluster-wide permissions.
 
 ```yaml
-apiVersion: konsumerator.lwolf.org/v1alpha1
+apiVersion: konsumerator.lwolf.org/v1
 kind: Consumer
 metadata:
   name: consumer-sample

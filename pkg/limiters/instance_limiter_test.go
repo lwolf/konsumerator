@@ -6,7 +6,7 @@ import (
 	tlog "github.com/go-logr/logr/testing"
 	corev1 "k8s.io/api/core/v1"
 
-	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/helpers/tests"
 )
@@ -14,19 +14,19 @@ import (
 func TestInstanceLimiter_MinAllowed(t *testing.T) {
 	testCases := map[string]struct {
 		containerName string
-		policy        konsumeratorv1alpha1.ResourcePolicy
+		policy        konsumeratorv1.ResourcePolicy
 		expLimits     *corev1.ResourceList
 	}{
 		"should return min allowed by containerName": {
 			containerName: "test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
 			}},
 			expLimits: tests.NewResourceList("100m", "100M"),
 		},
 		"should return nil if no such policy exists": {
 			containerName: "not-test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
 			}},
 			expLimits: nil,
@@ -53,19 +53,19 @@ func TestInstanceLimiter_MinAllowed(t *testing.T) {
 func TestInstanceLimiter_MaxAllowed(t *testing.T) {
 	testCases := map[string]struct {
 		containerName string
-		policy        konsumeratorv1alpha1.ResourcePolicy
+		policy        konsumeratorv1.ResourcePolicy
 		expLimits     *corev1.ResourceList
 	}{
 		"should return max allowed by containerName": {
 			containerName: "test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
 			}},
 			expLimits: tests.NewResourceList("2", "150M"),
 		},
 		"should return nil if no such policy exists": {
 			containerName: "not-test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
 			}},
 			expLimits: nil,
@@ -91,13 +91,13 @@ func TestInstanceLimiter_MaxAllowed(t *testing.T) {
 func TestInstanceLimiter_ApplyLimits(t *testing.T) {
 	testCases := map[string]struct {
 		containerName string
-		policy        konsumeratorv1alpha1.ResourcePolicy
+		policy        konsumeratorv1.ResourcePolicy
 		estimates     *corev1.ResourceRequirements
 		expRes        *corev1.ResourceRequirements
 	}{
 		"limits should override estimated cpu requests": {
 			containerName: "test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
 			}},
 			estimates: tests.NewResourceRequirements("2.1", "100M", "2", "150M"),
@@ -105,7 +105,7 @@ func TestInstanceLimiter_ApplyLimits(t *testing.T) {
 		},
 		"limits should override estimated memory requests": {
 			containerName: "test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("test", "100m", "100M", "1", "150M"),
 			}},
 			estimates: tests.NewResourceRequirements("100m", "200M", "1", "150M"),
@@ -113,7 +113,7 @@ func TestInstanceLimiter_ApplyLimits(t *testing.T) {
 		},
 		"limits should override estimated cpu limits": {
 			containerName: "test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
 			}},
 			estimates: tests.NewResourceRequirements("2", "100M", "3", "100M"),
@@ -121,7 +121,7 @@ func TestInstanceLimiter_ApplyLimits(t *testing.T) {
 		},
 		"limits should override estimated memory limits": {
 			containerName: "test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("test", "100m", "100M", "1", "150M"),
 			}},
 			estimates: tests.NewResourceRequirements("1", "100M", "1", "200M"),
@@ -129,7 +129,7 @@ func TestInstanceLimiter_ApplyLimits(t *testing.T) {
 		},
 		"minimums should be applied on 0 estimates": {
 			containerName: "test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("test", "100m", "100M", "1", "150M"),
 			}},
 			estimates: tests.NewResourceRequirements("0", "0", "0", "0"),
@@ -137,13 +137,13 @@ func TestInstanceLimiter_ApplyLimits(t *testing.T) {
 		},
 		"no resources are being set if neither estimates nor limits were test": {
 			containerName: "test",
-			policy:        konsumeratorv1alpha1.ResourcePolicy{},
+			policy:        konsumeratorv1.ResourcePolicy{},
 			estimates:     tests.NewResourceRequirements("0", "0", "0", "0"),
 			expRes:        &corev1.ResourceRequirements{},
 		},
 		"limits are not enforced because there are no limits for that container": {
 			containerName: "test",
-			policy: konsumeratorv1alpha1.ResourcePolicy{ContainerPolicies: []konsumeratorv1alpha1.ContainerResourcePolicy{
+			policy: konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
 				tests.NewContainerResourcePolicy("another-test", "100m", "100M", "1", "150M"),
 			}},
 			estimates: tests.NewResourceRequirements("1", "100M", "1", "200M"),
