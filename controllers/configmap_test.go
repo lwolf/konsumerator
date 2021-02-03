@@ -3,7 +3,7 @@ package controllers
 import (
 	"bytes"
 	"fmt"
-	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 	"k8s.io/apimachinery/pkg/util/yaml"
 	"testing"
 )
@@ -119,7 +119,7 @@ resourcePolicy:
       memory: "100M"
 `)
 
-	var consumer konsumeratorv1alpha1.Consumer
+	var consumer konsumeratorv1.Consumer
 	br := bytes.NewReader(data)
 	d := yaml.NewYAMLToJSONDecoder(br)
 	if err := d.Decode(&consumer.Spec); err != nil {

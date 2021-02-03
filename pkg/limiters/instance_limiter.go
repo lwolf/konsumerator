@@ -2,18 +2,19 @@ package limiters
 
 import (
 	"github.com/go-logr/logr"
-	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 )
 
 type InstanceLimiter struct {
-	registry map[string]konsumeratorv1alpha1.ContainerResourcePolicy
+	registry map[string]konsumeratorv1.ContainerResourcePolicy
 	log      logr.Logger
 }
 
-func NewInstanceLimiter(policy *konsumeratorv1alpha1.ResourcePolicy, log logr.Logger) *InstanceLimiter {
-	registry := make(map[string]konsumeratorv1alpha1.ContainerResourcePolicy, 0)
+func NewInstanceLimiter(policy *konsumeratorv1.ResourcePolicy, log logr.Logger) *InstanceLimiter {
+	registry := make(map[string]konsumeratorv1.ContainerResourcePolicy, 0)
 	if policy != nil {
 		for i := range policy.ContainerPolicies {
 			cp := policy.ContainerPolicies[i]
@@ -70,13 +71,13 @@ func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.R
 	}
 }
 
-func (il *InstanceLimiter) validateCpu(request, limit *resource.Quantity, policy *konsumeratorv1alpha1.ContainerResourcePolicy) (int64, int64) {
+func (il *InstanceLimiter) validateCpu(request, limit *resource.Quantity, policy *konsumeratorv1.ContainerResourcePolicy) (int64, int64) {
 	l := adjustQuantity(limit, policy.MinAllowed.Cpu(), policy.MaxAllowed.Cpu())
 	r := adjustQuantity(request, policy.MinAllowed.Cpu(), l)
 	return r.MilliValue(), l.MilliValue()
 }
 
-func (il *InstanceLimiter) validateMemory(request, limit *resource.Quantity, policy *konsumeratorv1alpha1.ContainerResourcePolicy) (int64, int64) {
+func (il *InstanceLimiter) validateMemory(request, limit *resource.Quantity, policy *konsumeratorv1.ContainerResourcePolicy) (int64, int64) {
 	l := adjustQuantity(limit, policy.MinAllowed.Memory(), policy.MaxAllowed.Memory())
 	r := adjustQuantity(request, policy.MinAllowed.Memory(), l)
 	return r.MilliValue(), l.MilliValue()

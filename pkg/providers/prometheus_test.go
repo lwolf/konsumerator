@@ -11,7 +11,7 @@ import (
 	"time"
 
 	tlog "github.com/go-logr/logr/testing"
-	"github.com/lwolf/konsumerator/api/v1alpha1"
+	"github.com/lwolf/konsumerator/api/v1"
 )
 
 func TestNewPrometheusMP(t *testing.T) {
@@ -39,7 +39,7 @@ func TestNewPrometheusMP(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := NewPrometheusMP(tlog.NullLogger{}, &v1alpha1.PrometheusAutoscalerSpec{
+			_, err := NewPrometheusMP(tlog.NullLogger{}, &v1.PrometheusAutoscalerSpec{
 				Address: tc.addrs,
 			}, "test")
 			if err != nil {
@@ -130,17 +130,17 @@ func TestPrometheusMP_Update(t *testing.T) {
 				}
 			}()
 
-			pm, err := NewPrometheusMP(tlog.NullLogger{}, &v1alpha1.PrometheusAutoscalerSpec{
+			pm, err := NewPrometheusMP(tlog.NullLogger{}, &v1.PrometheusAutoscalerSpec{
 				Address: addrs,
-				Production: v1alpha1.ProductionQuerySpec{
+				Production: v1.ProductionQuerySpec{
 					Query:          fmt.Sprintf("%s/%d", tc.queryType, tc.expectedProductionRate),
 					PartitionLabel: "partition",
 				},
-				Consumption: v1alpha1.ConsumptionQuerySpec{
+				Consumption: v1.ConsumptionQuerySpec{
 					Query:          fmt.Sprintf("%s/%d", tc.queryType, tc.expectedConsumptionRate),
 					PartitionLabel: "partition",
 				},
-				Offset: v1alpha1.OffsetQuerySpec{
+				Offset: v1.OffsetQuerySpec{
 					Query:          fmt.Sprintf("%s/%d", tc.queryType, tc.expectedOffset),
 					PartitionLabel: "partition",
 				},

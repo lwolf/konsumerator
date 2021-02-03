@@ -1,7 +1,7 @@
 package tests
 
 import (
-	konsumeratorv1alpha1 "github.com/lwolf/konsumerator/api/v1alpha1"
+	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -13,8 +13,8 @@ func NewResourceList(cpu, mem string) *corev1.ResourceList {
 	}
 }
 
-func NewContainerResourcePolicy(name, minCpu, minMem, maxCpu, maxMem string) konsumeratorv1alpha1.ContainerResourcePolicy {
-	return konsumeratorv1alpha1.ContainerResourcePolicy{
+func NewContainerResourcePolicy(name, minCpu, minMem, maxCpu, maxMem string) konsumeratorv1.ContainerResourcePolicy {
+	return konsumeratorv1.ContainerResourcePolicy{
 		ContainerName: name,
 		MinAllowed:    *NewResourceList(minCpu, minMem),
 		MaxAllowed:    *NewResourceList(maxCpu, maxMem),
