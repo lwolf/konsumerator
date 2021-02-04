@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	tlog "github.com/go-logr/logr/testing"
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/helpers/tests"
 	corev1 "k8s.io/api/core/v1"
@@ -12,7 +12,7 @@ import (
 
 func TestGlobalLimiter_ApplyLimits(t *testing.T) {
 	testCases := map[string]struct {
-		policy    *konsumeratorv1.ResourcePolicy
+		policy    *konsumeratorv2.ResourcePolicy
 		used      *corev1.ResourceList
 		requested *corev1.ResourceRequirements
 		expRes    *corev1.ResourceRequirements
@@ -131,9 +131,9 @@ func TestGlobalLimiter_ApplyLimits2(t *testing.T) {
 	}
 }
 
-func newGlobalPolicy(cpu, mem string) *konsumeratorv1.ResourcePolicy {
-	return &konsumeratorv1.ResourcePolicy{
-		GlobalPolicy: &konsumeratorv1.GlobalResourcePolicy{
+func newGlobalPolicy(cpu, mem string) *konsumeratorv2.ResourcePolicy {
+	return &konsumeratorv2.ResourcePolicy{
+		GlobalPolicy: &konsumeratorv2.GlobalResourcePolicy{
 			MaxAllowed: *tests.NewResourceList(cpu, mem),
 		}}
 }

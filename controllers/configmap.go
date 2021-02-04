@@ -36,7 +36,7 @@ import (
 
 	"github.com/lwolf/konsumerator/pkg/errors"
 
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 )
 
 const (
@@ -115,7 +115,7 @@ func (r *ConfigMapReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	var consumer konsumeratorv1.Consumer
+	var consumer konsumeratorv2.Consumer
 	var data string
 	for i := range cm.Data {
 		data = cm.Data[i]

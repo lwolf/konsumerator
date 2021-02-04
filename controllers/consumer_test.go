@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/clock"
 
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 )
 
 func TestEstimateResources(t *testing.T) {
@@ -20,24 +20,24 @@ func TestEstimateResources(t *testing.T) {
 func TestNewConsumerOperator(t *testing.T) {
 	testCases := []struct {
 		name           string
-		consumer       *konsumeratorv1.Consumer
+		consumer       *konsumeratorv2.Consumer
 		deploys        appsv1.DeploymentList
-		expectedStatus konsumeratorv1.ConsumerStatus
+		expectedStatus konsumeratorv2.ConsumerStatus
 	}{
 		{
 			"empty deployments step 1",
-			&konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			&konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: testInt32ToPt(10),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "",
-						Prometheus: &konsumeratorv1.PrometheusAutoscalerSpec{},
+						Prometheus: &konsumeratorv2.PrometheusAutoscalerSpec{},
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 			},
 			appsv1.DeploymentList{},
-			konsumeratorv1.ConsumerStatus{
+			konsumeratorv2.ConsumerStatus{
 				Expected:  testInt32ToPt(10),
 				Running:   testInt32ToPt(0),
 				Paused:    testInt32ToPt(0),
@@ -49,19 +49,19 @@ func TestNewConsumerOperator(t *testing.T) {
 		},
 		{
 			"empty deployments with group of 2",
-			&konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			&konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions:            testInt32ToPt(10),
 					NumPartitionsPerInstance: testInt32ToPt(2),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "",
-						Prometheus: &konsumeratorv1.PrometheusAutoscalerSpec{},
+						Prometheus: &konsumeratorv2.PrometheusAutoscalerSpec{},
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
 			},
 			appsv1.DeploymentList{},
-			konsumeratorv1.ConsumerStatus{
+			konsumeratorv2.ConsumerStatus{
 				Expected:  testInt32ToPt(5),
 				Running:   testInt32ToPt(0),
 				Paused:    testInt32ToPt(0),
@@ -73,12 +73,12 @@ func TestNewConsumerOperator(t *testing.T) {
 		},
 		{
 			"empty deployments step 2",
-			&konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			&konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: testInt32ToPt(10),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "",
-						Prometheus: &konsumeratorv1.PrometheusAutoscalerSpec{},
+						Prometheus: &konsumeratorv2.PrometheusAutoscalerSpec{},
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
@@ -95,7 +95,7 @@ func TestNewConsumerOperator(t *testing.T) {
 					},
 				},
 			},
-			konsumeratorv1.ConsumerStatus{
+			konsumeratorv2.ConsumerStatus{
 				Expected:  testInt32ToPt(10),
 				Running:   testInt32ToPt(1),
 				Paused:    testInt32ToPt(0),
@@ -107,12 +107,12 @@ func TestNewConsumerOperator(t *testing.T) {
 		},
 		{
 			"2 paused deployments",
-			&konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			&konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: testInt32ToPt(10),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "",
-						Prometheus: &konsumeratorv1.PrometheusAutoscalerSpec{},
+						Prometheus: &konsumeratorv2.PrometheusAutoscalerSpec{},
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
@@ -141,7 +141,7 @@ func TestNewConsumerOperator(t *testing.T) {
 					},
 				},
 			},
-			konsumeratorv1.ConsumerStatus{
+			konsumeratorv2.ConsumerStatus{
 				Expected:  testInt32ToPt(10),
 				Running:   testInt32ToPt(0),
 				Paused:    testInt32ToPt(2),
@@ -153,13 +153,13 @@ func TestNewConsumerOperator(t *testing.T) {
 		},
 		{
 			"deployment should be recreated if `NumPartitionsPerInstance` change",
-			&konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			&konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions:            testInt32ToPt(10),
 					NumPartitionsPerInstance: testInt32ToPt(3),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "",
-						Prometheus: &konsumeratorv1.PrometheusAutoscalerSpec{},
+						Prometheus: &konsumeratorv2.PrometheusAutoscalerSpec{},
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
@@ -177,7 +177,7 @@ func TestNewConsumerOperator(t *testing.T) {
 					},
 				},
 			},
-			konsumeratorv1.ConsumerStatus{
+			konsumeratorv2.ConsumerStatus{
 				Expected:  testInt32ToPt(4),
 				Running:   testInt32ToPt(0),
 				Paused:    testInt32ToPt(0),
@@ -189,13 +189,13 @@ func TestNewConsumerOperator(t *testing.T) {
 		},
 		{
 			"deployment with consumerId outside of range should be deleted",
-			&konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			&konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions:            testInt32ToPt(10),
 					NumPartitionsPerInstance: testInt32ToPt(3),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "",
-						Prometheus: &konsumeratorv1.PrometheusAutoscalerSpec{},
+						Prometheus: &konsumeratorv2.PrometheusAutoscalerSpec{},
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
@@ -213,7 +213,7 @@ func TestNewConsumerOperator(t *testing.T) {
 					},
 				},
 			},
-			konsumeratorv1.ConsumerStatus{
+			konsumeratorv2.ConsumerStatus{
 				Expected:  testInt32ToPt(4),
 				Running:   testInt32ToPt(0),
 				Paused:    testInt32ToPt(0),
@@ -244,7 +244,7 @@ func testInt32ToPt(v int32) *int32 {
 	return &v
 }
 
-func testCompareStatus(t *testing.T, a, b konsumeratorv1.ConsumerStatus) {
+func testCompareStatus(t *testing.T, a, b konsumeratorv2.ConsumerStatus) {
 	t.Helper()
 	equalInt32 := func(field string, a, b int32) {
 		if a != b {
@@ -260,13 +260,13 @@ func testCompareStatus(t *testing.T, a, b konsumeratorv1.ConsumerStatus) {
 	equalInt32("Redundant", *a.Redundant, *b.Redundant)
 }
 
-func newPrometheusAutoscalerSpec(minSyncPeriod time.Duration) *konsumeratorv1.PrometheusAutoscalerSpec {
-	return &konsumeratorv1.PrometheusAutoscalerSpec{
+func newPrometheusAutoscalerSpec(minSyncPeriod time.Duration) *konsumeratorv2.PrometheusAutoscalerSpec {
+	return &konsumeratorv2.PrometheusAutoscalerSpec{
 		Address:       nil,
 		MinSyncPeriod: &metav1.Duration{Duration: minSyncPeriod},
-		Offset:        konsumeratorv1.OffsetQuerySpec{},
-		Production:    konsumeratorv1.ProductionQuerySpec{},
-		Consumption:   konsumeratorv1.ConsumptionQuerySpec{},
+		Offset:        konsumeratorv2.OffsetQuerySpec{},
+		Production:    konsumeratorv2.ProductionQuerySpec{},
+		Consumption:   konsumeratorv2.ConsumptionQuerySpec{},
 		RatePerCore:   nil,
 		RamPerCore:    resource.Quantity{},
 		TolerableLag:  nil,
@@ -277,75 +277,75 @@ func newPrometheusAutoscalerSpec(minSyncPeriod time.Duration) *konsumeratorv1.Pr
 
 func TestShouldUpdateMetrics(t *testing.T) {
 	tests := map[string]struct {
-		consumer  *konsumeratorv1.Consumer
+		consumer  *konsumeratorv2.Consumer
 		expResult bool
 		expError  bool
 	}{
 		"should update if time to sync": {
-			consumer: &konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			consumer: &konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: testInt32ToPt(1),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "prometheus",
 						Prometheus: newPrometheusAutoscalerSpec(time.Duration(5 * time.Minute)),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
-				Status: konsumeratorv1.ConsumerStatus{
+				Status: konsumeratorv2.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
-					LastSyncState: map[string]konsumeratorv1.InstanceState{},
+					LastSyncState: map[string]konsumeratorv2.InstanceState{},
 				},
 			},
 			expResult: true,
 			expError:  false,
 		},
 		"false if not the time to sync": {
-			consumer: &konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			consumer: &konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: testInt32ToPt(1),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "prometheus",
 						Prometheus: newPrometheusAutoscalerSpec(5 * time.Minute),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
-				Status: konsumeratorv1.ConsumerStatus{
+				Status: konsumeratorv2.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -1)},
-					LastSyncState: map[string]konsumeratorv1.InstanceState{},
+					LastSyncState: map[string]konsumeratorv2.InstanceState{},
 				},
 			},
 			expResult: false,
 			expError:  false,
 		},
 		"should update if no LastSyncTime": {
-			consumer: &konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			consumer: &konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: testInt32ToPt(1),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "prometheus",
 						Prometheus: newPrometheusAutoscalerSpec(5 * time.Minute),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
-				Status: konsumeratorv1.ConsumerStatus{
+				Status: konsumeratorv2.ConsumerStatus{
 					LastSyncTime:  nil,
-					LastSyncState: map[string]konsumeratorv1.InstanceState{},
+					LastSyncState: map[string]konsumeratorv2.InstanceState{},
 				},
 			},
 			expResult: true,
 			expError:  false,
 		},
 		"should update if no LastSyncState ": {
-			consumer: &konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			consumer: &konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: testInt32ToPt(1),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "prometheus",
 						Prometheus: newPrometheusAutoscalerSpec(5 * time.Minute),
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
-				Status: konsumeratorv1.ConsumerStatus{
+				Status: konsumeratorv2.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -1)},
 					LastSyncState: nil,
 				},
@@ -354,33 +354,33 @@ func TestShouldUpdateMetrics(t *testing.T) {
 			expError:  false,
 		},
 		"should fail if no autoscaler setup": {
-			consumer: &konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			consumer: &konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions:      testInt32ToPt(1),
 					Autoscaler:         nil,
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
-				Status: konsumeratorv1.ConsumerStatus{
+				Status: konsumeratorv2.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
-					LastSyncState: map[string]konsumeratorv1.InstanceState{},
+					LastSyncState: map[string]konsumeratorv2.InstanceState{},
 				},
 			},
 			expResult: false,
 			expError:  true,
 		},
 		"should fail if prometheus config is missing": {
-			consumer: &konsumeratorv1.Consumer{
-				Spec: konsumeratorv1.ConsumerSpec{
+			consumer: &konsumeratorv2.Consumer{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: testInt32ToPt(1),
-					Autoscaler: &konsumeratorv1.AutoscalerSpec{
+					Autoscaler: &konsumeratorv2.AutoscalerSpec{
 						Mode:       "prometheus",
 						Prometheus: nil,
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{},
 				},
-				Status: konsumeratorv1.ConsumerStatus{
+				Status: konsumeratorv2.ConsumerStatus{
 					LastSyncTime:  &metav1.Time{Time: time.Now().Add(time.Minute * -6)},
-					LastSyncState: map[string]konsumeratorv1.InstanceState{},
+					LastSyncState: map[string]konsumeratorv2.InstanceState{},
 				},
 			},
 			expResult: false,

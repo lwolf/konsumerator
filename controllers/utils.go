@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/json"
 
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 )
 
 // TODO: could be replaced with resourceRequirementsDiff
@@ -80,7 +80,7 @@ func instanceStatusToInt(status string) int {
 	}
 }
 
-func shouldUpdateMetrics(consumer *konsumeratorv1.Consumer, now time.Time) (bool, error) {
+func shouldUpdateMetrics(consumer *konsumeratorv2.Consumer, now time.Time) (bool, error) {
 	status := consumer.Status
 	if status.LastSyncTime == nil || status.LastSyncState == nil {
 		return true, nil
@@ -88,7 +88,7 @@ func shouldUpdateMetrics(consumer *konsumeratorv1.Consumer, now time.Time) (bool
 	if consumer.Spec.Autoscaler == nil {
 		return false, fmt.Errorf("autoscaler is not present in consumer spec")
 	}
-	if consumer.Spec.Autoscaler.Mode == konsumeratorv1.AutoscalerTypePrometheus &&
+	if consumer.Spec.Autoscaler.Mode == konsumeratorv2.AutoscalerTypePrometheus &&
 		consumer.Spec.Autoscaler.Prometheus == nil {
 		return false, fmt.Errorf("autoscaler misconfiguration: prometheus setup is missing")
 	}
@@ -107,7 +107,7 @@ func deployIsPaused(d *appsv1.Deployment) bool {
 	return pausedAnnotation
 }
 
-func PopulateStatusFromAnnotation(a map[string]string, status *konsumeratorv1.ConsumerStatus) {
+func PopulateStatusFromAnnotation(a map[string]string, status *konsumeratorv2.ConsumerStatus) {
 	am := annotationMngr{a}
 	status.Expected = am.GetInt32(annotationStatusExpected)
 	status.Running = am.GetInt32(annotationStatusRunning)
@@ -119,7 +119,7 @@ func PopulateStatusFromAnnotation(a map[string]string, status *konsumeratorv1.Co
 	status.LastSyncState = am.GetMap(annotationStatusLastState)
 }
 
-func UpdateStatusAnnotations(cm *corev1.ConfigMap, status *konsumeratorv1.ConsumerStatus) error {
+func UpdateStatusAnnotations(cm *corev1.ConfigMap, status *konsumeratorv2.ConsumerStatus) error {
 	cm.Annotations[annotationStatusExpected] = fmt.Sprintf("%d", *status.Expected)
 	cm.Annotations[annotationStatusRunning] = fmt.Sprintf("%d", *status.Running)
 	cm.Annotations[annotationStatusPaused] = fmt.Sprintf("%d", *status.Paused)
@@ -139,12 +139,12 @@ type annotationMngr struct {
 	a map[string]string
 }
 
-func (am annotationMngr) GetMap(k string) map[string]konsumeratorv1.InstanceState {
+func (am annotationMngr) GetMap(k string) map[string]konsumeratorv2.InstanceState {
 	v, ok := am.a[k]
 	if !ok {
 		return nil
 	}
-	d := make(map[string]konsumeratorv1.InstanceState)
+	d := make(map[string]konsumeratorv2.InstanceState)
 	if err := json.Unmarshal([]byte(v), &d); err != nil {
 		return nil
 	}

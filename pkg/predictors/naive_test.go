@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/providers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,13 +24,13 @@ func testLogger() logr.Logger {
 	return ctrl.Log.WithName("naive_test")
 }
 
-func genPromSpec(ratePerCore int64, ramPerCore resource.Quantity) *konsumeratorv1.PrometheusAutoscalerSpec {
-	return &konsumeratorv1.PrometheusAutoscalerSpec{
+func genPromSpec(ratePerCore int64, ramPerCore resource.Quantity) *konsumeratorv2.PrometheusAutoscalerSpec {
+	return &konsumeratorv2.PrometheusAutoscalerSpec{
 		Address:       nil,
 		MinSyncPeriod: nil,
-		Offset:        konsumeratorv1.OffsetQuerySpec{},
-		Production:    konsumeratorv1.ProductionQuerySpec{},
-		Consumption:   konsumeratorv1.ConsumptionQuerySpec{},
+		Offset:        konsumeratorv2.OffsetQuerySpec{},
+		Production:    konsumeratorv2.ProductionQuerySpec{},
+		Consumption:   konsumeratorv2.ConsumptionQuerySpec{},
 		RatePerCore:   &ratePerCore,
 		RamPerCore:    ramPerCore,
 		TolerableLag:  nil,
@@ -121,7 +121,7 @@ func TestEstimateMemory(t *testing.T) {
 
 func TestExpectedConsumption(t *testing.T) {
 	tests := map[string]struct {
-		promSpec            konsumeratorv1.PrometheusAutoscalerSpec
+		promSpec            konsumeratorv2.PrometheusAutoscalerSpec
 		lagStore            providers.MetricsProvider
 		partition           int32
 		expectedConsumption int64
@@ -157,7 +157,7 @@ func TestExpectedConsumption(t *testing.T) {
 func TestEstimateResources(t *testing.T) {
 	tests := map[string]struct {
 		containerName     string
-		promSpec          konsumeratorv1.PrometheusAutoscalerSpec
+		promSpec          konsumeratorv2.PrometheusAutoscalerSpec
 		lagStore          providers.MetricsProvider
 		partitions        []int32
 		expectedResources corev1.ResourceRequirements

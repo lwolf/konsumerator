@@ -5292,7 +5292,7 @@ spec:
           type: object
       type: object
   versions:
-  - name: v1
+  - name: v2
     served: true
     storage: true
 status:

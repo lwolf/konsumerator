@@ -7,17 +7,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 	"github.com/lwolf/konsumerator/pkg/providers"
 )
 
 type NaivePredictor struct {
 	lagSource providers.MetricsProvider
-	promSpec  *konsumeratorv1.PrometheusAutoscalerSpec
+	promSpec  *konsumeratorv2.PrometheusAutoscalerSpec
 	log       logr.Logger
 }
 
-func NewNaivePredictor(log logr.Logger, store providers.MetricsProvider, promSpec *konsumeratorv1.PrometheusAutoscalerSpec) *NaivePredictor {
+func NewNaivePredictor(log logr.Logger, store providers.MetricsProvider, promSpec *konsumeratorv2.PrometheusAutoscalerSpec) *NaivePredictor {
 	// TODO: we need to do a basic validation of all the fields during creating of the Predictor
 	ctrlLogger := log.WithName("naivePredictor")
 	return &NaivePredictor{

@@ -26,7 +26,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 	"github.com/lwolf/konsumerator/controllers"
 	// +kubebuilder:scaffold:imports
 )
@@ -39,7 +39,7 @@ var (
 
 func init() {
 	_ = clientgoscheme.AddToScheme(scheme)
-	_ = konsumeratorv1.AddToScheme(scheme)
+	_ = konsumeratorv2.AddToScheme(scheme)
 	_ = appsv1.AddToScheme(scheme)
 	// +kubebuilder:scaffold:scheme
 }

@@ -30,7 +30,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 	"github.com/lwolf/konsumerator/pkg/errors"
 )
 
@@ -77,7 +77,7 @@ func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&konsumeratorv1.Consumer{}).
+		For(&konsumeratorv2.Consumer{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }
@@ -98,7 +98,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("consumer", req.NamespacedName)
 	result := ctrl.Result{RequeueAfter: defaultMinSyncPeriod}
 
-	var consumer konsumeratorv1.Consumer
+	var consumer konsumeratorv2.Consumer
 	if err := r.Get(ctx, req.NamespacedName, &consumer); err != nil {
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
 		// requeue (we'll need to wait for a new notification), and we can get them

@@ -2,7 +2,7 @@ package limiters
 
 import (
 	"github.com/go-logr/logr"
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -13,7 +13,7 @@ type GlobalLimiter struct {
 	log      logr.Logger
 }
 
-func NewGlobalLimiter(policy *konsumeratorv1.ResourcePolicy, used *corev1.ResourceList, log logr.Logger) *GlobalLimiter {
+func NewGlobalLimiter(policy *konsumeratorv2.ResourcePolicy, used *corev1.ResourceList, log logr.Logger) *GlobalLimiter {
 	l := &GlobalLimiter{log: log}
 	if policy == nil || policy.GlobalPolicy == nil {
 		// no limits were set

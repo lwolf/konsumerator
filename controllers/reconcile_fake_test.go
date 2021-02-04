@@ -13,7 +13,7 @@ import (
 
 	tlog "github.com/go-logr/logr/testing"
 	"github.com/google/go-cmp/cmp"
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 	"github.com/lwolf/konsumerator/controllers"
 	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/helpers/tests"
@@ -33,11 +33,11 @@ import (
 
 var fakeClock = clock.NewFakeClock(time.Now())
 
-func initReconciler(consumer *konsumeratorv1.Consumer) (client.Client, *controllers.ConsumerReconciler) {
+func initReconciler(consumer *konsumeratorv2.Consumer) (client.Client, *controllers.ConsumerReconciler) {
 	var s = runtime.NewScheme()
 
 	_ = clientgoscheme.AddToScheme(s)
-	_ = konsumeratorv1.AddToScheme(s)
+	_ = konsumeratorv2.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
 
 	cl := &fakeClient{fake.NewFakeClientWithScheme(s, consumer)}
@@ -85,26 +85,26 @@ func TestConsumerReconciliation(t *testing.T) {
 		Name:      name,
 		Namespace: namespace,
 	}
-	autoscalerSpec := konsumeratorv1.AutoscalerSpec{
-		Mode: konsumeratorv1.AutoscalerTypePrometheus,
-		Prometheus: &konsumeratorv1.PrometheusAutoscalerSpec{
-			Offset:      konsumeratorv1.OffsetQuerySpec{},
-			Production:  konsumeratorv1.ProductionQuerySpec{},
-			Consumption: konsumeratorv1.ConsumptionQuerySpec{},
+	autoscalerSpec := konsumeratorv2.AutoscalerSpec{
+		Mode: konsumeratorv2.AutoscalerTypePrometheus,
+		Prometheus: &konsumeratorv2.PrometheusAutoscalerSpec{
+			Offset:      konsumeratorv2.OffsetQuerySpec{},
+			Production:  konsumeratorv2.ProductionQuerySpec{},
+			Consumption: konsumeratorv2.ConsumptionQuerySpec{},
 			RatePerCore: helpers.Ptr2Int64(5000),
 			RamPerCore:  resource.Quantity{},
 		},
 	}
 	testCases := map[string]struct {
-		consumer              *konsumeratorv1.Consumer
+		consumer              *konsumeratorv2.Consumer
 		expDeployAnnotation   map[string]map[string]string
 		expContainerResources map[string]corev1.ResourceRequirements
 		expContainerEnv       map[string]map[string]string
 	}{
 		"deployment should have minimum resources without metrics provider": {
-			consumer: &konsumeratorv1.Consumer{
+			consumer: &konsumeratorv2.Consumer{
 				ObjectMeta: objMeta,
-				Spec: konsumeratorv1.ConsumerSpec{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: helpers.Ptr2Int32(1),
 					Name:          name,
 					Namespace:     namespace,
@@ -119,8 +119,8 @@ func TestConsumerReconciliation(t *testing.T) {
 								},
 							}},
 					},
-					ResourcePolicy: &konsumeratorv1.ResourcePolicy{
-						ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+					ResourcePolicy: &konsumeratorv2.ResourcePolicy{
+						ContainerPolicies: []konsumeratorv2.ContainerResourcePolicy{
 							tests.NewContainerResourcePolicy("busybox", "100m", "100M", "100m", "100M"),
 						},
 					},
@@ -147,9 +147,9 @@ func TestConsumerReconciliation(t *testing.T) {
 			},
 		},
 		"sidecar container should not skew metrics estimation": {
-			consumer: &konsumeratorv1.Consumer{
+			consumer: &konsumeratorv2.Consumer{
 				ObjectMeta: objMeta,
-				Spec: konsumeratorv1.ConsumerSpec{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: helpers.Ptr2Int32(1),
 					Name:          name,
 					Namespace:     namespace,
@@ -165,8 +165,8 @@ func TestConsumerReconciliation(t *testing.T) {
 								},
 							}},
 					},
-					ResourcePolicy: &konsumeratorv1.ResourcePolicy{
-						ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+					ResourcePolicy: &konsumeratorv2.ResourcePolicy{
+						ContainerPolicies: []konsumeratorv2.ContainerResourcePolicy{
 							tests.NewContainerResourcePolicy("busybox", "100m", "100M", "100m", "100M"),
 						},
 					},
@@ -201,9 +201,9 @@ func TestConsumerReconciliation(t *testing.T) {
 			},
 		},
 		"resource policy should be applied to corresponding containers correctly": {
-			consumer: &konsumeratorv1.Consumer{
+			consumer: &konsumeratorv2.Consumer{
 				ObjectMeta: objMeta,
-				Spec: konsumeratorv1.ConsumerSpec{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: helpers.Ptr2Int32(1),
 					Name:          name,
 					Namespace:     namespace,
@@ -227,8 +227,8 @@ func TestConsumerReconciliation(t *testing.T) {
 								},
 							}},
 					},
-					ResourcePolicy: &konsumeratorv1.ResourcePolicy{
-						ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+					ResourcePolicy: &konsumeratorv2.ResourcePolicy{
+						ContainerPolicies: []konsumeratorv2.ContainerResourcePolicy{
 							tests.NewContainerResourcePolicy("busybox", "400m", "400M", "800m", "800M"),
 							tests.NewContainerResourcePolicy("sidecar", "100m", "100M", "100m", "100M"),
 						},
@@ -265,9 +265,9 @@ func TestConsumerReconciliation(t *testing.T) {
 			},
 		},
 		"resource policy should ignore global policy on first run": {
-			consumer: &konsumeratorv1.Consumer{
+			consumer: &konsumeratorv2.Consumer{
 				ObjectMeta: objMeta,
-				Spec: konsumeratorv1.ConsumerSpec{
+				Spec: konsumeratorv2.ConsumerSpec{
 					NumPartitions: helpers.Ptr2Int32(1),
 					Name:          name,
 					Namespace:     namespace,
@@ -291,11 +291,11 @@ func TestConsumerReconciliation(t *testing.T) {
 								},
 							}},
 					},
-					ResourcePolicy: &konsumeratorv1.ResourcePolicy{
-						GlobalPolicy: &konsumeratorv1.GlobalResourcePolicy{
+					ResourcePolicy: &konsumeratorv2.ResourcePolicy{
+						GlobalPolicy: &konsumeratorv2.GlobalResourcePolicy{
 							MaxAllowed: *tests.NewResourceList("450m", "450M"),
 						},
-						ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+						ContainerPolicies: []konsumeratorv2.ContainerResourcePolicy{
 							tests.NewContainerResourcePolicy("busybox", "400m", "400M", "800m", "800M"),
 							tests.NewContainerResourcePolicy("sidecar", "100m", "100M", "100m", "100M"),
 						},
@@ -387,7 +387,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		expDeployAnnotation   map[string]map[string]string
 		expContainerResources map[string]corev1.ResourceRequirements
 		expContainerEnv       map[string]map[string]string
-		expConsumerState      konsumeratorv1.ConsumerStatus
+		expConsumerState      konsumeratorv2.ConsumerStatus
 	}{
 		{
 			name:                "should have one missing deployment on consumer creation",
@@ -396,7 +396,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(1),
@@ -414,7 +414,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -433,7 +433,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -452,7 +452,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1300m", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -471,7 +471,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1300m", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -494,7 +494,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -517,7 +517,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -536,7 +536,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -555,7 +555,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -578,7 +578,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -601,7 +601,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -620,7 +620,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -639,7 +639,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1.1", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -662,7 +662,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1.1", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -685,7 +685,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "200M", "1", "200M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -711,7 +711,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "200M", "1", "200M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -730,7 +730,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -749,7 +749,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -770,8 +770,8 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			},
 		},
 	}
-	c.Spec.ResourcePolicy = &konsumeratorv1.ResourcePolicy{
-		ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+	c.Spec.ResourcePolicy = &konsumeratorv2.ResourcePolicy{
+		ContainerPolicies: []konsumeratorv2.ContainerResourcePolicy{
 			tests.NewContainerResourcePolicy("busybox", "100m", "100M", "2", "400M"),
 		},
 	}
@@ -784,7 +784,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			fakeClock.Step(tc.timePassed)
 			if tc.promResponse != nil {
 				promServer.setResponse(tc.promResponse)
-				tc.expConsumerState.LastSyncState = map[string]konsumeratorv1.InstanceState{
+				tc.expConsumerState.LastSyncState = map[string]konsumeratorv2.InstanceState{
 					"0": {
 						ProductionRate:  tc.promResponse.production,
 						ConsumptionRate: tc.promResponse.consumption,
@@ -836,7 +836,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 		expDeployAnnotation   map[string]map[string]string
 		expContainerResources map[string]corev1.ResourceRequirements
 		expContainerEnv       map[string]map[string]string
-		expConsumerState      konsumeratorv1.ConsumerStatus
+		expConsumerState      konsumeratorv2.ConsumerStatus
 	}{
 		{
 			name:                "should have one missing deployment on consumer creation",
@@ -845,7 +845,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(1),
@@ -863,7 +863,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(0),
 				Missing:   helpers.Ptr2Int32(0),
@@ -882,7 +882,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -901,7 +901,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -920,7 +920,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -939,7 +939,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
-			expConsumerState: konsumeratorv1.ConsumerStatus{
+			expConsumerState: konsumeratorv2.ConsumerStatus{
 				Expected:  helpers.Ptr2Int32(1),
 				Lagging:   helpers.Ptr2Int32(1),
 				Missing:   helpers.Ptr2Int32(0),
@@ -960,8 +960,8 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			},
 		},
 	}
-	c.Spec.ResourcePolicy = &konsumeratorv1.ResourcePolicy{
-		ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+	c.Spec.ResourcePolicy = &konsumeratorv2.ResourcePolicy{
+		ContainerPolicies: []konsumeratorv2.ContainerResourcePolicy{
 			tests.NewContainerResourcePolicy("busybox", "100m", "100M", "2", "400M"),
 		},
 	}
@@ -974,7 +974,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			fakeClock.Step(tc.timePassed)
 			if tc.promResponse != nil {
 				promServer.setResponse(tc.promResponse)
-				tc.expConsumerState.LastSyncState = map[string]konsumeratorv1.InstanceState{
+				tc.expConsumerState.LastSyncState = map[string]konsumeratorv2.InstanceState{
 					"0": {
 						ProductionRate:  tc.promResponse.production,
 						ConsumptionRate: tc.promResponse.consumption,
@@ -1006,33 +1006,33 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 	}
 }
 
-func newConsumer(name, namespace string) *konsumeratorv1.Consumer {
-	return &konsumeratorv1.Consumer{
+func newConsumer(name, namespace string) *konsumeratorv2.Consumer {
+	return &konsumeratorv2.Consumer{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
 			Namespace: namespace,
 		},
-		Spec: konsumeratorv1.ConsumerSpec{
+		Spec: konsumeratorv2.ConsumerSpec{
 			NumPartitions: helpers.Ptr2Int32(1),
 			Name:          name,
 			Namespace:     namespace,
-			Autoscaler: &konsumeratorv1.AutoscalerSpec{
-				Mode:                     konsumeratorv1.AutoscalerTypePrometheus,
+			Autoscaler: &konsumeratorv2.AutoscalerSpec{
+				Mode:                     konsumeratorv2.AutoscalerTypePrometheus,
 				PendingScaleUpDuration:   &metav1.Duration{Duration: 5 * time.Minute},
 				PendingScaleDownDuration: &metav1.Duration{Duration: 5 * time.Minute},
-				Prometheus: &konsumeratorv1.PrometheusAutoscalerSpec{
+				Prometheus: &konsumeratorv2.PrometheusAutoscalerSpec{
 					TolerableLag:  &metav1.Duration{Duration: 3 * time.Minute},
 					MinSyncPeriod: &metav1.Duration{Duration: time.Minute},
 					RecoveryTime:  &metav1.Duration{Duration: 60 * time.Minute},
-					Offset: konsumeratorv1.OffsetQuerySpec{
+					Offset: konsumeratorv2.OffsetQuerySpec{
 						Query:          "offset",
 						PartitionLabel: "partition",
 					},
-					Production: konsumeratorv1.ProductionQuerySpec{
+					Production: konsumeratorv2.ProductionQuerySpec{
 						Query:          "production",
 						PartitionLabel: "partition",
 					},
-					Consumption: konsumeratorv1.ConsumptionQuerySpec{
+					Consumption: konsumeratorv2.ConsumptionQuerySpec{
 						Query:          "consumption",
 						PartitionLabel: "partition",
 					},
@@ -1055,7 +1055,7 @@ type testReconciler struct {
 	deployments     []*testDeployment
 }
 
-func newTestReconciler(t *testing.T, c *konsumeratorv1.Consumer) *testReconciler {
+func newTestReconciler(t *testing.T, c *konsumeratorv2.Consumer) *testReconciler {
 	cl, cr := initReconciler(c)
 	return &testReconciler{
 		t:         t,
@@ -1080,8 +1080,8 @@ func (tr *testReconciler) mustReconcile() {
 	}
 }
 
-func (tr *testReconciler) fetchConsumer() konsumeratorv1.Consumer {
-	var consumer konsumeratorv1.Consumer
+func (tr *testReconciler) fetchConsumer() konsumeratorv2.Consumer {
+	var consumer konsumeratorv2.Consumer
 	req := tr.newRequest()
 	if err := tr.client.Get(context.TODO(), req.NamespacedName, &consumer); err != nil {
 		tr.t.Fatalf("%s", err)
@@ -1089,7 +1089,7 @@ func (tr *testReconciler) fetchConsumer() konsumeratorv1.Consumer {
 	return consumer
 }
 
-func (tr *testReconciler) equalConsumerStatus(expected konsumeratorv1.ConsumerStatus) error {
+func (tr *testReconciler) equalConsumerStatus(expected konsumeratorv2.ConsumerStatus) error {
 	consumer := tr.fetchConsumer()
 	// nullify dynamic status values
 	consumerStatus := purgeStatus(consumer.Status)
@@ -1100,7 +1100,7 @@ func (tr *testReconciler) equalConsumerStatus(expected konsumeratorv1.ConsumerSt
 	return nil
 }
 
-func purgeStatus(cs konsumeratorv1.ConsumerStatus) *konsumeratorv1.ConsumerStatus {
+func purgeStatus(cs konsumeratorv2.ConsumerStatus) *konsumeratorv2.ConsumerStatus {
 	s := cs.DeepCopy()
 	s.ObservedGeneration = nil
 	s.LastSyncTime = nil

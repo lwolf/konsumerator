@@ -1,7 +1,7 @@
 package controllers
 
 import (
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	konsumeratorv2 "github.com/lwolf/konsumerator/api/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -20,7 +20,7 @@ const (
 	ScalingStatusChangeAnnotation = "konsumerator.lwolf.org/scaling-status-change"
 )
 
-var apiGVStr = konsumeratorv1.GroupVersion.String()
+var apiGVStr = konsumeratorv2.GroupVersion.String()
 
 type Controller interface {
 	SetupWithManager(mgr ctrl.Manager) error
