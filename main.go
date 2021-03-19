@@ -17,14 +17,18 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
+	"runtime"
 
+	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	kuberuntime "k8s.io/apimachinery/pkg/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 	"github.com/lwolf/konsumerator/controllers"
@@ -33,8 +37,13 @@ import (
 
 var (
 	Version  string
-	scheme   = runtime.NewScheme()
+	scheme   = kuberuntime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+
+	metaInfoGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Namespace: "konsumerator",
+		Name:      "meta_info",
+	}, []string{"go_version", "binary_version"})
 )
 
 func init() {
@@ -55,6 +64,10 @@ func main() {
 	flag.BoolVar(&isDebug, "verbose", false, "Set log level to debug mode.")
 	flag.StringVar(&namespace, "namespace", "", "Run operator in guest mode, limit scope to only a single namespace. No CRD will be created")
 	flag.Parse()
+
+	metrics.Registry.MustRegister(metaInfoGauge)
+	metaInfoGauge.WithLabelValues(runtime.Version(), Version).Set(1)
+
 	setupLog.Info(
 		"Initializing konsumerator controller",
 		"version", Version,
@@ -70,9 +83,11 @@ func main() {
 		Scheme:             scheme,
 		MetricsBindAddress: metricsAddr,
 		LeaderElection:     enableLeaderElection,
+		LeaderElectionID:   fmt.Sprintf("konsumerator-global"),
 	}
 	if guestMode {
 		options.Namespace = namespace
+		options.LeaderElectionID = fmt.Sprintf("konsumerator-%s", namespace)
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), options)

@@ -1,5 +1,4 @@
-
-VERSION ?= $(shell git rev-list --count HEAD)-$(shell git rev-parse --short=7 HEAD)
+VERSION ?= $(shell git describe --tags --always --dirty="-dev")
 # Image URL to use all building/pushing image targets
 IMG ?= quay.io/lwolf/konsumerator:$(VERSION)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
