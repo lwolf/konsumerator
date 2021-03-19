@@ -57,7 +57,7 @@ type fakeClient struct {
 	client.Client
 }
 
-func (fc *fakeClient) List(ctx context.Context, obj runtime.Object, opts ...client.ListOptionFunc) error {
+func (fc *fakeClient) List(ctx context.Context, obj runtime.Object, opts ...client.ListOption) error {
 	if err := fc.Client.List(ctx, obj, opts...); err != nil {
 		return err
 	}
