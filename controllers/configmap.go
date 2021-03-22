@@ -68,7 +68,7 @@ func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		r.Clock = clock.RealClock{}
 	}
 	if err := mgr.GetFieldIndexer().
-		IndexField(&appsv1.Deployment{}, cfgMapOwnerKey, func(rawObj runtime.Object) []string {
+		IndexField(context.Background(), &appsv1.Deployment{}, cfgMapOwnerKey, func(rawObj client.Object) []string {
 			d := rawObj.(*appsv1.Deployment)
 			owner := metav1.GetControllerOf(d)
 			if owner == nil {
@@ -91,14 +91,13 @@ func (r *ConfigMapReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *ConfigMapReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reconcileTotal.WithLabelValues(req.Name).Inc()
 	start := time.Now()
 	defer func() {
 		reconcileDuration.WithLabelValues(req.Name).Observe(time.Since(start).Seconds())
 	}()
 
-	ctx := context.Background()
 	log := r.Log.WithValues("configmap", req.NamespacedName)
 	result := ctrl.Result{RequeueAfter: defaultMinSyncPeriod}
 
@@ -130,7 +129,7 @@ func (r *ConfigMapReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 	consumer.Namespace = cm.Namespace
 	consumer.Name = cm.Name
 	var managedDeploys appsv1.DeploymentList
-	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(cfgMapOwnerKey, req.Name)); err != nil {
+	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingFields{cfgMapOwnerKey: req.Name}); err != nil {
 		eMsg := "unable to list managed deployments"
 		log.Error(err, eMsg)
 		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)

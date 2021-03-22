@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"context"
+
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
@@ -24,5 +26,5 @@ var apiGVStr = konsumeratorv1.GroupVersion.String()
 
 type Controller interface {
 	SetupWithManager(mgr ctrl.Manager) error
-	Reconcile(ctrl.Request) (ctrl.Result, error)
+	Reconcile(context.Context, ctrl.Request) (ctrl.Result, error)
 }

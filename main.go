@@ -21,6 +21,7 @@ import (
 	"os"
 	"runtime"
 
+	"github.com/lwolf/konsumerator/controllers"
 	"github.com/prometheus/client_golang/prometheus"
 	appsv1 "k8s.io/api/apps/v1"
 	kuberuntime "k8s.io/apimachinery/pkg/runtime"
@@ -31,7 +32,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
-	"github.com/lwolf/konsumerator/controllers"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -76,7 +76,7 @@ func main() {
 		"metricsAddr", metricsAddr,
 		"leaderElection", enableLeaderElection,
 	)
-	ctrl.SetLogger(zap.Logger(isDebug))
+	ctrl.SetLogger(zap.New())
 	guestMode := namespace != ""
 
 	options := ctrl.Options{
