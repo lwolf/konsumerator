@@ -73,7 +73,7 @@ var _ = Describe("Consumer", func() {
 						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}, MatchExpressions: nil},
 						Template: v1.PodTemplateSpec{
 							ObjectMeta: metav1.ObjectMeta{
-								CreationTimestamp: metav1.Now(),
+								CreationTimestamp: metav1.Time{},
 							},
 							Spec: v1.PodSpec{
 								Containers: []v1.Container{
