@@ -16,16 +16,16 @@ build: manager
 
 # Run tests
 test: generate fmt vet manifests
-	go test -race ./api/... ./controllers/... ./pkg/... -coverprofile=coverage.txt -covermode=atomic
+	go test -mod=vendor -race ./api/... ./controllers/... ./pkg/... -coverprofile=coverage.txt -covermode=atomic
 
 
 # Build manager binary
 manager: generate fmt vet
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-X main.Version=${VERSION}" -o bin/konsumerator main.go
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor -ldflags "-X main.Version=${VERSION}" -o bin/konsumerator main.go
 
 # Run against the configured Kubernetes cluster in ~/.kube/config
 run: generate fmt vet
-	go run ./main.go --verbose=true
+	go run -mod=vendor ./main.go --verbose=true
 
 # Install CRDs into a cluster
 install: manifests
@@ -37,8 +37,8 @@ deploy: manifests
 	kustomize build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
-manifests: controller-gen
-	$(CONTROLLER_GEN) $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+manifests: bin/controller-gen
+	bin/controller-gen $(CRD_OPTIONS) rbac:roleName=manager-role webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 # Run go fmt against code
 fmt:
@@ -49,8 +49,8 @@ vet:
 	go vet ./...
 
 # Generate code
-generate: controller-gen
-	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt,year=2021 paths=./api/...
+generate: bin/controller-gen
+	bin/controller-gen object:headerFile=./hack/boilerplate.go.txt,year=2021 paths=./api/...
 
 # Build the docker image
 docker-build: build test
@@ -63,14 +63,9 @@ docker-push:
 	docker push ${IMG}
 
 # find or download controller-gen
-# download controller-gen if necessary
-controller-gen:
-ifeq (, $(shell which controller-gen))
-	go get sigs.k8s.io/controller-tools/cmd/controller-gen@v0.5.0
-CONTROLLER_GEN=$(shell go env GOPATH)/bin/controller-gen
-else
-CONTROLLER_GEN=$(shell which controller-gen)
-endif
+# download controll -mod=vendorer-gen if necessary
+bin/controller-gen:
+	go build -mod=vendor -o ./bin/controller-gen "sigs.k8s.io/controller-tools/cmd/controller-gen"
 
 kind-destroy:
 	-kind delete cluster --name "konsumerator"
