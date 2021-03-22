@@ -25,4 +25,3 @@ bin
 # Project exclude paths
 /dist/
 coverage.txt
-vendor/
