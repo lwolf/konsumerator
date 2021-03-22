@@ -62,7 +62,7 @@ func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	if err := mgr.GetFieldIndexer().
-		IndexField(&appsv1.Deployment{}, consumerOwnerKey, func(rawObj runtime.Object) []string {
+		IndexField(context.Background(), &appsv1.Deployment{}, consumerOwnerKey, func(rawObj client.Object) []string {
 			d := rawObj.(*appsv1.Deployment)
 			owner := metav1.GetControllerOf(d)
 			if owner == nil {
@@ -87,14 +87,13 @@ func (r *ConsumerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 // +kubebuilder:rbac:groups=apps,resources=deployments,verbs=watch;create;get;update;patch;delete;list
 // +kubebuilder:rbac:groups=apps,resources=deployments/status,verbs=get
 
-func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
+func (r *ConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	reconcileTotal.WithLabelValues(req.Name).Inc()
 	start := time.Now()
 	defer func() {
 		reconcileDuration.WithLabelValues(req.Name).Observe(time.Since(start).Seconds())
 	}()
 
-	ctx := context.Background()
 	log := r.Log.WithValues("consumer", req.NamespacedName)
 	result := ctrl.Result{RequeueAfter: defaultMinSyncPeriod}
 
@@ -107,7 +106,7 @@ func (r *ConsumerReconciler) Reconcile(req ctrl.Request) (ctrl.Result, error) {
 		return ctrl.Result{}, errors.IgnoreNotFound(err)
 	}
 	var managedDeploys appsv1.DeploymentList
-	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingField(consumerOwnerKey, req.Name)); err != nil {
+	if err := r.List(ctx, &managedDeploys, client.InNamespace(req.Namespace), client.MatchingFields{consumerOwnerKey: req.Name}); err != nil {
 		eMsg := "unable to list managed deployments"
 		log.Error(err, eMsg)
 		r.Recorder.Event(&consumer, corev1.EventTypeWarning, "ListDeployFailure", eMsg)

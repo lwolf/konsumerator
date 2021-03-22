@@ -14,40 +14,40 @@ rules:
   - create
   - patch
 - apiGroups:
-  - konsumerator.lwolf.org
-  resources:
-  - consumers
-  verbs:
-  - get
-  - list
-  - watch
-  - create
-  - update
-  - patch
-  - delete
-- apiGroups:
-  - konsumerator.lwolf.org
-  resources:
-  - consumers/status
-  verbs:
-  - get
-  - update
-  - patch
-- apiGroups:
   - apps
   resources:
   - deployments
   verbs:
-  - watch
   - create
-  - get
-  - update
-  - patch
   - delete
+  - get
   - list
+  - patch
+  - update
+  - watch
 - apiGroups:
   - apps
   resources:
   - deployments/status
   verbs:
   - get
+- apiGroups:
+  - konsumerator.lwolf.org
+  resources:
+  - consumers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - konsumerator.lwolf.org
+  resources:
+  - consumers/status
+  verbs:
+  - get
+  - patch
+  - update
