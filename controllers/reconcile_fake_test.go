@@ -57,7 +57,7 @@ type fakeClient struct {
 	client.Client
 }
 
-func (fc *fakeClient) List(ctx context.Context, obj runtime.Object, opts ...client.ListOption) error {
+func (fc *fakeClient) List(ctx context.Context, obj client.ObjectList, opts ...client.ListOption) error {
 	if err := fc.Client.List(ctx, obj, opts...); err != nil {
 		return err
 	}
@@ -343,7 +343,7 @@ func TestConsumerReconciliation(t *testing.T) {
 					Namespace: tc.consumer.Namespace,
 				},
 			}
-			_, err := r.Reconcile(req)
+			_, err := r.Reconcile(context.Background(), req)
 			if err != nil {
 				t.Fatalf("reconcile err: %v", err)
 			}
@@ -1075,7 +1075,7 @@ func (tr *testReconciler) newRequest() reconcile.Request {
 	}
 }
 func (tr *testReconciler) mustReconcile() {
-	if _, err := tr.cr.Reconcile(tr.newRequest()); err != nil {
+	if _, err := tr.cr.Reconcile(context.Background(), tr.newRequest()); err != nil {
 		tr.t.Fatal(err)
 	}
 }
