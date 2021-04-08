@@ -499,9 +499,9 @@ func (o *operator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, 
 func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
 	partitionIds := o.assignments[consumerId]
 	deployLabels := map[string]string{
-		"app":        o.consumer.Spec.Name,
-		"controller": o.consumer.Name,
-		"partitions": strings.Join(helpers.Int2Str(partitionIds), "-"),
+		"app":        helpers.EnsureValidLabelValue(o.consumer.Spec.Name),
+		"controller": helpers.EnsureValidLabelValue(o.consumer.Name),
+		"partitions": helpers.EnsureValidLabelValue(helpers.ConsecutiveIntsToRange(partitionIds)),
 	}
 	deployAnnotations := make(map[string]string)
 	deploy := &appsv1.Deployment{

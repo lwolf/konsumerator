@@ -303,3 +303,54 @@ func TestParsePartitionsListAnnotation(t *testing.T) {
 		})
 	}
 }
+
+func TestConsecutiveIntsToRange(t *testing.T) {
+	testCases := map[string]struct {
+		in  []int32
+		exp string
+	}{
+		"single digits not a range": {
+			[]int32{0},
+			"0",
+		},
+		"double digit is a range": {
+			[]int32{0, 1},
+			"0-1",
+		},
+		"many digits making range": {
+			[]int32{0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 12},
+			"0-12",
+		},
+		"vary many digits still make range": {
+			[]int32{2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29},
+			"2-29",
+		},
+	}
+	for testName, tc := range testCases {
+		if res := ConsecutiveIntsToRange(tc.in); res != tc.exp {
+			t.Fatalf("%s: expected to get `%s`, got `%s`", testName, tc.exp, res)
+		}
+	}
+
+}
+
+func TestEnsureValidLabelValue(t *testing.T) {
+	testCases := map[string]struct {
+		in  string
+		exp string
+	}{
+		"short label value is OK": {
+			"0-1-2-3-4-5-6-7-8-10-12",
+			"0-1-2-3-4-5-6-7-8-10-12",
+		},
+		"long name should be cut up to the limit": {
+			"0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23-24-25-26-27-28-29",
+			"0-1-2-3-4-5-6-7-8-9-10-11-12-13-14-15-16-17-18-19-20-21-22-23-2",
+		},
+	}
+	for testName, tc := range testCases {
+		if res := EnsureValidLabelValue(tc.in); res != tc.exp {
+			t.Fatalf("%s: expected to get `%s`, got `%s`", testName, tc.exp, res)
+		}
+	}
+}

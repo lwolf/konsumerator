@@ -9,6 +9,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/util/validation"
 )
 
 const (
@@ -185,4 +186,37 @@ func Int2Str(ints []int32) []string {
 		result[i] = strconv.Itoa(int(d))
 	}
 	return result
+}
+
+// ConsecutiveIntsToRange takes a list of sorted integers and returns
+// string representation of its range
+// ConsecutiveIntsToRange(0,1,2,3,4,5,6) -> 0-6
+// ConsecutiveIntsToRange(12,13,14,15,16) -> 12-16
+func ConsecutiveIntsToRange(ints []int32) string {
+	res := make([]int32, 2)
+	if len(ints) < 3 {
+		res = ints
+	} else {
+		res = []int32{ints[0], ints[len(ints)-1]}
+	}
+	return strings.Join(Int2Str(res), "-")
+}
+
+func EnsureValidLabelValue(s string) string {
+	/*
+		https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+		Valid label value:
+		* must be 63 characters or less (cannot be empty),
+		* must begin and end with an alphanumeric character ([a-z0-9A-Z]),
+		* could contain dashes (-), underscores (_), dots (.), and alphanumerics between.
+
+		For now we only ensure the max length here
+		TODO: decide what to do with labels containing incompatible chars. At the moment having bad name will break in
+		many places, not only in labels.
+
+	*/
+	if len(s) > validation.LabelValueMaxLength {
+		return s[:validation.LabelValueMaxLength]
+	}
+	return s
 }
