@@ -8,6 +8,11 @@
 **Konsumerator** is a Kubernetes operator intended to automate management and resource allocations for 
 kafka consumers. 
 
+| Branch  | Second Header |
+| ------------- | ------------- |
+| master (v1)  | Current stable version (only bugfix)  |
+| v2   | Semi-stable v2 branch (new features go there)  |
+
 Operator creates and manages `Consumer` CRD, for this it requires cluster-wide permissions.
 
 ```yaml
