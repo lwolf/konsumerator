@@ -6,7 +6,7 @@ spec:
   numPartitions: 2
   numPartitionsPerInstance: 2
   name: "test-consumer"
-  namespace: "default"
+  namespace: "konsumerator-system"
   autoscaler:
     # mode could be vpa or prometheus.
     # `prometheus` is configured using prometheus provider and user specific metrics
@@ -34,8 +34,6 @@ spec:
       # prometheus addresses to query
       address:
         - "http://prometheus-server.kube-system:9090"
-        - "http://172.17.0.1:30666"
-        - "http://172.17.0.3:30666"
       # Offset query should return number of messages that is not
       # processed yet a.k.a lag per partitionLabel
       offset:
@@ -108,7 +106,6 @@ spec:
         cpu: "1"
         memory: "100M"
     - containerName: busybox-info
-#      mode: Off
       minAllowed:
         cpu: "100m"
         memory: "100M"
