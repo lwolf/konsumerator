@@ -25,7 +25,7 @@ spec:
       containers:
       - name: manager
         args:
-        - --enable-leader-election
+        - --namespace=konsumerator-system
         image: controller:latest
         resources:
           limits:

@@ -8,7 +8,7 @@ data:
   consumer.yaml: |
     numPartitions: 10
     name: "test-consumer"
-    namespace: "consumer-test"
+    namespace: "konsumerator-system"
     autoscaler:
       # mode could be vpa or prometheus.
       # `prometheus` is configured using prometheus provider and user specific metrics
@@ -35,7 +35,7 @@ data:
         recoveryTime: "30m"
         # prometheus addresses to query
         address:
-          - "http://172.17.0.3:30666"
+          - "http://prometheus-server.kube-system:9090"
         # Offset query should return number of messages that is not
         # processed yet a.k.a lag per partitionLabel
         offset:

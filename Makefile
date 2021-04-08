@@ -3,6 +3,7 @@ VERSION ?= $(shell git describe --tags --always --dirty="-dev")
 IMG ?= quay.io/lwolf/konsumerator:$(VERSION)
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true"
+KUBECTL ?= "kubectl"
 
 # for some reason travis-ci calls `make` on each step which triggers download
 # of all packages. This check disables it.
@@ -29,12 +30,12 @@ run: generate fmt vet
 
 # Install CRDs into a cluster
 install: manifests
-	kubectl apply -f config/crd/bases
+	${KUBECTL} apply -f config/crd/bases
 
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
-	kubectl apply -f config/crd/bases
-	kustomize build config/default | kubectl apply -f -
+	#$(KUBECTL) apply -f config/crd/bases
+	kustomize build config/default | $(KUBECTL) apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
 manifests: bin/controller-gen
@@ -82,8 +83,8 @@ kind-load-image:
 kind-update: docker-build kind-load-image deploy
 
 kind-apply:
-	kubectl --context=kind-konsumerator apply -f ./hack/ci/prom.yaml -n kube-system
-	kubectl --context=kind-konsumerator apply -f ./hack/ci/konsumerator-dashboard.yaml -n kube-system
-	kubectl --context=kind-konsumerator apply -f ./hack/ci/konsumerator-overview-dashboard.yaml -n kube-system
-	kubectl --context=kind-konsumerator apply -f ./hack/ci/grafana.yaml -n kube-system
+	$(KUBECTL) --context=kind-konsumerator apply -f ./hack/ci/prom.yaml -n kube-system
+	$(KUBECTL) --context=kind-konsumerator apply -f ./hack/ci/konsumerator-dashboard.yaml -n kube-system
+	$(KUBECTL) --context=kind-konsumerator apply -f ./hack/ci/konsumerator-overview-dashboard.yaml -n kube-system
+	$(KUBECTL) --context=kind-konsumerator apply -f ./hack/ci/grafana.yaml -n kube-system
 

@@ -126,7 +126,9 @@ func UpdateStatusAnnotations(cm *corev1.ConfigMap, status *konsumeratorv1.Consum
 	cm.Annotations[annotationStatusLagging] = fmt.Sprintf("%d", *status.Lagging)
 	cm.Annotations[annotationStatusMissing] = fmt.Sprintf("%d", *status.Missing)
 	cm.Annotations[annotationStatusOutdated] = fmt.Sprintf("%d", *status.Outdated)
-	cm.Annotations[annotationStatusLastSyncTime] = status.LastSyncTime.Format(helpers.TimeLayout)
+	if !status.LastSyncTime.IsZero() {
+		cm.Annotations[annotationStatusLastSyncTime] = status.LastSyncTime.Format(helpers.TimeLayout)
+	}
 	state, err := json.Marshal(status.LastSyncState)
 	if err != nil {
 		return err
