@@ -1,11 +1,11 @@
 package main
 
 import (
-	"github.com/alexflint/go-arg"
-	"github.com/prometheus/common/log"
+	"log"
 	"strconv"
 	"strings"
 
+	"github.com/alexflint/go-arg"
 	"github.com/lwolf/konsumerator/hack/faker/cmd/consumer"
 	"github.com/lwolf/konsumerator/hack/faker/cmd/producer"
 	"github.com/lwolf/konsumerator/hack/faker/lib"
@@ -37,7 +37,7 @@ func main() {
 	}
 	switch {
 	case args.Consumer != nil:
-		log.Info("running consumer")
+		log.Println("running consumer")
 		var partitions []int
 		for _, p := range strings.Split(args.Consumer.Partition, ",") {
 			partition, err := strconv.Atoi(p)
@@ -48,7 +48,7 @@ func main() {
 		}
 		consumer.RunConsumer(redisClient, partitions, args.Consumer.RatePerCore, args.Port)
 	case args.Producer != nil:
-		log.Info("running producer")
+		log.Println("running producer")
 		producer.RunProducer(
 			redisClient,
 			args.Producer.NumPartitions,

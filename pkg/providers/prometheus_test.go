@@ -2,7 +2,8 @@ package providers
 
 import (
 	"fmt"
-	"io/ioutil"
+	"github.com/go-logr/logr"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -10,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	tlog "github.com/go-logr/logr/testing"
 	"github.com/lwolf/konsumerator/api/v1"
 )
 
@@ -39,7 +39,7 @@ func TestNewPrometheusMP(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := NewPrometheusMP(tlog.NullLogger{}, &v1.PrometheusAutoscalerSpec{
+			_, err := NewPrometheusMP(logr.Discard(), &v1.PrometheusAutoscalerSpec{
 				Address: tc.addrs,
 			}, "test")
 			if err != nil {
@@ -130,7 +130,7 @@ func TestPrometheusMP_Update(t *testing.T) {
 				}
 			}()
 
-			pm, err := NewPrometheusMP(tlog.NullLogger{}, &v1.PrometheusAutoscalerSpec{
+			pm, err := NewPrometheusMP(logr.Discard(), &v1.PrometheusAutoscalerSpec{
 				Address: addrs,
 				Production: v1.ProductionQuerySpec{
 					Query:          fmt.Sprintf("%s/%d", tc.queryType, tc.expectedProductionRate),
@@ -224,7 +224,7 @@ func fakePromHandler(w http.ResponseWriter, r *http.Request) {
 		respondWithErr(w, fmt.Sprintf("wrong path %q requested", r.URL.Path))
 		return
 	}
-	b, err := ioutil.ReadAll(r.Body)
+	b, err := io.ReadAll(r.Body)
 	if err != nil {
 		respondWithErr(w, fmt.Sprintf("failed to read body: %s", err))
 		return

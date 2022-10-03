@@ -1,9 +1,9 @@
 package limiters
 
 import (
+	"github.com/go-logr/logr"
 	"testing"
 
-	tlog "github.com/go-logr/logr/testing"
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 	"github.com/lwolf/konsumerator/pkg/helpers"
 	"github.com/lwolf/konsumerator/pkg/helpers/tests"
@@ -56,7 +56,7 @@ func TestGlobalLimiter_ApplyLimits(t *testing.T) {
 	}
 	for testName, tc := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			l := NewGlobalLimiter(tc.policy, tc.used, tlog.NullLogger{})
+			l := NewGlobalLimiter(tc.policy, tc.used, logr.Discard())
 			r := l.ApplyLimits("", tc.requested)
 			if helpers.CmpResourceRequirements(*r, *tc.expRes) != 0 {
 				t.Errorf("ApplyLimits() results mismatch. \nWant: \n%v; \nGot: \n%v", tc.expRes, r)
@@ -70,7 +70,7 @@ func TestGlobalLimiter_ApplyLimits(t *testing.T) {
 func TestGlobalLimiter_ApplyLimits2(t *testing.T) {
 	policy := newGlobalPolicy("100", "100M")
 	used := tests.NewResourceList("10", "10M")
-	limiter := NewGlobalLimiter(policy, used, tlog.NullLogger{})
+	limiter := NewGlobalLimiter(policy, used, logr.Discard())
 
 	steps := []struct {
 		requested *corev1.ResourceRequirements

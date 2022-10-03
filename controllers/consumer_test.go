@@ -1,14 +1,14 @@
 package controllers
 
 import (
+	"github.com/go-logr/logr"
 	"testing"
 	"time"
 
-	tlog "github.com/go-logr/logr/testing"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/clock"
+	"k8s.io/utils/clock"
 
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 )
@@ -229,7 +229,7 @@ func TestNewConsumerOperator(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			o := &operator{
 				clock: clock.RealClock{},
-				log:   tlog.NullLogger{},
+				log:   logr.Discard(),
 			}
 			err := o.init(tc.consumer, tc.deploys)
 			if err != nil {

@@ -1,7 +1,20 @@
-version: "2"
+version: "3"
 domain: lwolf.org
 repo: github.com/lwolf/konsumerator
+projectName: konsumerator
+layout:
+- go.kubebuilder.io/v3
 resources:
 - group: konsumerator
   version: v1
   kind: Consumer
+resources:
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: lwolf.org
+  group: konsumerator
+  kind: Consumer
+  path: github.com/lwolf/konsumerator/api/v1
+  version: v1

@@ -6,10 +6,10 @@ import (
 )
 
 func TestGetCpuRequest(t *testing.T) {
-	fname := "testdata/cpu.shares"
-	t.Log(filepath.Abs(fname))
+	fname := "../../testdata/cpu.shares"
 	value, err := getCpuRequest(fname)
 	if err != nil {
+		t.Log(filepath.Abs(fname))
 		t.Fatal(err)
 	}
 	t.Log(value)

@@ -15,12 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var tLogger logr.Logger
-
 func testLogger() logr.Logger {
-	if tLogger != nil {
-		return tLogger
-	}
 	return ctrl.Log.WithName("naive_test")
 }
 

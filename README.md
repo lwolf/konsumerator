@@ -240,7 +240,7 @@ If there is no such policy set, no resource request/limit will be set.
 
 Requirements
 
-* https://github.com/kubernetes-sigs/kind - is used to spin-up dev cluster (v0.10+)
+* https://github.com/kubernetes-sigs/kind - is used to spin-up dev cluster (v0.16+)
 * https://github.com/etcd-io/etcd - etcd needs to be present in the system path. Kubebuilder is a using it to run integration tests locally
 * https://github.com/kubernetes-sigs/kustomize - needs to be preset in the system path to render generated manifests 
 

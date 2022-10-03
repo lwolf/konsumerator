@@ -2,7 +2,7 @@ package consumer
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"math"
 	"math/rand"
@@ -51,7 +51,7 @@ func getCpuRequest(fname string) (float64, error) {
 		return 0, fmt.Errorf("failed to open cgroups file: %v", err)
 	}
 	defer f.Close()
-	cpuR, err := ioutil.ReadAll(f)
+	cpuR, err := io.ReadAll(f)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read cgroups file: %v", err)
 	}

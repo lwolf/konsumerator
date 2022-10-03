@@ -13,7 +13,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v2.1.3
         with:
-          go-version: '1.15.x'
+          go-version: '1.19.x'
         id: go
 
       - name: Checkout
@@ -30,8 +30,8 @@ jobs:
         # $(curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt)
         run: |
           mkdir -p /opt/bin
-          curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.19.3/bin/linux/amd64/kubectl && chmod +x kubectl && mv kubectl /opt/bin/
-          curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.19.3/bin/linux/amd64/kube-apiserver && chmod +x kube-apiserver && mv kube-apiserver /opt/bin/
+          curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.25.0/bin/linux/amd64/kubectl && chmod +x kubectl && mv kubectl /opt/bin/
+          curl -LO https://storage.googleapis.com/kubernetes-release/release/v1.25.0/bin/linux/amd64/kube-apiserver && chmod +x kube-apiserver && mv kube-apiserver /opt/bin/
           bash hack/download_etcd.sh v3.3.13 /opt/bin
           echo 'KUBEBUILDER_ASSETS=/opt/bin' >> $GITHUB_ENV
       - name: Unit Test

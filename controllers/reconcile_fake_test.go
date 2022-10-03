@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
 	"time"
 
-	tlog "github.com/go-logr/logr/testing"
+	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 	"github.com/lwolf/konsumerator/controllers"
@@ -23,15 +22,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/clock"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
+	testclock "k8s.io/utils/clock/testing"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var fakeClock = clock.NewFakeClock(time.Now())
+var fakeClock = testclock.NewFakeClock(time.Now())
 
 func initReconciler(consumer *konsumeratorv1.Consumer) (client.Client, *controllers.ConsumerReconciler) {
 	var s = runtime.NewScheme()
@@ -46,7 +45,7 @@ func initReconciler(consumer *konsumeratorv1.Consumer) (client.Client, *controll
 	recorder := broadcaster.NewRecorder(s, eventSource)
 	return cl, &controllers.ConsumerReconciler{
 		Client:   cl,
-		Log:      tlog.NullLogger{},
+		Log:      logr.Discard(),
 		Recorder: recorder,
 		Scheme:   s,
 		Clock:    fakeClock,
@@ -1205,7 +1204,7 @@ func (fs *fakePromServer) handler(rw http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		fs.t.Fatalf("expected to receive POST request; got %q", req.Method)
 	}
-	b, err := ioutil.ReadAll(req.Body)
+	b, err := io.ReadAll(req.Body)
 	if err != nil {
 		fs.t.Fatalf("error while reading body: %s", err)
 	}
