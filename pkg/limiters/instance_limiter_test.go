@@ -3,7 +3,7 @@ package limiters
 import (
 	"testing"
 
-	tlog "github.com/go-logr/logr/testing"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
@@ -34,7 +34,7 @@ func TestInstanceLimiter_MinAllowed(t *testing.T) {
 	}
 	for testName, tc := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			limiter := NewInstanceLimiter(&tc.policy, tlog.NullLogger{})
+			limiter := NewInstanceLimiter(&tc.policy, logr.Discard())
 			limits := limiter.MinAllowed(tc.containerName)
 			if tc.expLimits != nil && limits != nil {
 				if helpers.CmpResourceList(*limits, *tc.expLimits) != 0 {
@@ -73,7 +73,7 @@ func TestInstanceLimiter_MaxAllowed(t *testing.T) {
 	}
 	for testName, tc := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			limiter := NewInstanceLimiter(&tc.policy, tlog.NullLogger{})
+			limiter := NewInstanceLimiter(&tc.policy, logr.Discard())
 			limits := limiter.MaxAllowed(tc.containerName)
 			if tc.expLimits != nil && limits != nil {
 				if helpers.CmpResourceList(*limits, *tc.expLimits) != 0 {
@@ -152,7 +152,7 @@ func TestInstanceLimiter_ApplyLimits(t *testing.T) {
 	}
 	for testName, tc := range testCases {
 		t.Run(testName, func(t *testing.T) {
-			limiter := NewInstanceLimiter(&tc.policy, tlog.NullLogger{})
+			limiter := NewInstanceLimiter(&tc.policy, logr.Discard())
 			resources := limiter.ApplyLimits(tc.containerName, tc.estimates)
 			if helpers.CmpResourceRequirements(*resources, *tc.expRes) != 0 {
 				t.Errorf("ApplyLimits() results mismatch. want %v, got %v", tc.expRes, resources)
