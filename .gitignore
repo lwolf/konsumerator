@@ -25,3 +25,4 @@ bin
 # Project exclude paths
 /dist/
 coverage.txt
+/default.etcd/member/

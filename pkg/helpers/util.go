@@ -145,8 +145,8 @@ func CmpResourceRequirements(a corev1.ResourceRequirements, b corev1.ResourceReq
 // SplitIntoBuckets takes array size and group size and returns array of arrays
 // e.g.
 //
-//	SplitIntoBuckets(10, 3) -> [0,1,2],[3,4,5][6,7][8,9]
-//	SplitIntoBuckets(12, 3) -> [0,1,2],[3,4,5][6,7,8][9,10,11]
+//	SplitIntoBuckets(10, 3) -> [0,1,2] [3,4,5] [6,7] [8,9]
+//	SplitIntoBuckets(12, 3) -> [0,1,2] [3,4,5] [6,7,8] [9,10,11]
 func SplitIntoBuckets(size int32, desiredBucketSize int32) (buckets [][]int32) {
 	if size == 0 || desiredBucketSize == 0 {
 		return

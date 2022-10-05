@@ -80,7 +80,7 @@ spec:
               - /faker
               - consumer
               - --rpc=50000
-              - --redisAddr=redis.default:6379
+              - --redisAddr=redis:6379
               - --port=9000
             ports:
               - containerPort: 9000
