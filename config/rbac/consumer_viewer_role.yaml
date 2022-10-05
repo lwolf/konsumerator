@@ -1,24 +1,27 @@
+# permissions for end users to view consumers.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   labels:
     app.kubernetes.io/name: clusterrole
-    app.kubernetes.io/instance: proxy-role
-    app.kubernetes.io/component: kube-rbac-proxy
+    app.kubernetes.io/instance: consumer-viewer-role
+    app.kubernetes.io/component: rbac
     app.kubernetes.io/created-by: konsumerator
     app.kubernetes.io/part-of: konsumerator
     app.kubernetes.io/managed-by: kustomize
-  name: proxy-role
+  name: consumer-viewer-role
 rules:
 - apiGroups:
-  - authentication.k8s.io
+  - konsumerator.lwolf.org
   resources:
-  - tokenreviews
+  - consumers
   verbs:
-  - create
+  - get
+  - list
+  - watch
 - apiGroups:
-  - authorization.k8s.io
+  - konsumerator.lwolf.org
   resources:
-  - subjectaccessreviews
+  - consumers/status
   verbs:
-  - create
+  - get

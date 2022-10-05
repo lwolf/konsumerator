@@ -2,15 +2,11 @@ package consumer
 
 import (
 	"fmt"
-	"io"
 	"log"
 	"math"
 	"math/rand"
 	"net/http"
-	"os"
-	"runtime"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,13 +15,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/lwolf/konsumerator/hack/faker/lib"
-)
-
-const (
-	// request => `/sys/fs/cgroup/cpu/cpu.shares`
-	sysCpuRequestFile = "/sys/fs/cgroup/cpu/cpu.shares"
-	// limit => `/sys/fs/cgroup/cpu/cpu.cfs_quota_us`
-	sysCpuLimitFile = "/sys/fs/cgroup/cpu/cpu.cfs_quota_us"
 )
 
 var (
@@ -42,33 +31,13 @@ func runServer(port int) {
 	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", port), nil))
 }
 
-func getCpuRequest(fname string) (float64, error) {
-	if runtime.GOOS == "darwin" {
-		return 104, nil
-	}
-	f, err := os.Open(fname)
-	if err != nil {
-		return 0, fmt.Errorf("failed to open cgroups file: %v", err)
-	}
-	defer f.Close()
-	cpuR, err := io.ReadAll(f)
-	if err != nil {
-		return 0, fmt.Errorf("failed to read cgroups file: %v", err)
-	}
-	request, err := strconv.Atoi(strings.TrimSpace(string(cpuR)))
-	if err != nil {
-		return 0, fmt.Errorf("failed to convert cpu shared to int: %v", err)
-	}
-	return float64(request), nil
-}
-
 func consume(partition int, ratePerCore int) float64 {
-	milliCores, err := getCpuRequest(sysCpuRequestFile)
+	milliCores, err := lib.GetCpuRequests()
 	if err != nil {
 		panic(fmt.Sprintf("unable to get cgroups value %v", err))
 	}
 	rand.Seed(int64(partition))
-	consumptionRate := (milliCores / 1000) * float64(ratePerCore)
+	consumptionRate := (float64(milliCores) / 1000) * float64(ratePerCore)
 	fuzz := rand.Float64() * consumptionRate * 0.1
 	return fuzz + consumptionRate
 }

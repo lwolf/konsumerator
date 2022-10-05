@@ -73,13 +73,13 @@ data:
             tier: consumer
         spec:
           containers:
-            - image: lwolf/faker:v0.23
+            - image: lwolf/faker:latest
               name: consumer
               command:
                 - /faker
                 - consumer
                 - --rpc=50000
-                - --redisAddr=redis.default:6379
+                - --redisAddr=redis:6379
                 - --port=9000
               ports:
                 - containerPort: 9000
