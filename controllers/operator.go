@@ -569,16 +569,10 @@ func (o *operator) updateResources(container *corev1.Container, partitions []int
 	currentResources := container.Resources.DeepCopy()
 
 	request := resourceRequirementsDiff(estimatedResources, currentResources)
-	requestedResources := o.globalLimiter.ApplyLimits("", request)
-	if requestedResources == nil {
-		// global limiter exhausted
-		// return existing resources
-		return &container.Resources, reqDiff
-	}
-
+	allowedResources := o.globalLimiter.ApplyLimits("", request)
 	// sum-up current and requested resources
-	limitedResources := resourceRequirementsSum(currentResources, requestedResources)
-	globalDiff := request.Requests.Cpu().MilliValue() - requestedResources.Requests.Cpu().MilliValue()
+	limitedResources := resourceRequirementsSum(currentResources, allowedResources)
+	globalDiff := request.Requests.Cpu().MilliValue() - allowedResources.Requests.Cpu().MilliValue()
 	return limitedResources, reqDiff + globalDiff
 }
 

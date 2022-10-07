@@ -53,6 +53,24 @@ func TestGlobalLimiter_ApplyLimits(t *testing.T) {
 			requested: tests.NewResourceRequirements("-10", "-20M", "0", "0"),
 			expRes:    tests.NewResourceRequirements("-10", "-20M", "0", "0"),
 		},
+		"request while memory pool is exhausted": {
+			policy:    newGlobalPolicy("100", "10M"),
+			used:      tests.NewResourceList("10", "10M"),
+			requested: tests.NewResourceRequirements("10", "20M", "0", "0"),
+			expRes:    tests.NewResourceRequirements("10", "0", "0", "0"),
+		},
+		"request while cpu pool is exhausted": {
+			policy:    newGlobalPolicy("100", "10M"),
+			used:      tests.NewResourceList("100", "5M"),
+			requested: tests.NewResourceRequirements("10", "5M", "0", "0"),
+			expRes:    tests.NewResourceRequirements("0", "5M", "0", "0"),
+		},
+		"request while both pools are exhausted": {
+			policy:    newGlobalPolicy("100", "10M"),
+			used:      tests.NewResourceList("100", "10M"),
+			requested: tests.NewResourceRequirements("10", "20M", "0", "0"),
+			expRes:    tests.NewResourceRequirements("0", "0", "0", "0"),
+		},
 	}
 	for testName, tc := range testCases {
 		t.Run(testName, func(t *testing.T) {
@@ -66,7 +84,7 @@ func TestGlobalLimiter_ApplyLimits(t *testing.T) {
 }
 
 // TestGlobalLimiter_ApplyLimits2 tests single GlobalLimiter object
-// changing it's state by sequential list of steps
+// changing its state by sequential list of steps
 func TestGlobalLimiter_ApplyLimits2(t *testing.T) {
 	policy := newGlobalPolicy("100", "100M")
 	used := tests.NewResourceList("10", "10M")
@@ -93,11 +111,6 @@ func TestGlobalLimiter_ApplyLimits2(t *testing.T) {
 			expState:  tests.NewResourceList("0", "45M"),
 		},
 		{
-			requested: tests.NewResourceRequirements("10", "20M", "0", "0"),
-			expRes:    nil,
-			expState:  tests.NewResourceList("0", "45M"),
-		},
-		{
 			requested: tests.NewResourceRequirements("-20", "-40M", "0", "0"),
 			expRes:    tests.NewResourceRequirements("-20", "-40M", "0", "0"),
 			expState:  tests.NewResourceList("20", "85M"),
@@ -115,10 +128,8 @@ func TestGlobalLimiter_ApplyLimits2(t *testing.T) {
 	}
 	for i, step := range steps {
 		r := limiter.ApplyLimits("", step.requested)
-		if r != nil {
-			if helpers.CmpResourceRequirements(*r, *step.expRes) != 0 {
-				t.Fatalf("step %d - ApplyLimits() results mismatch. \nWant: \n%v; \nGot: \n%v", i+1, step.expRes, r)
-			}
+		if helpers.CmpResourceRequirements(*r, *step.expRes) != 0 {
+			t.Fatalf("step %d - ApplyLimits() results mismatch. \nWant: \n%v; \nGot: \n%v", i+1, step.expRes, r)
 		}
 		state := tests.NewResourceList(limiter.availCPU.String(), limiter.availMem.String())
 		if helpers.CmpResourceList(*state, *step.expState) != 0 {

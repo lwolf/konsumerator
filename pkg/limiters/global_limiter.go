@@ -1,16 +1,21 @@
 package limiters
 
 import (
-	"github.com/go-logr/logr"
-	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	"sync"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"github.com/go-logr/logr"
+	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 )
 
 type GlobalLimiter struct {
 	availCPU *resource.Quantity
 	availMem *resource.Quantity
 	log      logr.Logger
+
+	sync.Mutex
 }
 
 func NewGlobalLimiter(policy *konsumeratorv1.ResourcePolicy, used *corev1.ResourceList, log logr.Logger) *GlobalLimiter {
@@ -28,7 +33,7 @@ func NewGlobalLimiter(policy *konsumeratorv1.ResourcePolicy, used *corev1.Resour
 
 	limit := policy.GlobalPolicy.MaxAllowed
 	if used.Cpu().Cmp(*limit.Cpu()) == 1 || used.Memory().Cmp(*limit.Memory()) == 1 {
-		l.log.V(1).Info(
+		l.log.Info(
 			"Resource allocation is higher than global limit",
 			"limit.CPU", limit.Cpu().MilliValue(),
 			"limit.Memory", limit.Memory().MilliValue(),
@@ -60,27 +65,17 @@ func (l *GlobalLimiter) MaxAllowed(_ string) *corev1.ResourceList {
 	}
 }
 
+// ApplyLimits returns amount resources that is possible to allocate, if pool is exhasted returns zeros
 func (l *GlobalLimiter) ApplyLimits(_ string, resources *corev1.ResourceRequirements) *corev1.ResourceRequirements {
 	if l.availMem == nil || l.availCPU == nil {
 		// no limits were applied - returning as is
 		return resources
 	}
+	l.Lock()
+	defer l.Unlock()
 
 	requestCPU := resources.Requests.Cpu()
 	requestMem := resources.Requests.Memory()
-
-	if l.availCPU.IsZero() || l.availMem.IsZero() {
-		if requestCPU.MilliValue() > 0 && requestMem.MilliValue() > 0 {
-			l.log.V(1).Info(
-				"global limiter exhausted",
-				"cpuReq", requestCPU.MilliValue(),
-				"cpuLimit", l.availCPU.MilliValue(),
-				"memReq", requestMem.MilliValue(),
-				"memLimit", l.availMem.MilliValue(),
-			)
-			return nil
-		}
-	}
 
 	cpu := l.deductCPU(requestCPU)
 	mem := l.deductMem(requestMem)
