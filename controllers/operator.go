@@ -30,7 +30,6 @@ import (
 type operator struct {
 	owner    metav1.Object
 	consumer *konsumeratorv1.Consumer
-	// new
 	Recorder record.EventRecorder
 	Scheme   *runtime.Scheme
 
@@ -124,10 +123,10 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		o.setOwner(newD)
 		if err := cl.Create(ctx, newD); errors.IgnoreAlreadyExists(err) != nil {
 			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
-			o.log.Error(err, "unable to create new Deployment", "deployment", newD, "consumerId", consumerId)
+			o.log.Error(err, "unable to create new Deployment", "deployment", deploy.Name)
 			continue
 		}
-		o.log.V(1).Info("created new deployment", "deployment", newD, "consumerId", consumerId)
+		o.log.Info("created new deployment", "deployment", deploy.Name)
 		deploymentsCreateTotal.WithLabelValues(req.Name).Inc()
 	}
 
@@ -135,7 +134,7 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 	for _, deploy := range o.toRemoveInstances {
 		deploymentStatus.WithLabelValues(o.consumer.Name, deploy.Name).Set(0)
 		if err := cl.Delete(ctx, deploy); errors.IgnoreNotFound(err) != nil {
-			o.log.Error(err, "unable to delete deployment", "deployment", deploy)
+			o.log.Error(err, "unable to delete deployment", "deployment", deploy.Name)
 			deploymentsDeleteErrors.WithLabelValues(req.Name).Inc()
 			continue
 		}
@@ -156,7 +155,7 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		o.setOwner(deploy)
 		if err := cl.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
-			o.log.Error(err, "unable to update deployment", "deployment", deploy)
+			o.log.Error(err, "unable to update deployment", "deployment", deploy.Name)
 			continue
 		}
 		deploymentsUpdateTotal.WithLabelValues(req.Name).Inc()
@@ -183,11 +182,11 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 	return nil
 }
 
-func (o operator) observedGeneration() string {
+func (o *operator) observedGeneration() string {
 	return strconv.Itoa(int(*o.consumer.Status.ObservedGeneration))
 }
 
-func (o operator) isLagging(lag time.Duration) bool {
+func (o *operator) isLagging(lag time.Duration) bool {
 	tolerableLag := o.consumer.Spec.Autoscaler.Prometheus.TolerableLag
 	if tolerableLag == nil {
 		return false

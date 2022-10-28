@@ -1,7 +1,6 @@
 package limiters
 
 import (
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -10,10 +9,9 @@ import (
 
 type InstanceLimiter struct {
 	registry map[string]konsumeratorv1.ContainerResourcePolicy
-	log      logr.Logger
 }
 
-func NewInstanceLimiter(policy *konsumeratorv1.ResourcePolicy, log logr.Logger) *InstanceLimiter {
+func NewInstanceLimiter(policy *konsumeratorv1.ResourcePolicy) *InstanceLimiter {
 	registry := make(map[string]konsumeratorv1.ContainerResourcePolicy, 0)
 	if policy != nil {
 		for i := range policy.ContainerPolicies {
@@ -23,7 +21,6 @@ func NewInstanceLimiter(policy *konsumeratorv1.ResourcePolicy, log logr.Logger) 
 	}
 	return &InstanceLimiter{
 		registry: registry,
-		log:      log,
 	}
 }
 
@@ -50,15 +47,6 @@ func (il *InstanceLimiter) ApplyLimits(containerName string, resources *corev1.R
 	}
 	cpuReq, cpuLimit := il.validateCpu(resources.Requests.Cpu(), resources.Limits.Cpu(), &limits)
 	memoryReq, memoryLimit := il.validateMemory(resources.Requests.Memory(), resources.Limits.Memory(), &limits)
-	il.log.V(1).Info(
-		"resource limiting results",
-		"containerName", containerName,
-		"cpuReq", cpuReq,
-		"cpuLimit", cpuLimit,
-		"memReq", memoryReq,
-		"memLimit", memoryLimit,
-	)
-
 	return &corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    *resource.NewMilliQuantity(cpuReq, resource.DecimalSI),
