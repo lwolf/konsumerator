@@ -128,6 +128,42 @@ var (
 		},
 		[]string{"consumer", "deployment"},
 	)
+	consumerGlobalMemoryPoolSize = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "consumer",
+			Name:      "global_memory_limit_bytes",
+			Help:      "Total amount of bytes for allocation in global limiter",
+		},
+		[]string{"consumer"},
+	)
+	consumerGlobalCPUPoolSize = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "consumer",
+			Name:      "global_cpu_limit_mcores",
+			Help:      "Total amount of bytes for allocation in global limiter",
+		},
+		[]string{"consumer"},
+	)
+	consumerGlobalMemoryPoolAllocated = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "consumer",
+			Name:      "global_memory_allocated_bytes",
+			Help:      "Total amount of bytes allocated from the global limiter pool",
+		},
+		[]string{"consumer"},
+	)
+	consumerGlobalCPUPoolAllocated = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: "consumer",
+			Name:      "global_cpu_allocated_mcores",
+			Help:      "Total number of milli cores allocated from the global limiter pool",
+		},
+		[]string{"consumer"},
+	)
 )
 
 func init() {
@@ -136,5 +172,7 @@ func init() {
 		deploymentsCreateTotal, deploymentsCreateErrors,
 		deploymentsDeleteTotal, deploymentsDeleteErrors,
 		deploymentsUpdateTotal, deploymentsUpdateErrors,
-		deploymentSaturation, deploymentStatus)
+		deploymentSaturation, deploymentStatus,
+		consumerGlobalMemoryPoolSize, consumerGlobalCPUPoolSize,
+		consumerGlobalMemoryPoolAllocated, consumerGlobalCPUPoolAllocated)
 }

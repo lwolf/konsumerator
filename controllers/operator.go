@@ -94,11 +94,21 @@ func (o *operator) init(consumer *konsumeratorv1.Consumer, managedDeploys appsv1
 
 	o.limiter = limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, o.log)
 	o.globalLimiter = limiters.NewGlobalLimiter(consumer.Spec.ResourcePolicy, o.usedResources, o.log)
+
+	// expose the global limiter pool size. MaxAllowed returns a total before anything was assigned
+	policy := consumer.Spec.ResourcePolicy
+	if policy != nil && policy.GlobalPolicy != nil {
+		consumerGlobalCPUPoolSize.WithLabelValues(consumer.Name).Set(float64(o.globalLimiter.MaxAllowed("").Cpu().MilliValue()))
+		consumerGlobalMemoryPoolSize.WithLabelValues(consumer.Name).Set(o.globalLimiter.MaxAllowed("").Memory().AsApproximateFloat64())
+	}
+
 	if o.consumer.Spec.Autoscaler == nil || o.consumer.Spec.Autoscaler.Prometheus == nil {
 		return fmt.Errorf("Spec.Autoscaler.Prometheus can't be empty")
 	}
 	o.predictor = predictors.NewNaivePredictor(o.log, o.mp, o.consumer.Spec.Autoscaler.Prometheus)
 
+	consumerGlobalCPUPoolAllocated.WithLabelValues(consumer.Name).Set(float64(o.usedResources.Cpu().MilliValue()))
+	consumerGlobalMemoryPoolAllocated.WithLabelValues(consumer.Name).Set(o.usedResources.Memory().AsApproximateFloat64())
 	return nil
 }
 
