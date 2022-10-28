@@ -39,7 +39,7 @@ func initReconciler(consumer *konsumeratorv1.Consumer) (client.Client, *controll
 	_ = konsumeratorv1.AddToScheme(s)
 	_ = appsv1.AddToScheme(s)
 
-	cl := &fakeClient{fake.NewFakeClientWithScheme(s, consumer)}
+	cl := &fakeClient{fake.NewClientBuilder().WithScheme(s).WithRuntimeObjects(consumer).Build()}
 	broadcaster := record.NewBroadcasterForTests(time.Second)
 	eventSource := corev1.EventSource{Component: "eventTest"}
 	recorder := broadcaster.NewRecorder(s, eventSource)

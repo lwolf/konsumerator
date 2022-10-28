@@ -59,14 +59,12 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
-	var isDebug bool
 	var namespace string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&isDebug, "verbose", false, "Set log level to debug mode.")
 	flag.StringVar(&namespace, "namespace", "", "Run operator in guest mode, limit scope to only a single namespace. No CRD will be created")
 	opts := zap.Options{
 		Development: true,
@@ -82,7 +80,6 @@ func main() {
 	setupLog.Info(
 		"Initializing konsumerator controller",
 		"version", Version,
-		"isDebug", isDebug,
 		"namespace", namespace,
 		"metricsAddr", metricsAddr,
 		"leaderElection", enableLeaderElection,

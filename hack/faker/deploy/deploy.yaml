@@ -26,9 +26,9 @@ spec:
         command:
           - /faker
           - producer
-          - --redisAddr=redis.default:6379
+          - --redisAddr=redis:6379
           - --port=9000
-          - --num-partitions=2
+          - --num-partitions=10
           - --base-rate=40000
           - --full-period=43200 # 12 hour cycle
         name: faker
