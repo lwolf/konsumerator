@@ -1,8 +1,6 @@
 package predictors
 
 import (
-	"math"
-
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -36,10 +34,10 @@ func (s *NaivePredictor) expectedConsumption(partition int32) int64 {
 	}
 	return production
 }
-func (s *NaivePredictor) estimateCpu(consumption int64, ratePerCore int64) (int64, int64) {
-	// round cpuRequests to the nearest 100 Millicore, and cpuLimit to the nearest Core
-	cpuReq := math.Ceil(float64(consumption)/float64(ratePerCore)*10) / 10
-	return int64(cpuReq * 1000), int64(math.Ceil(cpuReq)) * 1000
+func (s *NaivePredictor) estimateCpu(consumption int64, ratePerCore int64, scalingStep int64) (int64, int64) {
+	requestCPU := ceilToMultipleOf(consumption*1000/ratePerCore, scalingStep)
+	limitCPU := ceilToMultipleOf(requestCPU, 1000)
+	return requestCPU, limitCPU
 }
 func (s *NaivePredictor) estimateMemory(ramPerCore int64, cpuL int64) (int64, int64) {
 	limit := cpuL * (ramPerCore / 1000)
@@ -51,7 +49,14 @@ func (s *NaivePredictor) Estimate(containerName string, partitions []int32) *cor
 	for _, p := range partitions {
 		expectedConsumption += s.expectedConsumption(p)
 	}
-	cpuReq, cpuLimit := s.estimateCpu(expectedConsumption, *s.promSpec.RatePerCore)
+	// for backward compatibility, cpuIncrement is an optional field
+	var step int64
+	if s.promSpec.CpuIncrement == nil {
+		step = 100
+	} else {
+		step = s.promSpec.CpuIncrement.MilliValue()
+	}
+	cpuReq, cpuLimit := s.estimateCpu(expectedConsumption, *s.promSpec.RatePerCore, step)
 	memoryReq, memoryLimit := s.estimateMemory(s.promSpec.RamPerCore.MilliValue(), cpuLimit)
 	s.log.V(1).Info(
 		"resource estimation results",
@@ -74,4 +79,11 @@ func (s *NaivePredictor) Estimate(containerName string, partitions []int32) *cor
 			corev1.ResourceMemory: *resource.NewMilliQuantity(memoryLimit, resource.DecimalSI),
 		},
 	}
+}
+
+func ceilToMultipleOf(in int64, step int64) int64 {
+	if in%step == 0 {
+		return in
+	}
+	return in + (step - in%step)
 }

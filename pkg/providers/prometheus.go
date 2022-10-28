@@ -46,7 +46,6 @@ var allConsFailedErr = errors.New("unable to reach any prometheus address")
 
 var once sync.Once
 
-// TODO: make spec passed by value
 func NewPrometheusMP(log logr.Logger, spec *konsumeratorv1.PrometheusAutoscalerSpec, consumer string) (*PrometheusMP, error) {
 	once.Do(initMetrics)
 

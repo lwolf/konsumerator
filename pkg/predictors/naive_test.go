@@ -38,32 +38,57 @@ func TestEstimateCpu(t *testing.T) {
 	tests := map[string]struct {
 		consumption  int64
 		ratePerCore  int64
+		cpuIncrement int64
 		expectedCpuR int64
 		expectedCpuL int64
 	}{
 		"simple case": {
 			consumption:  20000,
 			ratePerCore:  10000,
+			cpuIncrement: 100,
 			expectedCpuR: 2000,
 			expectedCpuL: 2000,
 		},
 		"cpuLimit should be rounded to the CPU": {
 			consumption:  18000,
 			ratePerCore:  10000,
+			cpuIncrement: 100,
 			expectedCpuR: 1800,
 			expectedCpuL: 2000,
 		},
 		"cpuRequest should be rounded to 100 millicore": {
 			consumption:  18510,
 			ratePerCore:  10000,
+			cpuIncrement: 100,
 			expectedCpuR: 1900,
+			expectedCpuL: 2000,
+		},
+		"cpuRequest should be rounded to a custom value (400 mCPU)": {
+			consumption:  11510,
+			ratePerCore:  10000,
+			cpuIncrement: 400,
+			expectedCpuR: 1200,
+			expectedCpuL: 2000,
+		},
+		"cpuRequest should be rounded to a custom value (500 mCPU)": {
+			consumption:  11510,
+			ratePerCore:  10000,
+			cpuIncrement: 500,
+			expectedCpuR: 1500,
+			expectedCpuL: 2000,
+		},
+		"cpuRequest should be rounded to a custom value (1 CPU)": {
+			consumption:  11510,
+			ratePerCore:  10000,
+			cpuIncrement: 1000,
+			expectedCpuR: 2000,
 			expectedCpuL: 2000,
 		},
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			estimator := NaivePredictor{log: testLogger()}
-			cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore)
+			cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore, tt.cpuIncrement)
 			if cpuR != tt.expectedCpuR {
 				t.Fatalf("expected Request CPU %d, got %d", tt.expectedCpuR, cpuR)
 			}

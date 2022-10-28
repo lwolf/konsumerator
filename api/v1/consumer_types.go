@@ -111,11 +111,15 @@ type PrometheusAutoscalerSpec struct {
 	Production  ProductionQuerySpec  `json:"production"`
 	Consumption ConsumptionQuerySpec `json:"consumption"`
 
-	RatePerCore  *int64            `json:"ratePerCore"`
-	RamPerCore   resource.Quantity `json:"ramPerCore"`
-	TolerableLag *metav1.Duration  `json:"tolerableLag"`
-	CriticalLag  *metav1.Duration  `json:"criticalLag"`
-	RecoveryTime *metav1.Duration  `json:"recoveryTime"`
+	RatePerCore *int64            `json:"ratePerCore"`
+	RamPerCore  resource.Quantity `json:"ramPerCore"`
+
+	// CpuIncrement sets the minimum cpu scaling step (default is 100m)
+	// +optional
+	CpuIncrement *resource.Quantity `json:"cpuIncrement,omitempty"`
+	TolerableLag *metav1.Duration   `json:"tolerableLag"`
+	CriticalLag  *metav1.Duration   `json:"criticalLag"`
+	RecoveryTime *metav1.Duration   `json:"recoveryTime"`
 }
 
 type OffsetQuerySpec struct {
