@@ -356,6 +356,11 @@ func (in *PrometheusAutoscalerSpec) DeepCopyInto(out *PrometheusAutoscalerSpec) 
 		**out = **in
 	}
 	out.RamPerCore = in.RamPerCore.DeepCopy()
+	if in.CpuIncrement != nil {
+		in, out := &in.CpuIncrement, &out.CpuIncrement
+		x := (*in).DeepCopy()
+		*out = &x
+	}
 	if in.TolerableLag != nil {
 		in, out := &in.TolerableLag, &out.TolerableLag
 		*out = new(metav1.Duration)
