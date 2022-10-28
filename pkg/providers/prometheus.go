@@ -105,10 +105,8 @@ func (l *PrometheusMP) GetConsumptionRate(partition int32) int64 {
 func (l *PrometheusMP) GetMessagesBehind(partition int32) int64 {
 	behind, ok := l.messagesBehind[partition]
 	if !ok {
-		l.log.V(1).Info("lag value not found", "partition", partition)
 		return 0
 	}
-	l.log.V(1).Info("current lag", "partition", partition, "messagesBehind", behind)
 	return behind
 }
 
@@ -117,14 +115,15 @@ func (l *PrometheusMP) GetMessagesBehind(partition int32) int64 {
 // not thread-safe
 func (l *PrometheusMP) GetLagByPartition(partition int32) time.Duration {
 	behind := l.GetMessagesBehind(partition)
+	if behind == 0 {
+		l.log.V(1).Info("messages behind is missing", "partition", partition)
+	}
 	production := l.GetProductionRate(partition)
-	l.log.V(1).Info("lag estimation", "production", production, "behind", behind)
 	if production == 0 {
-		l.log.V(1).Info("production rate is 0", "partition", partition)
+		l.log.V(1).Info("production rate is missing", "partition", partition)
 		return 0
 	}
 	lag := float64(behind) / float64(production)
-	l.log.V(1).Info("lag per partition", "partition", partition, "lag", lag, "lagSec", time.Duration(lag)*time.Second)
 	return time.Duration(lag) * time.Second
 }
 
@@ -284,7 +283,7 @@ func (l *PrometheusMP) parseMatrix(matrix model.Matrix, label model.LabelName) m
 		partitionNumberStr := string(ss.Metric[label])
 		partitionNumber, err := strconv.Atoi(partitionNumberStr)
 		if err != nil {
-			l.log.Info("unable to parse partition number from the label", "label", partitionNumberStr)
+			l.log.Error(err, "unable to parse partition number from the label", "label", partitionNumberStr)
 			continue
 		}
 
@@ -301,7 +300,7 @@ func (l *PrometheusMP) parseVector(vector model.Vector, label model.LabelName) m
 		partitionNumberStr := string(v.Metric[label])
 		partitionNumber, err := strconv.Atoi(partitionNumberStr)
 		if err != nil {
-			l.log.Info("unable to parse partition number from the label", "label", partitionNumberStr)
+			l.log.Error(err, "unable to parse partition number from the label", "label", partitionNumberStr)
 			continue
 		}
 		metrics[int32(partitionNumber)] = int64(v.Value)
