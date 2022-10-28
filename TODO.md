@@ -63,10 +63,10 @@ v0.9 Multi-partition assignment
 
 vNext
 * [x] Resync all metrics on reconcile. Status metric is wrong (seems to be updated only during creating of deployments)
-* [ ] Implement progressive updates (canary).
-* [ ] Rework configuration of RAM estimation, make it possible to provide some formula, i.e. (fixed + ramPerCore)  
 * [ ] Implement `bounce` mode, keep track of the last few node names per instance and add antiaffinitity rule to deployment
       to avoid scheduling to that node during the next scale up. 
+* [ ] Implement progressive updates (canary).
+* [ ] Rework configuration of RAM estimation, make it possible to provide some formula, i.e. (fixed + ramPerCore)  
 * [ ] Consider replacing DeploymentSpec with PodSpec/PodLabels/PodAnnotations
       Ability to set additional deployment-level annotations/labels  
 * [ ] Recreate deployments from scratch, if any of the immutable fields were changed in the deploymentSpec

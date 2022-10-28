@@ -17,13 +17,6 @@ endif
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
 
-# for some reason travis-ci calls `make` on each step which triggers download
-# of all packages. This check disables it.
-ifeq ($(CI),true)
-all:
-	@echo "disabling default target make"
-endif
-
 ##@ General
 
 # The help target prints out all targets with their descriptions organized
