@@ -188,7 +188,7 @@ func TestNewConsumerOperator(t *testing.T) {
 			},
 		},
 		{
-			"deployment with consumerId outside of range should be deleted",
+			"deployment with instanceId outside of range should be deleted",
 			&konsumeratorv1.Consumer{
 				Spec: konsumeratorv1.ConsumerSpec{
 					NumPartitions:            testInt32ToPt(10),

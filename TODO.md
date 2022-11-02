@@ -61,8 +61,20 @@ v0.9 Multi-partition assignment
 * [x] Static multi-partition assignment
 * [x] Improve logging
 
-vNext
+v1.0
+* [x] Promote v1alpha1 version to v1
 * [x] Resync all metrics on reconcile. Status metric is wrong (seems to be updated only during creating of deployments)
+* [x] Replace partition labels with ranges, validate length
+
+v1.1
+* [ ] If there is no metrics at all allocate avg/mean instead of minimal
+* [x] cpu increment should be configurable
+* [x] cleanup logging
+  * [x] Log not only scaling cmp value (-1, 0, 1), but also how many cores were estimated per instance
+  * [x] introduce verbose mode to make it easier to debug a single instance issues.
+ 
+ 
+vNext
 * [ ] Implement `bounce` mode, keep track of the last few node names per instance and add antiaffinitity rule to deployment
       to avoid scheduling to that node during the next scale up. 
 * [ ] Implement progressive updates (canary).
@@ -77,14 +89,12 @@ vNext
 Unsorted
 * [ ] Consider using number of messages in all estimates instead of `projected lag time`
 * [ ] Add jitter to the scaling time
-* [ ] Log not only scaling cmp value (-1, 0, 1), but also how many cores were estimated per partition
 * [ ] Dynamic multi-partition assignment. Instead of static `numPartitionsPerInstance`:
       Configure min/max values for `numPartitionsPerInstance`
       Configure min/max number of pods per consumer
       Based on production rate decide the value of partitions to assign. Scale each one vertically until fits.
       If per-pod resource limit is exhausted, but global one is not, scale horizontally and reduce number of partitions per instance.  
 * [ ] [BUG] update of the auto-scaler spec (ratePerCore, ramPerCore) should ? trigger reconciliation
-* [ ] [BUG] fix the logic for calculation hash of deploymentSpec (should always be positive) 
 * [ ] Reset status annotation if MANUAL mode is enabled
 * [ ] Consider making number of partitions optional in the spec
 * [ ] [Feature] implement defaulting/validating webhooks

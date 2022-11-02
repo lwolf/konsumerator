@@ -1,7 +1,6 @@
 package predictors
 
 import (
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -12,16 +11,13 @@ import (
 type NaivePredictor struct {
 	lagSource providers.MetricsProvider
 	promSpec  *konsumeratorv1.PrometheusAutoscalerSpec
-	log       logr.Logger
 }
 
-func NewNaivePredictor(log logr.Logger, store providers.MetricsProvider, promSpec *konsumeratorv1.PrometheusAutoscalerSpec) *NaivePredictor {
+func NewNaivePredictor(store providers.MetricsProvider, promSpec *konsumeratorv1.PrometheusAutoscalerSpec) *NaivePredictor {
 	// TODO: we need to do a basic validation of all the fields during creating of the Predictor
-	ctrlLogger := log.WithName("naivePredictor")
 	return &NaivePredictor{
 		lagSource: store,
 		promSpec:  promSpec,
-		log:       ctrlLogger,
 	}
 }
 
@@ -58,16 +54,6 @@ func (s *NaivePredictor) Estimate(containerName string, partitions []int32) *cor
 	}
 	cpuReq, cpuLimit := s.estimateCpu(expectedConsumption, *s.promSpec.RatePerCore, step)
 	memoryReq, memoryLimit := s.estimateMemory(s.promSpec.RamPerCore.MilliValue(), cpuLimit)
-	s.log.V(1).Info(
-		"resource estimation results",
-		"containerName", containerName,
-		"partitions", partitions,
-		"expected consumption", expectedConsumption,
-		"cpuReq", cpuReq,
-		"cpuLimit", cpuLimit,
-		"memReq", memoryReq,
-		"memLimit", memoryLimit,
-	)
 
 	return &corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{

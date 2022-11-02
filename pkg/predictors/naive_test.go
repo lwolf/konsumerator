@@ -87,7 +87,7 @@ func TestEstimateCpu(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			estimator := NaivePredictor{log: testLogger()}
+			estimator := NaivePredictor{}
 			cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore, tt.cpuIncrement)
 			if cpuR != tt.expectedCpuR {
 				t.Fatalf("expected Request CPU %d, got %d", tt.expectedCpuR, cpuR)
@@ -127,7 +127,7 @@ func TestEstimateMemory(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			estimator := NaivePredictor{log: testLogger()}
+			estimator := NaivePredictor{}
 			memoryR, memoryL := estimator.estimateMemory(tt.ramPerCore, tt.cpuL)
 			if memoryR != tt.expectedMemoryR {
 				t.Fatalf("expected Request Memory %d, got %d", tt.expectedMemoryR, memoryR)
@@ -164,7 +164,6 @@ func TestExpectedConsumption(t *testing.T) {
 			estimator := NaivePredictor{
 				lagSource: tt.lagStore,
 				promSpec:  &tt.promSpec,
-				log:       testLogger(),
 			}
 			actual := estimator.expectedConsumption(tt.partition)
 			if actual != tt.expectedConsumption {
@@ -259,7 +258,6 @@ func TestEstimateResources(t *testing.T) {
 			estimator := NaivePredictor{
 				lagSource: tt.lagStore,
 				promSpec:  &tt.promSpec,
-				log:       testLogger(),
 			}
 			resources := estimator.Estimate(tt.containerName, tt.partitions)
 			if helpers.CmpResourceRequirements(*resources, tt.expectedResources) != 0 {

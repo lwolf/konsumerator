@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"github.com/lwolf/konsumerator/pkg/helpers"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 	"time"
 
@@ -115,7 +116,7 @@ func TestUpdateStatusAnnotations(t *testing.T) {
 				Outdated:     helpers.Ptr2Int32(5),
 				LastSyncTime: &mtm,
 				LastSyncState: map[string]konsumeratorv1.InstanceState{
-					"0": konsumeratorv1.InstanceState{ProductionRate: 20, ConsumptionRate: 10, MessagesBehind: 1000},
+					"0": {ProductionRate: 20, ConsumptionRate: 10, MessagesBehind: 1000},
 				},
 			},
 		},
@@ -135,3 +136,56 @@ func TestUpdateStatusAnnotations(t *testing.T) {
 	}
 
 }
+
+func TestResourceRequirementsDiff(t *testing.T) {}
+func TestResourceRequirementsSum(t *testing.T)  {}
+func TestResourceListSum(t *testing.T) {
+	testCases := map[string]struct {
+		a   corev1.ResourceList
+		b   corev1.ResourceList
+		exp corev1.ResourceList
+	}{
+		"sanity check": {
+			corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("100M"),
+			},
+			corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("10M"),
+			},
+			corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("150m"),
+				corev1.ResourceMemory: resource.MustParse("110M"),
+			},
+		},
+	}
+	for tcName, tc := range testCases {
+		t.Run(tcName, func(t *testing.T) {
+			beforeA := tc.a.DeepCopy()
+			beforeB := tc.b.DeepCopy()
+			res := resourceListSum(&tc.a, &tc.b)
+			if isResourceListEqual(*res, tc.exp) {
+				t.Fatalf("expected value: %v, got: %v", tc.exp, res)
+			}
+			if isResourceListEqual(beforeA, tc.a) {
+				t.Fatalf("unexpected mutation of the initial data!")
+			}
+			if isResourceListEqual(beforeB, tc.b) {
+				t.Fatalf("unexpected mutation of the initial data!")
+			}
+		})
+	}
+}
+
+func isResourceListEqual(a, b corev1.ResourceList) bool {
+	if a.Cpu().Cmp(*b.Cpu()) != 0 {
+		return false
+	}
+	if a.Memory().Cmp(*b.Cpu()) != 0 {
+		return false
+	}
+	return true
+}
+
+func TestResourceListDiff(t *testing.T) {}
