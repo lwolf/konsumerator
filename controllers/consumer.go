@@ -36,17 +36,9 @@ import (
 
 const (
 	consumerOwnerKey = ".metadata.controller"
-
-	cmpResourcesLt int = -1
-	cmpResourcesEq int = 0
-	cmpResourcesGt int = 1
-
-	defaultMinSyncPeriod               = time.Minute
-	defaultScaleStatePendingUpPeriod   = time.Minute * 5
-	defaultScaleStatePendingDownPeriod = time.Minute * 15
 )
 
-// Consumer reconciles a Consumer object
+// ConsumerReconciler reconciles a Consumer object
 type ConsumerReconciler struct {
 	client.Client
 
@@ -131,7 +123,18 @@ func (r *ConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.V(1).Info("no change detected...")
 		return result, nil
 	}
-
+	o.log.Info(
+		"deployments count",
+		"metricsUpdated", o.metricsUpdated,
+		"expected", o.consumer.Spec.NumPartitions,
+		"running", consumer.Status.Running,
+		"paused", consumer.Status.Paused,
+		"missing", consumer.Status.Missing,
+		"lagging", consumer.Status.Lagging,
+		"toUpdate", consumer.Status.Outdated,
+		"redundant", consumer.Status.Redundant,
+		"toEstimate", len(o.toEstimateInstances),
+	)
 	start = time.Now()
 	if err := r.Status().Update(ctx, o.consumer); err != nil {
 		properError := errors.IgnoreConflict(err)

@@ -12,6 +12,7 @@ import (
 	"github.com/mitchellh/hashstructure"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -43,35 +44,31 @@ type operator struct {
 	log logr.Logger
 	mp  providers.MetricsProvider
 
+	// ephemeral caching of the previous states to reduce logging
+	// map of deployment name to the state
+	states map[string]*InstanceState
 	// XXX: should it be a part of mp?
 	metricsUpdated bool
 
-	// partition assignments, indicates relation of consumerId to partitions
+	// partition assignments, indicates relation of instanceId to partitions
 	// these arrays are operate on deployments, not partitions
 	assignments [][]int32
-	missingIds  map[int32]bool
-	pausedIds   map[int32]bool
-	runningIds  map[int32]bool
-	laggingIds  map[int32]bool
 
-	// toRemove is a map of deployment name to the deployment.
-	// we can't use consumerId here, because deployment could be without it
-	toRemoveInstances map[string]*appsv1.Deployment
-	// toUpdate and toEstimate are maps of consumerId to deployment
-	toUpdateInstances   map[int32]*appsv1.Deployment
-	toEstimateInstances map[int32]*appsv1.Deployment
+	toRemoveInstances   []*appsv1.Deployment
+	toUpdateInstances   []*appsv1.Deployment
+	toEstimateInstances []*appsv1.Deployment
+	toCreateInstances   []*appsv1.Deployment
 
 	clock clock.Clock
 }
 
-func (o *operator) init(consumer *konsumeratorv1.Consumer, managedDeploys appsv1.DeploymentList) error {
+func (o *operator) init(consumer *konsumeratorv1.Consumer, managedInstances appsv1.DeploymentList) error {
 	hash, err := hashstructure.Hash(consumer.Spec.DeploymentTemplate, nil)
 	if err != nil {
 		return err
 	}
 	consumer.Status.ObservedGeneration = helpers.Ptr2Int64(int64(hash))
 	rl := make(corev1.ResourceList, 0)
-	// TODO: refactor following list of actions
 	o.consumer = consumer
 	o.usedResources = &rl
 	o.mp = o.newMetricsProvider()
@@ -80,18 +77,14 @@ func (o *operator) init(consumer *konsumeratorv1.Consumer, managedDeploys appsv1
 		groupSize = *o.consumer.Spec.NumPartitionsPerInstance
 	}
 	o.assignments = helpers.SplitIntoBuckets(*o.consumer.Spec.NumPartitions, groupSize)
+	o.states = make(map[string]*InstanceState, len(o.assignments))
 
-	o.missingIds = make(map[int32]bool)
-	o.pausedIds = make(map[int32]bool)
-	o.runningIds = make(map[int32]bool)
-	o.laggingIds = make(map[int32]bool)
-	o.toRemoveInstances = make(map[string]*appsv1.Deployment)
-	o.toUpdateInstances = make(map[int32]*appsv1.Deployment)
-	o.toEstimateInstances = make(map[int32]*appsv1.Deployment)
+	o.toRemoveInstances = make([]*appsv1.Deployment, 0)
+	o.toUpdateInstances = make([]*appsv1.Deployment, 0)
+	o.toEstimateInstances = make([]*appsv1.Deployment, 0)
+	o.toCreateInstances = make([]*appsv1.Deployment, 0)
 
-	o.syncDeploys(managedDeploys)
-
-	o.limiter = limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, o.log)
+	o.limiter = limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy)
 	o.globalLimiter = limiters.NewGlobalLimiter(consumer.Spec.ResourcePolicy, o.usedResources, o.log)
 
 	// expose the global limiter pool size. MaxAllowed returns a total before anything was assigned
@@ -104,24 +97,124 @@ func (o *operator) init(consumer *konsumeratorv1.Consumer, managedDeploys appsv1
 	if o.consumer.Spec.Autoscaler == nil || o.consumer.Spec.Autoscaler.Prometheus == nil {
 		return fmt.Errorf("Spec.Autoscaler.Prometheus can't be empty")
 	}
-	o.predictor = predictors.NewNaivePredictor(o.log, o.mp, o.consumer.Spec.Autoscaler.Prometheus)
+	o.predictor = predictors.NewNaivePredictor(o.mp, o.consumer.Spec.Autoscaler.Prometheus)
+
+	o.syncInstanceStates(managedInstances)
 
 	consumerGlobalCPUPoolAllocated.WithLabelValues(consumer.Name).Set(float64(o.usedResources.Cpu().MilliValue()))
 	consumerGlobalMemoryPoolAllocated.WithLabelValues(consumer.Name).Set(o.usedResources.Memory().AsApproximateFloat64())
 	return nil
 }
 
-func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
-	ctx := context.Background()
-	for consumerId := range o.missingIds {
-		newD, err := o.newDeploy(consumerId)
+func (o *operator) syncInstanceStates(managedDeploys appsv1.DeploymentList) {
+	var missing, paused, running, lagging int32
+	expectedInstances := int32(len(o.assignments))
+	trackedInstances := make(map[int32]bool)
+
+	for i := range managedDeploys.Items {
+		deploy := &managedDeploys.Items[i]
+		instanceId, err := helpers.ParseIntAnnotation(deploy.Annotations[ConsumerAnnotation])
 		if err != nil {
-			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
-			o.log.Error(err, "failed to create new deploy")
+			o.log.Error(err, "failed to parse annotation with instanceId. Old deploy?")
+			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
 			continue
 		}
-		o.setOwner(newD)
-		if err := cl.Create(ctx, newD); errors.IgnoreAlreadyExists(err) != nil {
+		parsedPartitions, err := helpers.ParsePartitionsListAnnotation(deploy.Annotations[PartitionAnnotation])
+		if err != nil {
+			o.log.Error(err, "failed to parse annotation with partition number.")
+			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
+			continue
+		}
+		forceMetricsUpdate(deploy, o.consumer.Name)
+		trackedInstances[instanceId] = true
+		if instanceId > expectedInstances-1 {
+			o.log.Info("deployment with instanceId out of range", "instanceId", instanceId)
+			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
+			continue
+		}
+		partitions := o.assignments[instanceId]
+		if !cmp.Equal(parsedPartitions, partitions) {
+			o.log.Info(
+				"partitions from annotation differ from those that should be assigned",
+				"expected", partitions,
+				"annotation", parsedPartitions,
+			)
+			o.toRemoveInstances = append(o.toRemoveInstances, deploy)
+			continue
+		}
+
+		// TODO: expose metric when deployment doesn't have an active pod for some time?
+		// if deploy.Status.Replicas == deploy.Status.UnavailableReplicas {
+		// 	o.log.Info("deployment is unable to create a replica")
+		// }
+		state := &InstanceState{
+			instanceId:   instanceId,
+			partitions:   partitions,
+			scalingState: deploy.Annotations[ScalingStatusAnnotation],
+		}
+		state.lastStateChange, _ = helpers.ParseTimeAnnotation(deploy.Annotations[ScalingStatusChangeAnnotation])
+		if _, ok := deploy.Annotations[VerboseLoggingAnnotation]; ok {
+			state.verbose = true
+		}
+
+		if deployIsPaused(deploy) {
+			paused++
+		} else {
+			running++
+		}
+
+		state.maxLag = o.getMaxLag(partitions)
+		if o.isLagging(state.maxLag) {
+			state.isLagging = true
+			lagging++
+		}
+		o.states[deploy.Name] = state
+
+		// count used resources by each container in deployment
+		claimedResources := sumAllRequestedResourcesInPod(deploy.Spec.Template.Spec.Containers)
+		o.usedResources = resourceListSum(o.usedResources, claimedResources)
+		state.currentResources = claimedResources
+
+		if deploy.Annotations[GenerationAnnotation] != o.observedGeneration() {
+			o.toUpdateInstances = append(o.toUpdateInstances, deploy)
+			continue
+		}
+		if o.metricsUpdated {
+			o.toEstimateInstances = append(o.toEstimateInstances, deploy)
+		}
+
+	}
+	for i := int32(0); i < expectedInstances; i++ {
+		if _, ok := trackedInstances[i]; !ok {
+			missing++
+			o.toCreateInstances = append(o.toCreateInstances, o.updateDeploy(o.constructDeploy(i)))
+		}
+	}
+
+	status := &o.consumer.Status
+	status.Running = helpers.Ptr2Int32(running)
+	status.Paused = helpers.Ptr2Int32(paused)
+	status.Lagging = helpers.Ptr2Int32(lagging)
+	status.Outdated = helpers.Ptr2Int32(int32(len(o.toUpdateInstances)))
+	status.Missing = helpers.Ptr2Int32(missing)
+	status.Redundant = helpers.Ptr2Int32(int32(len(o.toRemoveInstances)))
+	status.Expected = &expectedInstances
+
+	name := o.consumer.Name
+	consumerStatus.WithLabelValues(name, "running").Set(float64(*status.Running))
+	consumerStatus.WithLabelValues(name, "paused").Set(float64(*status.Paused))
+	consumerStatus.WithLabelValues(name, "lagging").Set(float64(*status.Lagging))
+	consumerStatus.WithLabelValues(name, "outdated").Set(float64(*status.Outdated))
+	consumerStatus.WithLabelValues(name, "expected").Set(float64(*status.Expected))
+	consumerStatus.WithLabelValues(name, "missing").Set(float64(*status.Missing))
+	consumerStatus.WithLabelValues(name, "redundant").Set(float64(*status.Redundant))
+}
+
+func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
+	ctx := context.Background()
+	for _, deploy := range o.toCreateInstances {
+		o.setOwner(deploy)
+		if err := cl.Create(ctx, deploy); errors.IgnoreAlreadyExists(err) != nil {
 			deploymentsCreateErrors.WithLabelValues(req.Name).Inc()
 			o.log.Error(err, "unable to create new Deployment", "deployment", deploy.Name)
 			continue
@@ -130,7 +223,6 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 		deploymentsCreateTotal.WithLabelValues(req.Name).Inc()
 	}
 
-	var deleted int
 	for _, deploy := range o.toRemoveInstances {
 		deploymentStatus.WithLabelValues(o.consumer.Name, deploy.Name).Set(0)
 		if err := cl.Delete(ctx, deploy); errors.IgnoreNotFound(err) != nil {
@@ -138,20 +230,15 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 			deploymentsDeleteErrors.WithLabelValues(req.Name).Inc()
 			continue
 		}
-		deleted += 1
+		o.log.Info("deleting the deployment", "deployment", deploy.Name)
 		deploymentsDeleteTotal.WithLabelValues(req.Name).Inc()
-	}
-	if deleted > 0 {
-		o.log.Info("deployments were deleted", "count", deleted)
 	}
 
 	for _, origDeploy := range o.toUpdateInstances {
-		deploy, err := o.updateDeploy(origDeploy.DeepCopy())
-		if err != nil {
-			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
-			o.log.Error(err, "failed to update deploy")
-			continue
+		if o.shouldLog(origDeploy.Name) {
+			o.log.Info("deployment needs to updated", "deployment", origDeploy.Name)
 		}
+		deploy := o.updateDeploy(origDeploy.DeepCopy())
 		o.setOwner(deploy)
 		if err := cl.Update(ctx, deploy); errors.IgnoreConflict(err) != nil {
 			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
@@ -162,6 +249,9 @@ func (o *operator) reconcile(cl client.Client, req ctrl.Request) error {
 	}
 
 	for _, origDeploy := range o.toEstimateInstances {
+		if o.shouldLog(origDeploy.Name) {
+			o.log.Info("deployment needs to resource estimation", "deployment", origDeploy.Name)
+		}
 		deploy, needsUpdate, err := o.estimateDeploy(origDeploy.DeepCopy())
 		if err != nil {
 			deploymentsUpdateErrors.WithLabelValues(req.Name).Inc()
@@ -235,115 +325,9 @@ func (o *operator) newMetricsProvider() providers.MetricsProvider {
 	}
 }
 
-func (o *operator) syncDeploys(managedDeploys appsv1.DeploymentList) {
-	// TODO: check that maximum partition is not greater than configured in the spec and ?warn?change?
-	// TODO: consider making `numPartitions` optional and just get it from the production rate metrics
-	//		* upside: no need to manual intervention when number of kafka partitions increases
-	//		* downside: if prometheus is unavailable, we'll be unable to start consumption
-	//		* unknown: is it possible to get inconsistent data from Prometheus between syncs? (100,100,95,100)
-	buckets := int32(len(o.assignments))
-	trackedConsumers := make(map[int32]bool)
-	for i := range managedDeploys.Items {
-		deploy := &managedDeploys.Items[i]
-		consumerId, err := helpers.ParseIntAnnotation(deploy.Annotations[ConsumerAnnotation])
-		if err != nil {
-			o.log.Error(err, "failed to parse annotation with consumerId. Old deploy?")
-			o.toRemoveInstances[deploy.Name] = deploy
-			continue
-		}
-		parsedPartitions, err := helpers.ParsePartitionsListAnnotation(deploy.Annotations[PartitionAnnotation])
-		if err != nil {
-			o.log.Error(err, "failed to parse annotation with partition number.")
-			o.toRemoveInstances[deploy.Name] = deploy
-			continue
-		}
-		updateDeploymentMetrics(deploy, o.consumer.Name)
-		trackedConsumers[consumerId] = true
-		if consumerId > buckets-1 {
-			o.log.Info("deployment with consumerId out of range", "consumerId", consumerId)
-			o.toRemoveInstances[deploy.Name] = deploy
-			continue
-		}
-		partitions := o.assignments[consumerId]
-		if !cmp.Equal(parsedPartitions, partitions) {
-			o.log.Info(
-				"partitions from annotation differ from those that should be assigned",
-				"expected", partitions,
-				"annotation", parsedPartitions,
-			)
-			o.toRemoveInstances[deploy.Name] = deploy
-			continue
-		}
-		for _, partition := range partitions {
-			lag := o.mp.GetLagByPartition(partition)
-			o.log.V(1).Info("lag per partition", "partition", partition, "lag", lag)
-
-			if deployIsPaused(deploy) {
-				o.pausedIds[consumerId] = true
-				continue
-			} else {
-				o.runningIds[consumerId] = true
-			}
-			if o.isLagging(lag) {
-				o.laggingIds[consumerId] = true
-			}
-		}
-		// count used resources by each container in deployment
-		for _, container := range deploy.Spec.Template.Spec.Containers {
-			r := container.Resources.Requests
-			o.usedResources.Cpu().Add(*r.Cpu())
-			o.usedResources.Memory().Add(*r.Memory())
-		}
-
-		if deploy.Annotations[GenerationAnnotation] != o.observedGeneration() {
-			o.toUpdateInstances[consumerId] = deploy
-			continue
-		}
-		if o.metricsUpdated {
-			o.toEstimateInstances[consumerId] = deploy
-		}
-	}
-	for i := int32(0); i < buckets; i++ {
-		if _, ok := trackedConsumers[i]; !ok {
-			o.missingIds[i] = true
-		}
-	}
-
-	status := &o.consumer.Status
-	status.Running = helpers.Ptr2Int32(int32(len(o.runningIds)))
-	status.Paused = helpers.Ptr2Int32(int32(len(o.pausedIds)))
-	status.Lagging = helpers.Ptr2Int32(int32(len(o.laggingIds)))
-	status.Outdated = helpers.Ptr2Int32(int32(len(o.toUpdateInstances)))
-	status.Missing = helpers.Ptr2Int32(int32(len(o.missingIds)))
-	status.Redundant = helpers.Ptr2Int32(int32(len(o.toRemoveInstances)))
-	status.Expected = &buckets
-
-	name := o.consumer.Name
-	consumerStatus.WithLabelValues(name, "running").Set(float64(*status.Running))
-	consumerStatus.WithLabelValues(name, "paused").Set(float64(*status.Paused))
-	consumerStatus.WithLabelValues(name, "lagging").Set(float64(*status.Lagging))
-	consumerStatus.WithLabelValues(name, "outdated").Set(float64(*status.Outdated))
-	consumerStatus.WithLabelValues(name, "expected").Set(float64(*status.Expected))
-	consumerStatus.WithLabelValues(name, "missing").Set(float64(*status.Missing))
-	consumerStatus.WithLabelValues(name, "redundant").Set(float64(*status.Redundant))
-
-	o.log.V(1).Info(
-		"deployments count",
-		"metricsUpdated", o.metricsUpdated,
-		"expected", o.consumer.Spec.NumPartitions,
-		"running", status.Running,
-		"paused", status.Paused,
-		"missing", status.Missing,
-		"lagging", status.Lagging,
-		"toUpdate", status.Outdated,
-		"redundant", status.Redundant,
-		"toEstimate", len(o.toEstimateInstances),
-	)
-}
-
-// updateDeploymentMetrics updates deployment metrics to make sure that we do not have
+// forceMetricsUpdate updates deployment metrics to make sure that we do not have
 // missing or stale metrics between app restarts.
-func updateDeploymentMetrics(deploy *appsv1.Deployment, consumerName string) {
+func forceMetricsUpdate(deploy *appsv1.Deployment, consumerName string) {
 	status := deploy.Annotations[ScalingStatusAnnotation]
 	ds := float64(instanceStatusToInt(status))
 	deploymentStatus.WithLabelValues(consumerName, deploy.Name).Set(ds)
@@ -368,49 +352,37 @@ func (o *operator) setOwner(deploy *appsv1.Deployment) {
 	}
 }
 
-func (o *operator) newDeploy(consumerId int32) (*appsv1.Deployment, error) {
-	deploy := o.constructDeploy(consumerId)
-	return o.updateDeploy(deploy)
-}
-
 func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, bool, error) {
-	// TODO: compare with the minimum of (scaleUpPendingPeriod, scaleDownPendingPeriod)
-	if o.clock.Since(o.consumer.Status.LastSyncTime.Time) >= o.scaleUpPendingPeriod() {
+	if o.clock.Since(o.consumer.Status.LastSyncTime.Time) >= minDuration(o.scaleUpPendingPeriod(), o.scaleDownPendingPeriod()) {
+		o.log.Info(
+			"WARNING: Long time since the last metrics update",
+			"lastSyncTime", o.consumer.Status.LastSyncTime.Time,
+		)
 		return deploy, false, nil
 	}
-	consumerId, err := helpers.ParseIntAnnotation(deploy.Annotations[ConsumerAnnotation])
-	if err != nil {
-		return nil, false, err
-	}
-	currentState := deploy.Annotations[ScalingStatusAnnotation]
-	lastStateChange, err := helpers.ParseTimeAnnotation(deploy.Annotations[ScalingStatusChangeAnnotation])
-	if err != nil {
-		return nil, false, err
-	}
+	state := o.states[deploy.Name]
+	instanceId := state.instanceId
+	isLagging := state.isLagging
+	currentState := state.scalingState
+	lastStateChange := state.lastStateChange
 
-	partitions := o.assignments[consumerId]
-	var isLagging bool
-	for _, p := range partitions {
-		lag := o.mp.GetLagByPartition(p)
-		if o.isLagging(lag) {
-			isLagging = true
-			break
-		}
-	}
 	needsUpdate := false
 	for i := range deploy.Spec.Template.Spec.Containers {
 		isChangedAnnotations := false
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		resources, underProvision := o.updateResources(container, partitions)
+		resources, underProvision := o.estimateResources(container, state, true)
 		cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, *resources)
+		var logHeadline string
 		switch cmpRes {
 		case cmpResourcesEq:
 			isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
+			logHeadline = "No action. Same amount of resources estimated"
 		case cmpResourcesGt:
 			if isLagging {
 				switch currentState {
 				case InstanceStatusRunning:
 					isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleUp)
+					logHeadline = fmt.Sprintf("PENDING_SCALE_UP, as more resources estimated with lag present. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
 				case InstanceStatusPendingScaleUp:
 					if o.scalingUpAllowed(lastStateChange, currentState) {
 						o.updateScaleAnnotations(deploy, underProvision)
@@ -419,18 +391,25 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 							container.Env,
 							&container.Resources,
 							o.consumer.Spec.PartitionEnvKey,
-							partitions,
-							int(consumerId),
+							state.partitions,
+							int(instanceId),
 							int(*o.consumer.Spec.NumPartitions),
 							len(o.assignments),
 						)
 						needsUpdate = true
+						logHeadline = fmt.Sprintf("SCALING UP as more resources estimated and scaling action is allowed. cpu[current=%v, ideal=%v, ilimited=%v, glimited=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu(), state.iLimitResources.Cpu(), state.gLimitResources.Cpu())
 					}
+					logHeadline = fmt.Sprintf("No action. More resources estimated, but scaling action is not allowed for another %v. cpu[current=%v, ideal=%v]", o.scaleUpPendingPeriod()-o.clock.Since(lastStateChange), state.currentResources.Cpu(), state.estimatedResources.Cpu())
 				case InstanceStatusSaturated:
 					isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
+					logHeadline = fmt.Sprintf("No action. More resources estimated, but instance is SATURATED. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
 				}
 			} else {
-				isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
+				// XXX: changing annotation here doesn't make any sense.
+				// current state is: pod is running, no lag detected, but estimations thinks that it needs more resources
+				// this leads to changing state from RUNNING to SATURATED ?!
+				// isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
+				logHeadline = fmt.Sprintf("No action. More resources estimated, but no lag detected. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
 			}
 		case cmpResourcesLt:
 			if !isLagging {
@@ -441,72 +420,74 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 						container.Env,
 						&container.Resources,
 						o.consumer.Spec.PartitionEnvKey,
-						partitions,
-						int(consumerId),
+						state.partitions,
+						int(instanceId),
 						int(*o.consumer.Spec.NumPartitions),
 						len(o.assignments),
 					)
 					needsUpdate = true
+					logHeadline = fmt.Sprintf("SCALING DOWN as less resources estimated and scaling action is allowed. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
 				} else {
 					isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleDown)
+					logHeadline = fmt.Sprintf("PENDING_SCALE_DOWN. Less resources estimated, but scaling action is not allowed for another %v. cpu[current=%v, ideal=%v]", o.scaleDownPendingPeriod()-o.clock.Since(lastStateChange), state.currentResources.Cpu(), state.estimatedResources.Cpu())
 				}
 			} else {
 				isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
+				logHeadline = fmt.Sprintf("No action. Less resources estimated, but lag is still present. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
 			}
 		}
-		o.log.Info(
-			"cmp resource",
-			"consumerId", consumerId,
-			"partitions", partitions,
-			"container", container.Name,
-			"cmp", cmpRes,
-			"currentState", currentState,
-			"scalingUpAllowed", o.scalingUpAllowed(lastStateChange, currentState),
-			"scalingDownAllowed", o.scalingDownAllowed(lastStateChange, currentState),
-			"isLagging", isLagging,
-			"saturationLevel", underProvision,
-		)
 		if isChangedAnnotations {
 			needsUpdate = true
 		}
+		o.log.Info(
+			logHeadline,
+			"instanceId", instanceId,
+			"partitions", state.partitions,
+			"container", container.Name,
+			"oldStatus", currentState,
+			"newStatus", deploy.Annotations[ScalingStatusAnnotation],
+			"isChangedAnnotations", isChangedAnnotations,
+			"maxLag", o.getMaxLag(state.partitions),
+			"isLagging", isLagging,
+			"cpu.shortage", underProvision.Cpu(),
+			"ram.shortage", underProvision.Memory(),
+		)
 	}
 	return deploy, needsUpdate, nil
 }
 
-func (o *operator) updateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment, error) {
-	consumerId, err := helpers.ParseIntAnnotation(deploy.Annotations[ConsumerAnnotation])
-	if err != nil {
-		return nil, err
-	}
-	partitions := o.assignments[consumerId]
+func (o *operator) updateDeploy(deploy *appsv1.Deployment) *appsv1.Deployment {
+	state := o.states[deploy.Name]
+	instanceId := state.instanceId
+	partitions := o.assignments[instanceId]
 	deploy.Annotations[GenerationAnnotation] = o.observedGeneration()
-	deploy.Spec = o.consumer.Spec.DeploymentTemplate
+	deploy.Spec = *o.consumer.Spec.DeploymentTemplate.DeepCopy()
+	var shortage corev1.ResourceList
 	for i := range deploy.Spec.Template.Spec.Containers {
 		var resources *corev1.ResourceRequirements
-		var underProvision int64
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		if container.Resources.Requests.Cpu().IsZero() {
-			resources, underProvision = o.allocateResources(container, partitions)
-		} else {
-			resources, underProvision = o.updateResources(container, partitions)
-		}
-		o.updateScaleAnnotations(deploy, underProvision)
+		// GlobalLimit should be ignored when new deployment is being created.
+		// otherwise we won't be able to set limits and/or create it.
+		respectGlobalLimit := !container.Resources.Requests.Cpu().IsZero()
+		resources, resShortage := o.estimateResources(container, state, respectGlobalLimit)
+		shortage = *resourceListSum(&shortage, resShortage)
 		container.Resources = *resources
 		container.Env = helpers.PopulateEnv(
 			container.Env,
 			&container.Resources,
 			o.consumer.Spec.PartitionEnvKey,
 			partitions,
-			int(consumerId),
+			int(instanceId),
 			int(*o.consumer.Spec.NumPartitions),
 			len(o.assignments),
 		)
 	}
-	return deploy, nil
+	o.updateScaleAnnotations(deploy, &shortage)
+	return deploy
 }
 
-func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
-	partitionIds := o.assignments[consumerId]
+func (o *operator) constructDeploy(instanceId int32) *appsv1.Deployment {
+	partitionIds := o.assignments[instanceId]
 	deployLabels := map[string]string{
 		"app":        helpers.EnsureValidLabelValue(o.consumer.Spec.Name),
 		"controller": helpers.EnsureValidLabelValue(o.consumer.Name),
@@ -518,15 +499,24 @@ func (o *operator) constructDeploy(consumerId int32) *appsv1.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:      deployLabels,
 			Annotations: deployAnnotations,
-			Name:        fmt.Sprintf("%s-%d", o.consumer.Spec.Name, consumerId),
+			Name:        fmt.Sprintf("%s-%d", o.consumer.Spec.Name, instanceId),
 			Namespace:   o.consumer.Spec.Namespace,
 		},
 		Spec: o.consumer.Spec.DeploymentTemplate,
 	}
 	deploy.Annotations[PartitionAnnotation] = strings.Join(helpers.Int2Str(partitionIds), ",")
-	deploy.Annotations[ConsumerAnnotation] = strconv.Itoa(int(consumerId))
+	deploy.Annotations[ConsumerAnnotation] = strconv.Itoa(int(instanceId))
 	deploy.Annotations[GenerationAnnotation] = o.observedGeneration()
 	o.updateScalingStatus(deploy, InstanceStatusRunning)
+
+	o.states[deploy.Name] = &InstanceState{
+		instanceId:       instanceId,
+		partitions:       o.assignments[instanceId],
+		currentResources: &corev1.ResourceList{corev1.ResourceCPU: resource.MustParse("0"), corev1.ResourceMemory: resource.MustParse("0")},
+		scalingState:     InstanceStatusRunning,
+		verbose:          false,
+	}
+
 	return deploy
 }
 
@@ -541,7 +531,7 @@ func (o *operator) getMaxLag(partitions []int32) time.Duration {
 	return maxLag
 }
 
-func (o *operator) isCritReached(maxLag time.Duration) bool {
+func (o *operator) isCriticalLagReached(maxLag time.Duration) bool {
 	crit := o.consumer.Spec.Autoscaler.Prometheus.CriticalLag
 	// critical lag is not set in the spec
 	if crit == nil {
@@ -554,39 +544,51 @@ func (o *operator) isCritReached(maxLag time.Duration) bool {
 	return maxLag.Seconds() >= crit.Seconds()
 }
 
-func (o *operator) allocateResources(container *corev1.Container, partitions []int32) (*corev1.ResourceRequirements, int64) {
-	var estimates *corev1.ResourceRequirements
+// estimateResources calculates amount of resources in 3 steps
+// 1. calculate ideal amount of resources
+// 2. apply instance limiter
+// 3. apply global limiter
+// returns allowed resource requirements and resource shortage if any
+func (o *operator) estimateResources(container *corev1.Container, state *InstanceState, applyGlobalLimiter bool) (*corev1.ResourceRequirements, *corev1.ResourceList) {
+	var estimatedResources *corev1.ResourceRequirements
 	// Respect criticalLag value. If lag reached criticalLag, allocate maximum allowed resources
-	if o.isCritReached(o.getMaxLag(partitions)) {
+	if o.isCriticalLagReached(o.getMaxLag(state.partitions)) {
+		state.isLagCritical = true
 		maxAllowed := o.limiter.MaxAllowed(container.Name)
-		estimates = &corev1.ResourceRequirements{
-			Limits:   *maxAllowed,
-			Requests: *maxAllowed,
-		}
+		estimatedResources = &corev1.ResourceRequirements{Limits: *maxAllowed, Requests: *maxAllowed}
 	}
-	if estimates == nil {
-		estimates = o.predictor.Estimate(container.Name, partitions)
+	if estimatedResources == nil {
+		estimatedResources = o.predictor.Estimate(container.Name, state.partitions)
+	}
+	state.estimatedResources = &estimatedResources.Requests
+	iLimitResources := o.limiter.ApplyLimits(container.Name, estimatedResources)
+
+	state.iLimitResources = &iLimitResources.Requests
+	resDiff := resourceListDiff(estimatedResources.Requests, iLimitResources.Requests)
+	if !applyGlobalLimiter {
+		return iLimitResources, &resDiff
 	}
 
-	resources := o.limiter.ApplyLimits(container.Name, estimates)
-	reqDiff := estimates.Requests.Cpu().MilliValue() - resources.Requests.Cpu().MilliValue()
-	return resources, reqDiff
-}
-
-func (o *operator) updateResources(container *corev1.Container, partitions []int32) (*corev1.ResourceRequirements, int64) {
-	estimatedResources, reqDiff := o.allocateResources(container, partitions)
 	currentResources := container.Resources.DeepCopy()
-
-	request := resourceRequirementsDiff(estimatedResources, currentResources)
-	allowedResources := o.globalLimiter.ApplyLimits("", request)
+	resourcesToRequest := resourceRequirementsDiff(iLimitResources, currentResources)
+	allocatableResources := o.globalLimiter.ApplyLimits("", resourcesToRequest)
+	state.gLimitResources = &allocatableResources.Requests
+	if !resourcesToRequest.Requests.Cpu().IsZero() && allocatableResources.Requests.Cpu().IsZero() {
+		o.log.Info("CPU global limit is reached", " instanceId", state.instanceId)
+	}
+	if !resourcesToRequest.Requests.Memory().IsZero() && allocatableResources.Requests.Memory().IsZero() {
+		o.log.Info("Memory global limit is reached", "instanceId", state.instanceId)
+	}
 	// sum-up current and requested resources
-	limitedResources := resourceRequirementsSum(currentResources, allowedResources)
-	globalDiff := request.Requests.Cpu().MilliValue() - allowedResources.Requests.Cpu().MilliValue()
-	return limitedResources, reqDiff + globalDiff
+	resourcesAfterLimitApplied := resourceRequirementsSum(currentResources, allocatableResources)
+	globalShortage := resourceListDiff(resourcesToRequest.Requests, allocatableResources.Requests)
+
+	return resourcesAfterLimitApplied, resourceListSum(&resDiff, &globalShortage)
 }
 
-func (o *operator) updateScaleAnnotations(d *appsv1.Deployment, underProvision int64) bool {
-	if underProvision > 0 {
+func (o *operator) updateScaleAnnotations(d *appsv1.Deployment, resourceShortage *corev1.ResourceList) bool {
+	if resourceShortage.Cpu().MilliValue() > 0 {
+		underProvision := resourceShortage.Cpu().MilliValue()
 		oldSaturation := d.Annotations[CPUSaturationLevel]
 		d.Annotations[CPUSaturationLevel] = strconv.Itoa(int(underProvision))
 		deploymentSaturation.WithLabelValues(o.consumer.Name, d.Name).Set(float64(underProvision))
@@ -630,4 +632,14 @@ func (o *operator) scalingUpAllowed(lastChange time.Time, currentState string) b
 
 func (o *operator) scalingDownAllowed(lastChange time.Time, currentState string) bool {
 	return currentState == InstanceStatusPendingScaleDown && o.clock.Since(lastChange) >= o.scaleDownPendingPeriod()
+}
+
+func (o *operator) shouldLog(deploymentName string) bool {
+	if s, ok := o.states[deploymentName]; ok {
+		return s.verbose
+	}
+	if _, ok := o.consumer.Annotations[VerboseLoggingAnnotation]; ok {
+		return true
+	}
+	return false
 }

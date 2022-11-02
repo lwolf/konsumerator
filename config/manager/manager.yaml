@@ -42,6 +42,9 @@ spec:
       - name: manager
         args:
         - --namespace=konsumerator-system
+        - --zap-encoder=console
+        - --zap-log-level=debug
+        - --zap-time-encoding=iso8601
         image: controller:latest
         resources:
           limits:

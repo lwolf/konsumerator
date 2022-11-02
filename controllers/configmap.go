@@ -34,9 +34,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	"github.com/lwolf/konsumerator/pkg/errors"
-
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
+	"github.com/lwolf/konsumerator/pkg/errors"
 )
 
 const (
@@ -156,7 +155,18 @@ func (r *ConfigMapReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		log.V(1).Info("no change detected...")
 		return result, nil
 	}
-
+	o.log.Info(
+		"deployments count",
+		"metricsUpdated", o.metricsUpdated,
+		"expected", o.consumer.Spec.NumPartitions,
+		"running", consumer.Status.Running,
+		"paused", consumer.Status.Paused,
+		"missing", consumer.Status.Missing,
+		"lagging", consumer.Status.Lagging,
+		"toUpdate", consumer.Status.Outdated,
+		"redundant", consumer.Status.Redundant,
+		"toEstimate", len(o.toEstimateInstances),
+	)
 	start = time.Now()
 	err = UpdateStatusAnnotations(cm, &consumer.Status)
 	if err != nil {

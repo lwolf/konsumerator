@@ -19,19 +19,13 @@ import (
 // TODO: could be replaced with resourceRequirementsDiff
 // turned to Neg()
 func resourceRequirementsSum(a, b *corev1.ResourceRequirements) *corev1.ResourceRequirements {
-	cpu := a.Requests.Cpu()
-	mem := a.Requests.Memory()
-	cpu.Add(*b.Requests.Cpu())
-	mem.Add(*b.Requests.Memory())
+	sum := resourceListSum(&a.Requests, &b.Requests)
 
 	return &corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    *cpu,
-			corev1.ResourceMemory: *mem,
-		},
+		Requests: *sum,
 		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    roundQuantity(cpu),
-			corev1.ResourceMemory: *mem,
+			corev1.ResourceCPU:    roundQuantity(sum.Cpu()),
+			corev1.ResourceMemory: *sum.Memory(),
 		},
 	}
 }
@@ -54,14 +48,25 @@ func roundQuantity(q *resource.Quantity) resource.Quantity {
 	return *resource.NewQuantity(rounded, resource.DecimalSI)
 }
 
-func resourceListDiff(a, b corev1.ResourceList) corev1.ResourceList {
+func resourceListSum(a, b *corev1.ResourceList) *corev1.ResourceList {
 	cpu := a.Cpu()
 	mem := a.Memory()
+	cpu.Add(*b.Cpu())
+	mem.Add(*b.Memory())
+	return &corev1.ResourceList{
+		corev1.ResourceCPU:    *cpu,
+		corev1.ResourceMemory: *mem,
+	}
+}
+
+func resourceListDiff(a, b corev1.ResourceList) corev1.ResourceList {
+	cpu := a.Cpu().DeepCopy()
+	mem := a.Memory().DeepCopy()
 	cpu.Sub(*b.Cpu())
 	mem.Sub(*b.Memory())
 	return corev1.ResourceList{
-		corev1.ResourceCPU:    *cpu,
-		corev1.ResourceMemory: *mem,
+		corev1.ResourceCPU:    cpu,
+		corev1.ResourceMemory: mem,
 	}
 }
 
@@ -174,4 +179,22 @@ func (am annotationMngr) GetInt32(k string) *int32 {
 		return helpers.Ptr2Int32(0)
 	}
 	return helpers.Ptr2Int32(int32(i))
+}
+
+func minDuration(a, b time.Duration) time.Duration {
+	if a <= b {
+		return a
+	}
+	return b
+}
+
+func sumAllRequestedResourcesInPod(containerSpecs []corev1.Container) *corev1.ResourceList {
+	result := corev1.ResourceList{
+		corev1.ResourceCPU:    resource.MustParse("0"),
+		corev1.ResourceMemory: resource.MustParse("0"),
+	}
+	for _, container := range containerSpecs {
+		result = *resourceListSum(&result, &container.Resources.Requests)
+	}
+	return &result
 }

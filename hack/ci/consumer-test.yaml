@@ -28,8 +28,7 @@ spec:
       # give maximum allowed resource to that deployment
       criticalLag: "60m"
       # preferable recovery time. During lag, if resources are
-      # available, consumer will be scaled up to recover during
-      # during this time.
+      # available, consumer will be scaled up to recover during this time.
       recoveryTime: "30m"
       # prometheus addresses to query
       address:

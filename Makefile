@@ -175,3 +175,6 @@ kind-apply: ## Deploy test application into KIND cluster
 	$(KUBECTL) --context=kind-konsumerator apply -f ./hack/ci/konsumerator-dashboard.yaml -n kube-system
 	$(KUBECTL) --context=kind-konsumerator apply -f ./hack/ci/konsumerator-overview-dashboard.yaml -n kube-system
 	$(KUBECTL) --context=kind-konsumerator apply -f ./hack/ci/grafana.yaml -n kube-system
+
+.PHONY: kind-redeploy
+kind-redeploy: docker-build kind-load-image deploy

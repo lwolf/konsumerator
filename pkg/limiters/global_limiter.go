@@ -74,11 +74,9 @@ func (l *GlobalLimiter) ApplyLimits(_ string, resources *corev1.ResourceRequirem
 	l.Lock()
 	defer l.Unlock()
 
-	requestCPU := resources.Requests.Cpu()
-	requestMem := resources.Requests.Memory()
+	cpu := l.deductCPU(resources.Requests.Cpu())
+	mem := l.deductMem(resources.Requests.Memory())
 
-	cpu := l.deductCPU(requestCPU)
-	mem := l.deductMem(requestMem)
 	return &corev1.ResourceRequirements{
 		Requests: corev1.ResourceList{
 			corev1.ResourceCPU:    *resource.NewMilliQuantity(cpu.MilliValue(), resource.DecimalSI),

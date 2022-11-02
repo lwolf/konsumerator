@@ -67,9 +67,18 @@ var (
 		},
 		[]string{"consumer", "addr"},
 	)
+	zeroValuesTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "zero_values_total",
+			Help:      "Total number of estimation queries that returned 0 - NO DATA(metrics are missing, not even a cache)",
+		},
+		[]string{"consumer", "partitions", "type"},
+	)
 )
 
 func initMetrics() {
 	metrics.Registry.MustRegister(requestsTotal, requestErrors, requestDuration,
-		subRequestTotal, subRequestErrors, subRequestDuration)
+		subRequestTotal, subRequestErrors, subRequestDuration, zeroValuesTotal)
 }
