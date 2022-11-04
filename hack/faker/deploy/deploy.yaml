@@ -28,8 +28,8 @@ spec:
           - producer
           - --redisAddr=redis:6379
           - --port=9000
-          - --num-partitions=10
-          - --base-rate=40000
+          - --num-partitions=4
+          - --base-rate=4000
           - --full-period=43200 # 12 hour cycle
         name: faker
         ports:

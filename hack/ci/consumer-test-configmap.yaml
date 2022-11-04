@@ -6,7 +6,7 @@ metadata:
     konsumerator.lwolf.org/managed: "true"
 data:
   consumer.yaml: |
-    numPartitions: 10
+    numPartitions: 4
     name: "test-consumer"
     namespace: "konsumerator-system"
     autoscaler:
