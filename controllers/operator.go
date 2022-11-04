@@ -370,19 +370,20 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 	for i := range deploy.Spec.Template.Spec.Containers {
 		isChangedAnnotations := false
 		container := &deploy.Spec.Template.Spec.Containers[i]
-		resources, underProvision := o.estimateResources(container, state, true)
+		estimates := o.estimateResources(container, state)
+		resources, underProvision := o.applyResourcesLimiters(container, estimates, state, true)
 		cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, *resources)
 		var logHeadline string
 		switch cmpRes {
 		case cmpResourcesEq:
 			isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
-			logHeadline = "No action. Same amount of resources estimated"
+			logHeadline = fmt.Sprintf("No action. Same amount of resources estimated")
 		case cmpResourcesGt:
 			if isLagging {
 				switch currentState {
 				case InstanceStatusRunning:
 					isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleUp)
-					logHeadline = fmt.Sprintf("PENDING_SCALE_UP, as more resources estimated with lag present. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
+					logHeadline = fmt.Sprintf("PENDING_SCALE_UP, as more resources estimated with lag present")
 				case InstanceStatusPendingScaleUp:
 					if o.scalingUpAllowed(lastStateChange, currentState) {
 						o.updateScaleAnnotations(deploy, underProvision)
@@ -397,19 +398,19 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 							len(o.assignments),
 						)
 						needsUpdate = true
-						logHeadline = fmt.Sprintf("SCALING UP as more resources estimated and scaling action is allowed. cpu[current=%v, ideal=%v, ilimited=%v, glimited=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu(), state.iLimitResources.Cpu(), state.gLimitResources.Cpu())
+						logHeadline = fmt.Sprintf("SCALING UP as more resources estimated and scaling action is allowed")
 					}
-					logHeadline = fmt.Sprintf("No action. More resources estimated, but scaling action is not allowed for another %v. cpu[current=%v, ideal=%v]", o.scaleUpPendingPeriod()-o.clock.Since(lastStateChange), state.currentResources.Cpu(), state.estimatedResources.Cpu())
+					logHeadline = fmt.Sprintf("No action. More resources estimated, but scaling action is not allowed for another %v", o.scaleUpPendingPeriod()-o.clock.Since(lastStateChange))
 				case InstanceStatusSaturated:
 					isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
-					logHeadline = fmt.Sprintf("No action. More resources estimated, but instance is SATURATED. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
+					logHeadline = fmt.Sprintf("No action. More resources estimated, but instance is SATURATED")
 				}
 			} else {
 				// XXX: changing annotation here doesn't make any sense.
 				// current state is: pod is running, no lag detected, but estimations thinks that it needs more resources
 				// this leads to changing state from RUNNING to SATURATED ?!
 				// isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
-				logHeadline = fmt.Sprintf("No action. More resources estimated, but no lag detected. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
+				logHeadline = fmt.Sprintf("No action. More resources estimated, but no lag detected")
 			}
 		case cmpResourcesLt:
 			if !isLagging {
@@ -426,21 +427,21 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 						len(o.assignments),
 					)
 					needsUpdate = true
-					logHeadline = fmt.Sprintf("SCALING DOWN as less resources estimated and scaling action is allowed. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
+					logHeadline = fmt.Sprintf("SCALING DOWN as less resources estimated and scaling action is allowed")
 				} else {
 					isChangedAnnotations = o.updateScalingStatus(deploy, InstanceStatusPendingScaleDown)
-					logHeadline = fmt.Sprintf("PENDING_SCALE_DOWN. Less resources estimated, but scaling action is not allowed for another %v. cpu[current=%v, ideal=%v]", o.scaleDownPendingPeriod()-o.clock.Since(lastStateChange), state.currentResources.Cpu(), state.estimatedResources.Cpu())
+					logHeadline = fmt.Sprintf("PENDING_SCALE_DOWN. Less resources estimated, but scaling action is not allowed for another %v", o.scaleDownPendingPeriod()-o.clock.Since(lastStateChange))
 				}
 			} else {
 				isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
-				logHeadline = fmt.Sprintf("No action. Less resources estimated, but lag is still present. cpu[current=%v, ideal=%v]", state.currentResources.Cpu(), state.estimatedResources.Cpu())
+				logHeadline = fmt.Sprintf("No action. Less resources estimated, but lag is still present")
 			}
 		}
 		if isChangedAnnotations {
 			needsUpdate = true
 		}
 		o.log.Info(
-			logHeadline,
+			fmt.Sprintf("%s. cpu[current=%v, ideal=%v, ilimited=%v, glimited=%v]", logHeadline, state.currentResources.Cpu(), state.estimatedResources.Cpu(), state.iLimitResources.Cpu(), state.gLimitResources.Cpu()),
 			"instanceId", instanceId,
 			"partitions", state.partitions,
 			"container", container.Name,
@@ -448,6 +449,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 			"newStatus", deploy.Annotations[ScalingStatusAnnotation],
 			"isChangedAnnotations", isChangedAnnotations,
 			"maxLag", o.getMaxLag(state.partitions),
+			"isCritLag", state.isLagCritical,
 			"isLagging", isLagging,
 			"cpu.shortage", underProvision.Cpu(),
 			"ram.shortage", underProvision.Memory(),
@@ -469,7 +471,8 @@ func (o *operator) updateDeploy(deploy *appsv1.Deployment) *appsv1.Deployment {
 		// GlobalLimit should be ignored when new deployment is being created.
 		// otherwise we won't be able to set limits and/or create it.
 		respectGlobalLimit := !container.Resources.Requests.Cpu().IsZero()
-		resources, resShortage := o.estimateResources(container, state, respectGlobalLimit)
+		estimates := o.estimateResources(container, state)
+		resources, resShortage := o.applyResourcesLimiters(container, estimates, state, respectGlobalLimit)
 		shortage = *resourceListSum(&shortage, resShortage)
 		container.Resources = *resources
 		container.Env = helpers.PopulateEnv(
@@ -544,27 +547,26 @@ func (o *operator) isCriticalLagReached(maxLag time.Duration) bool {
 	return maxLag.Seconds() >= crit.Seconds()
 }
 
-// estimateResources calculates amount of resources in 3 steps
-// 1. calculate ideal amount of resources
-// 2. apply instance limiter
-// 3. apply global limiter
+func (o *operator) estimateResources(container *corev1.Container, state *InstanceState) *corev1.ResourceRequirements {
+	estimatedResources := o.predictor.Estimate(container.Name, state.partitions)
+	state.estimatedResources = &estimatedResources.Requests
+	return estimatedResources
+}
+
+// applyResourcesLimiters applies both limiters (local and global)
 // returns allowed resource requirements and resource shortage if any
-func (o *operator) estimateResources(container *corev1.Container, state *InstanceState, applyGlobalLimiter bool) (*corev1.ResourceRequirements, *corev1.ResourceList) {
-	var estimatedResources *corev1.ResourceRequirements
+func (o *operator) applyResourcesLimiters(container *corev1.Container, estimates *corev1.ResourceRequirements, state *InstanceState, applyGlobalLimiter bool) (*corev1.ResourceRequirements, *corev1.ResourceList) {
+	var iLimitResources *corev1.ResourceRequirements
 	// Respect criticalLag value. If lag reached criticalLag, allocate maximum allowed resources
 	if o.isCriticalLagReached(o.getMaxLag(state.partitions)) {
 		state.isLagCritical = true
 		maxAllowed := o.limiter.MaxAllowed(container.Name)
-		estimatedResources = &corev1.ResourceRequirements{Limits: *maxAllowed, Requests: *maxAllowed}
+		iLimitResources = &corev1.ResourceRequirements{Limits: *maxAllowed, Requests: *maxAllowed}
+	} else {
+		iLimitResources = o.limiter.ApplyLimits(container.Name, estimates)
 	}
-	if estimatedResources == nil {
-		estimatedResources = o.predictor.Estimate(container.Name, state.partitions)
-	}
-	state.estimatedResources = &estimatedResources.Requests
-	iLimitResources := o.limiter.ApplyLimits(container.Name, estimatedResources)
-
 	state.iLimitResources = &iLimitResources.Requests
-	resDiff := resourceListDiff(estimatedResources.Requests, iLimitResources.Requests)
+	resDiff := resourceListDiff(estimates.Requests, iLimitResources.Requests)
 	if !applyGlobalLimiter {
 		return iLimitResources, &resDiff
 	}

@@ -3,8 +3,8 @@ kind: Consumer
 metadata:
   name: consumer-sample
 spec:
-  numPartitions: 2
-  numPartitionsPerInstance: 2
+  numPartitions: 4
+  numPartitionsPerInstance: 1
   name: "test-consumer"
   namespace: "konsumerator-system"
   autoscaler:
