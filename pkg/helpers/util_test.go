@@ -8,6 +8,27 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 )
 
+func TestGomemlimitFromResource(t *testing.T) {
+	testCases := map[string]struct {
+		in     string
+		expOut string
+	}{
+		"simple M":   {"100M", "80MiB"},
+		"rounding M": {"111M", "89MiB"},
+		"simple G":   {"1G", "800MiB"},
+		"big G":      {"20G", "16000MiB"},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			v := resource.MustParse(tc.in)
+			out := GomemlimitFromResource(&v)
+			if tc.expOut != out {
+				t.Fatalf("expected to get %s, got %s", tc.expOut, out)
+			}
+		})
+	}
+}
+
 func TestPopulateEnv(t *testing.T) {
 	tests := map[string]struct {
 		initialEnv    []corev1.EnvVar
@@ -44,6 +65,10 @@ func TestPopulateEnv(t *testing.T) {
 				{
 					Name:  gomaxprocsEnvKey,
 					Value: "2",
+				},
+				{
+					Name:  gomemlimitEnvKey,
+					Value: "1600MiB",
 				},
 				{
 					Name:  instanceEnvKey,
@@ -84,6 +109,10 @@ func TestPopulateEnv(t *testing.T) {
 				{
 					Name:  gomaxprocsEnvKey,
 					Value: "1",
+				},
+				{
+					Name:  gomemlimitEnvKey,
+					Value: "1600MiB",
 				},
 				{
 					Name:  instanceEnvKey,
