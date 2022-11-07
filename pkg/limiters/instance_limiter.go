@@ -1,6 +1,8 @@
 package limiters
 
 import (
+	"fmt"
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -9,18 +11,57 @@ import (
 
 type InstanceLimiter struct {
 	registry map[string]konsumeratorv1.ContainerResourcePolicy
+	log      logr.Logger
 }
 
-func NewInstanceLimiter(policy *konsumeratorv1.ResourcePolicy) *InstanceLimiter {
+func forceValidPolicy(p konsumeratorv1.ContainerResourcePolicy) (*konsumeratorv1.ContainerResourcePolicy, bool) {
+	policy := konsumeratorv1.ContainerResourcePolicy{
+		ContainerName: p.ContainerName,
+		Mode:          p.Mode,
+	}
+	var swapped bool
+	var minCPU, maxCPU, minMemory, maxMemory *resource.Quantity
+	if p.MaxAllowed.Cpu().Cmp(*p.MinAllowed.Cpu()) == -1 {
+		swapped = true
+		maxCPU = p.MinAllowed.Cpu()
+		minCPU = p.MaxAllowed.Cpu()
+	} else {
+		minCPU = p.MinAllowed.Cpu()
+		maxCPU = p.MaxAllowed.Cpu()
+	}
+	if p.MaxAllowed.Memory().Cmp(*p.MinAllowed.Memory()) == -1 {
+		swapped = true
+		maxMemory = p.MinAllowed.Memory()
+		minMemory = p.MaxAllowed.Memory()
+	} else {
+		minMemory = p.MinAllowed.Memory()
+		maxMemory = p.MaxAllowed.Memory()
+	}
+	policy.MinAllowed = corev1.ResourceList{
+		corev1.ResourceCPU:    *minCPU,
+		corev1.ResourceMemory: *minMemory,
+	}
+	policy.MaxAllowed = corev1.ResourceList{
+		corev1.ResourceCPU:    *maxCPU,
+		corev1.ResourceMemory: *maxMemory,
+	}
+	return &policy, swapped
+}
+
+func NewInstanceLimiter(policy *konsumeratorv1.ResourcePolicy, log logr.Logger) *InstanceLimiter {
 	registry := make(map[string]konsumeratorv1.ContainerResourcePolicy, 0)
 	if policy != nil {
 		for i := range policy.ContainerPolicies {
-			cp := policy.ContainerPolicies[i]
-			registry[cp.ContainerName] = cp
+			cp, swapped := forceValidPolicy(policy.ContainerPolicies[i])
+			if swapped {
+				log.Error(fmt.Errorf("invalid container policy: Min > Max"), "Force swapping min and max! Please fix!")
+			}
+			registry[cp.ContainerName] = *cp
 		}
 	}
 	return &InstanceLimiter{
 		registry: registry,
+		log:      log,
 	}
 }
 

@@ -84,7 +84,7 @@ func (o *operator) init(consumer *konsumeratorv1.Consumer, managedInstances apps
 	o.toEstimateInstances = make([]*appsv1.Deployment, 0)
 	o.toCreateInstances = make([]*appsv1.Deployment, 0)
 
-	o.limiter = limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy)
+	o.limiter = limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, o.log)
 	o.globalLimiter = limiters.NewGlobalLimiter(consumer.Spec.ResourcePolicy, o.usedResources, o.log)
 
 	// expose the global limiter pool size. MaxAllowed returns a total before anything was assigned
