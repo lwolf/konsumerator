@@ -135,6 +135,7 @@ func TestConsumerReconciliation(t *testing.T) {
 				"busybox": {
 					"KONSUMERATOR_PARTITION":      "0",
 					"GOMAXPROCS":                  "1",
+					"GOMEMLIMIT":                  "80MiB",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
@@ -181,6 +182,7 @@ func TestConsumerReconciliation(t *testing.T) {
 				"busybox": {
 					"KONSUMERATOR_PARTITION":      "0",
 					"GOMAXPROCS":                  "1",
+					"GOMEMLIMIT":                  "80MiB",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
@@ -244,6 +246,7 @@ func TestConsumerReconciliation(t *testing.T) {
 				"busybox": {
 					"KONSUMERATOR_PARTITION":      "0",
 					"GOMAXPROCS":                  "1",
+					"GOMEMLIMIT":                  "320MiB",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
@@ -252,6 +255,7 @@ func TestConsumerReconciliation(t *testing.T) {
 				"sidecar": {
 					"KONSUMERATOR_PARTITION":      "0",
 					"GOMAXPROCS":                  "1",
+					"GOMEMLIMIT":                  "80MiB",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
@@ -311,6 +315,7 @@ func TestConsumerReconciliation(t *testing.T) {
 				"busybox": {
 					"KONSUMERATOR_PARTITION":      "0",
 					"GOMAXPROCS":                  "1",
+					"GOMEMLIMIT":                  "320MiB",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
@@ -319,6 +324,7 @@ func TestConsumerReconciliation(t *testing.T) {
 				"sidecar": {
 					"KONSUMERATOR_PARTITION":      "0",
 					"GOMAXPROCS":                  "1",
+					"GOMEMLIMIT":                  "80MiB",
 					"KONSUMERATOR_INSTANCE":       "0",
 					"KONSUMERATOR_NUM_INSTANCES":  "1",
 					"KONSUMERATOR_NUM_PARTITIONS": "1",
@@ -391,7 +397,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 		{
 			name:                "should have one missing deployment on consumer creation",
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
@@ -409,7 +415,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			name:                "should have a single running deployment after the first reconcile",
 			promResponse:        promMetricsForLag(0),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
@@ -428,7 +434,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(6),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
-			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
@@ -447,7 +453,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(15),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1300m", "400M", "2", "400M"),
 			},
@@ -466,7 +472,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(20),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1300m", "400M", "2", "400M"),
 			},
@@ -489,7 +495,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				consumption: 5e3,
 			},
 			expDeployAnnotation: deployAnnotationSaturated(name, "400"),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
@@ -512,7 +518,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				consumption: 5e3,
 			},
 			expDeployAnnotation: deployAnnotationSaturated(name, "200"),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
@@ -531,7 +537,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(2),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
@@ -550,7 +556,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(1),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
@@ -573,7 +579,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				consumption: 5e3,
 			},
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
@@ -596,7 +602,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				consumption: 1e3,
 			},
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
@@ -615,7 +621,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(1),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
@@ -634,7 +640,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(1),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1.1", "400M", "2", "400M"),
 			},
@@ -657,7 +663,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				consumption: 5e3,
 			},
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleDown),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1.1", "400M", "2", "400M"),
 			},
@@ -680,7 +686,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				consumption: 5e3,
 			},
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "160MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "200M", "1", "200M"),
 			},
@@ -706,7 +712,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 				consumption: 10,
 			},
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
-			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "160MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "200M", "1", "200M"),
 			},
@@ -725,7 +731,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(60 * 3), // 3h lag
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusSaturated),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
@@ -744,7 +750,7 @@ func TestConsumerReconciler_Reconcile(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(60 * 3), // 3h lag,
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusSaturated),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
@@ -840,7 +846,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 		{
 			name:                "should have one missing deployment on consumer creation",
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
@@ -858,7 +864,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			name:                "should have a single running deployment after the first reconcile",
 			promResponse:        promMetricsForLag(0),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
@@ -877,7 +883,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(6),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
-			expContainerEnv:     containerEnv("busybox", "0", "1", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
 			},
@@ -896,7 +902,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(6),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
@@ -915,7 +921,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(10),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("1100m", "400M", "2", "400M"),
 			},
@@ -934,7 +940,7 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 			timePassed:          time.Minute * 10,
 			promResponse:        promMetricsForLag(15),
 			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
-			expContainerEnv:     containerEnv("busybox", "0", "2", "0", "1", "1"),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
 			expContainerResources: map[string]corev1.ResourceRequirements{
 				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
 			},
@@ -1231,7 +1237,7 @@ type fakeMetrics struct {
 	consumption int64
 }
 
-func containerEnv(name, partition, gomaxprocs, instance, numP, numI string) map[string]map[string]string {
+func containerEnv(name, partition, gomaxprocs, gomem, instance, numP, numI string) map[string]map[string]string {
 	return map[string]map[string]string{
 		name: {
 			"KONSUMERATOR_PARTITION":      partition,
@@ -1239,6 +1245,7 @@ func containerEnv(name, partition, gomaxprocs, instance, numP, numI string) map[
 			"KONSUMERATOR_NUM_INSTANCES":  numI,
 			"KONSUMERATOR_NUM_PARTITIONS": numP,
 			"GOMAXPROCS":                  gomaxprocs,
+			"GOMEMLIMIT":                  gomem,
 		},
 	}
 }

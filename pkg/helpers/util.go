@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ const (
 	numInstancesEnvKey     = "KONSUMERATOR_NUM_INSTANCES"
 	numPartitionsEnvKey    = "KONSUMERATOR_NUM_PARTITIONS"
 	gomaxprocsEnvKey       = "GOMAXPROCS"
+	gomemlimitEnvKey       = "GOMEMLIMIT"
 	TimeLayout             = time.RFC3339
 )
 
@@ -70,6 +72,12 @@ func ParsePartitionsListAnnotation(partitions string) ([]int32, error) {
 	return res, nil
 }
 
+func GomemlimitFromResource(memory *resource.Quantity) string {
+	// TODO: hardcoded 80% value, allow configuration through the spec
+	v := math.Ceil(float64(memory.ScaledValue(resource.Mega)) * 0.8)
+	return fmt.Sprintf("%vMiB", v)
+}
+
 func GomaxprocsFromResource(cpu *resource.Quantity) string {
 	value := int(cpu.Value())
 	if value < 1 {
@@ -103,6 +111,9 @@ func PopulateEnv(currentEnv []corev1.EnvVar, resources *corev1.ResourceRequireme
 	copy(env, currentEnv)
 	env = SetEnv(env, partitionKey, strings.Join(Int2Str(partitions), ","))
 	env = SetEnv(env, gomaxprocsEnvKey, GomaxprocsFromResource(resources.Limits.Cpu()))
+	if !resources.Limits.Memory().IsZero() {
+		env = SetEnv(env, gomemlimitEnvKey, GomemlimitFromResource(resources.Limits.Memory()))
+	}
 	env = SetEnv(env, instanceEnvKey, strconv.Itoa(id))
 	env = SetEnv(env, numPartitionsEnvKey, strconv.Itoa(numPartitions))
 	env = SetEnv(env, numInstancesEnvKey, strconv.Itoa(numInstances))
