@@ -455,7 +455,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 			"isLagging", isLagging,
 			"isCritLag", state.isLagCritical,
 			"cpu.shortage", underProvision.Cpu(),
-			"ram.shortage", underProvision.Memory(),
+			"ram.shortage", underProvision.Memory().ScaledValue(resource.Mega),
 		)
 	}
 	return deploy, needsUpdate, nil
@@ -577,7 +577,6 @@ func (o *operator) applyResourcesLimiters(container *corev1.Container, estimates
 	currentResources := container.Resources.DeepCopy()
 	resourcesToRequest := resourceRequirementsDiff(iLimitResources, currentResources)
 	allocatableResources := o.globalLimiter.ApplyLimits("", resourcesToRequest)
-	state.gLimitResources = &allocatableResources.Requests
 	if !resourcesToRequest.Requests.Cpu().IsZero() && allocatableResources.Requests.Cpu().IsZero() {
 		o.log.Info("CPU global limit is reached", " instanceId", state.instanceId)
 	}
@@ -587,6 +586,7 @@ func (o *operator) applyResourcesLimiters(container *corev1.Container, estimates
 	// sum-up current and requested resources
 	resourcesAfterLimitApplied := resourceRequirementsSum(currentResources, allocatableResources)
 	globalShortage := resourceListDiff(resourcesToRequest.Requests, allocatableResources.Requests)
+	state.gLimitResources = &resourcesAfterLimitApplied.Requests
 
 	return resourcesAfterLimitApplied, resourceListSum(&resDiff, &globalShortage)
 }

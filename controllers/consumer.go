@@ -126,7 +126,7 @@ func (r *ConsumerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	o.log.Info(
 		"deployments count",
 		"metricsUpdated", o.metricsUpdated,
-		"expected", o.consumer.Spec.NumPartitions,
+		"expected", consumer.Status.Expected,
 		"running", consumer.Status.Running,
 		"paused", consumer.Status.Paused,
 		"missing", consumer.Status.Missing,
