@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/gomega"
 	"golang.org/x/net/context"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/api/core/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -61,7 +61,7 @@ var _ = Describe("Consumer", func() {
 					Namespace: "default",
 				},
 				Spec: ConsumerSpec{
-					NumPartitions: helpers.Ptr2Int32(1),
+					NumPartitions: helpers.Ptr[int32](1),
 					Name:          "foo",
 					Namespace:     "default",
 					Autoscaler: &AutoscalerSpec{
@@ -69,14 +69,14 @@ var _ = Describe("Consumer", func() {
 						Prometheus: nil,
 					},
 					DeploymentTemplate: appsv1.DeploymentSpec{
-						Replicas: helpers.Ptr2Int32(1),
+						Replicas: helpers.Ptr[int32](1),
 						Selector: &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}, MatchExpressions: nil},
-						Template: v1.PodTemplateSpec{
+						Template: corev1.PodTemplateSpec{
 							ObjectMeta: metav1.ObjectMeta{
 								CreationTimestamp: metav1.Time{},
 							},
-							Spec: v1.PodSpec{
-								Containers: []v1.Container{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{
 									{Name: "pod", Image: "busybox"},
 								},
 							}},
