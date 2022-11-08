@@ -198,7 +198,7 @@ func (o *operator) syncInstanceStates(managedDeploys appsv1.DeploymentList) {
 	status.Outdated = helpers.Ptr2Int32(int32(len(o.toUpdateInstances)))
 	status.Missing = helpers.Ptr2Int32(missing)
 	status.Redundant = helpers.Ptr2Int32(int32(len(o.toRemoveInstances)))
-	status.Expected = &expectedInstances
+	status.Expected = helpers.Ptr2Int32(int32(len(o.assignments)))
 
 	name := o.consumer.Name
 	consumerStatus.WithLabelValues(name, "running").Set(float64(*status.Running))
@@ -443,7 +443,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 		o.log.Info(
 			fmt.Sprintf("%s. cpu[current=%v, ideal=%v, ilimited=%v, glimited=%v], memory[current=%v, ideal=%v, ilimited=%v, glimited=%v]", logHeadline,
 				state.currentResources.Cpu(), state.estimatedResources.Cpu(), state.iLimitResources.Cpu(), state.gLimitResources.Cpu(),
-				state.currentResources.Memory(), state.estimatedResources.Memory(), state.iLimitResources.Memory(), state.gLimitResources.Memory(),
+				state.currentResources.Memory().ScaledValue(resource.Mega), state.estimatedResources.Memory().ScaledValue(resource.Mega), state.iLimitResources.Memory().ScaledValue(resource.Mega), state.gLimitResources.Memory().ScaledValue(resource.Mega),
 			),
 			"instanceId", instanceId,
 			"partitions", state.partitions,
