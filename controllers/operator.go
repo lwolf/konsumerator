@@ -67,7 +67,7 @@ func (o *operator) init(consumer *konsumeratorv1.Consumer, managedInstances apps
 	if err != nil {
 		return err
 	}
-	consumer.Status.ObservedGeneration = helpers.Ptr2Int64(int64(hash))
+	consumer.Status.ObservedGeneration = helpers.Ptr(int64(hash))
 	rl := make(corev1.ResourceList, 0)
 	o.consumer = consumer
 	o.usedResources = &rl
@@ -192,13 +192,13 @@ func (o *operator) syncInstanceStates(managedDeploys appsv1.DeploymentList) {
 	}
 
 	status := &o.consumer.Status
-	status.Running = helpers.Ptr2Int32(running)
-	status.Paused = helpers.Ptr2Int32(paused)
-	status.Lagging = helpers.Ptr2Int32(lagging)
-	status.Outdated = helpers.Ptr2Int32(int32(len(o.toUpdateInstances)))
-	status.Missing = helpers.Ptr2Int32(missing)
-	status.Redundant = helpers.Ptr2Int32(int32(len(o.toRemoveInstances)))
-	status.Expected = helpers.Ptr2Int32(int32(len(o.assignments)))
+	status.Running = helpers.Ptr(running)
+	status.Paused = helpers.Ptr(paused)
+	status.Lagging = helpers.Ptr(lagging)
+	status.Outdated = helpers.Ptr(int32(len(o.toUpdateInstances)))
+	status.Missing = helpers.Ptr(missing)
+	status.Redundant = helpers.Ptr(int32(len(o.toRemoveInstances)))
+	status.Expected = helpers.Ptr(int32(len(o.assignments)))
 
 	name := o.consumer.Name
 	consumerStatus.WithLabelValues(name, "running").Set(float64(*status.Running))

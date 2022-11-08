@@ -1,10 +1,11 @@
 package controllers
 
 import (
-	"github.com/lwolf/konsumerator/pkg/helpers"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 	"time"
+
+	"github.com/lwolf/konsumerator/pkg/helpers"
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	"github.com/google/go-cmp/cmp"
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
@@ -22,12 +23,12 @@ func TestPopulateStatusFromAnnotation(t *testing.T) {
 		"expect to get empty status": {
 			in: map[string]string{},
 			status: &konsumeratorv1.ConsumerStatus{
-				Expected:      helpers.Ptr2Int32(0),
-				Running:       helpers.Ptr2Int32(0),
-				Paused:        helpers.Ptr2Int32(0),
-				Lagging:       helpers.Ptr2Int32(0),
-				Missing:       helpers.Ptr2Int32(0),
-				Outdated:      helpers.Ptr2Int32(0),
+				Expected:      helpers.Ptr[int32](0),
+				Running:       helpers.Ptr[int32](0),
+				Paused:        helpers.Ptr[int32](0),
+				Lagging:       helpers.Ptr[int32](0),
+				Missing:       helpers.Ptr[int32](0),
+				Outdated:      helpers.Ptr[int32](0),
 				LastSyncTime:  nil,
 				LastSyncState: nil,
 			},
@@ -42,12 +43,12 @@ func TestPopulateStatusFromAnnotation(t *testing.T) {
 				annotationStatusOutdated: "5",
 			},
 			status: &konsumeratorv1.ConsumerStatus{
-				Expected:      helpers.Ptr2Int32(6),
-				Running:       helpers.Ptr2Int32(1),
-				Paused:        helpers.Ptr2Int32(2),
-				Lagging:       helpers.Ptr2Int32(3),
-				Missing:       helpers.Ptr2Int32(4),
-				Outdated:      helpers.Ptr2Int32(5),
+				Expected:      helpers.Ptr[int32](6),
+				Running:       helpers.Ptr[int32](1),
+				Paused:        helpers.Ptr[int32](2),
+				Lagging:       helpers.Ptr[int32](3),
+				Missing:       helpers.Ptr[int32](4),
+				Outdated:      helpers.Ptr[int32](5),
 				LastSyncTime:  nil,
 				LastSyncState: nil,
 			},
@@ -64,12 +65,12 @@ func TestPopulateStatusFromAnnotation(t *testing.T) {
 				annotationStatusLastState:    "bad state",
 			},
 			status: &konsumeratorv1.ConsumerStatus{
-				Expected:      helpers.Ptr2Int32(6),
-				Running:       helpers.Ptr2Int32(1),
-				Paused:        helpers.Ptr2Int32(2),
-				Lagging:       helpers.Ptr2Int32(3),
-				Missing:       helpers.Ptr2Int32(4),
-				Outdated:      helpers.Ptr2Int32(5),
+				Expected:      helpers.Ptr[int32](6),
+				Running:       helpers.Ptr[int32](1),
+				Paused:        helpers.Ptr[int32](2),
+				Lagging:       helpers.Ptr[int32](3),
+				Missing:       helpers.Ptr[int32](4),
+				Outdated:      helpers.Ptr[int32](5),
 				LastSyncTime:  &mtm,
 				LastSyncState: nil,
 			},
@@ -108,12 +109,12 @@ func TestUpdateStatusAnnotations(t *testing.T) {
 				},
 			},
 			status: &konsumeratorv1.ConsumerStatus{
-				Expected:     helpers.Ptr2Int32(6),
-				Running:      helpers.Ptr2Int32(1),
-				Paused:       helpers.Ptr2Int32(2),
-				Lagging:      helpers.Ptr2Int32(3),
-				Missing:      helpers.Ptr2Int32(4),
-				Outdated:     helpers.Ptr2Int32(5),
+				Expected:     helpers.Ptr[int32](6),
+				Running:      helpers.Ptr[int32](1),
+				Paused:       helpers.Ptr[int32](2),
+				Lagging:      helpers.Ptr[int32](3),
+				Missing:      helpers.Ptr[int32](4),
+				Outdated:     helpers.Ptr[int32](5),
 				LastSyncTime: &mtm,
 				LastSyncState: map[string]konsumeratorv1.InstanceState{
 					"0": {ProductionRate: 20, ConsumptionRate: 10, MessagesBehind: 1000},

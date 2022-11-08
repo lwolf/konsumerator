@@ -23,12 +23,8 @@ const (
 	TimeLayout             = time.RFC3339
 )
 
-func Ptr2Int32(i int32) *int32 {
-	return &i
-}
-
-func Ptr2Int64(i int64) *int64 {
-	return &i
+func Ptr[T any](v T) *T {
+	return &v
 }
 
 func MapToArray(data map[int32]bool) []int32 {

@@ -172,13 +172,13 @@ func (am annotationMngr) GetTime(k string) *metav1.Time {
 func (am annotationMngr) GetInt32(k string) *int32 {
 	v, ok := am.a[k]
 	if !ok {
-		return helpers.Ptr2Int32(0)
+		return helpers.Ptr[int32](0)
 	}
 	i, err := strconv.Atoi(v)
 	if err != nil {
-		return helpers.Ptr2Int32(0)
+		return helpers.Ptr[int32](0)
 	}
-	return helpers.Ptr2Int32(int32(i))
+	return helpers.Ptr(int32(i))
 }
 
 func minDuration(a, b time.Duration) time.Duration {
