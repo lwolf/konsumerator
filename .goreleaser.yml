@@ -29,11 +29,7 @@ changelog:
     - '^docs:'
     - '^test:'
 dockers:
-  - binaries:
-      - konsumerator
-    dockerfile: Dockerfile-releaser
-    image_templates:
-      - "quay.io/lwolf/konsumerator:{{ .Tag }}"
-      - "quay.io/lwolf/konsumerator:latest"
-#      - "ghcr.io/lwolf/konsumerator/{{ .Tag }}"
-#      - "ghcr.io/lwolf/konsumerator/latest"
+- image_templates:
+    - "quay.io/lwolf/konsumerator:{{ .Tag }}"
+    - "quay.io/lwolf/konsumerator:latest"
+  dockerfile: 'Dockerfile-releaser'
