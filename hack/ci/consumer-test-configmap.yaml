@@ -7,6 +7,7 @@ metadata:
 data:
   consumer.yaml: |
     numPartitions: 4
+    numPartitionsPerInstance: 2
     name: "test-consumer"
     namespace: "konsumerator-system"
     autoscaler:
@@ -24,11 +25,11 @@ data:
         # approximate memory requirements per CPU
         # if ratePerCore is 10k ops, this value is amount of
         # RAM needed during the processing of this 10k ops
-        ramPerCore: "100M"
+        ramPerCore: "500M"
         # criticalLag is some value close to the SLO.
         # if lag has reached this point, autoscaler will
         # give maximum allowed resource to that deployment
-        criticalLag: "60m"
+        criticalLag: "40m"
         # preferable recovery time. During lag, if resources are
         # available, consumer will be scaled up to recover during
         # during this time.
@@ -100,10 +101,10 @@ data:
       - containerName: consumer
         minAllowed:
           cpu: "100m"
-          memory: "100M"
+          memory: "200M"
         maxAllowed:
-          cpu: "500m"
-          memory: "100M"
+          cpu: "2"
+          memory: "200M"
       - containerName: busybox-info
         minAllowed:
           cpu: "100m"
