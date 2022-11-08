@@ -372,7 +372,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 		container := &deploy.Spec.Template.Spec.Containers[i]
 		estimates := o.estimateResources(container, state)
 		resources, underProvision := o.applyResourcesLimiters(container, estimates, state, true)
-		cmpRes := helpers.CmpResourceRequirements(deploy.Spec.Template.Spec.Containers[i].Resources, *resources)
+		cmpRes := helpers.CmpResourceList(deploy.Spec.Template.Spec.Containers[i].Resources.Requests, resources.Requests)
 		var logHeadline string
 		switch cmpRes {
 		case cmpResourcesEq:
@@ -441,7 +441,10 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 			needsUpdate = true
 		}
 		o.log.Info(
-			fmt.Sprintf("%s. cpu[current=%v, ideal=%v, ilimited=%v, glimited=%v]", logHeadline, state.currentResources.Cpu(), state.estimatedResources.Cpu(), state.iLimitResources.Cpu(), state.gLimitResources.Cpu()),
+			fmt.Sprintf("%s. cpu[current=%v, ideal=%v, ilimited=%v, glimited=%v], memory[current=%v, ideal=%v, ilimited=%v, glimited=%v]", logHeadline,
+				state.currentResources.Cpu(), state.estimatedResources.Cpu(), state.iLimitResources.Cpu(), state.gLimitResources.Cpu(),
+				state.currentResources.Memory(), state.estimatedResources.Memory(), state.iLimitResources.Memory(), state.gLimitResources.Memory(),
+			),
 			"instanceId", instanceId,
 			"partitions", state.partitions,
 			"container", container.Name,
@@ -449,8 +452,8 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 			"newStatus", deploy.Annotations[ScalingStatusAnnotation],
 			"isChangedAnnotations", isChangedAnnotations,
 			"maxLag", o.getMaxLag(state.partitions),
-			"isCritLag", state.isLagCritical,
 			"isLagging", isLagging,
+			"isCritLag", state.isLagCritical,
 			"cpu.shortage", underProvision.Cpu(),
 			"ram.shortage", underProvision.Memory(),
 		)
