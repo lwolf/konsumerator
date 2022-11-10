@@ -67,6 +67,24 @@ var (
 		},
 		[]string{"consumer", "addr"},
 	)
+	lagObserved = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "lag_observed_seconds",
+			Help:      "Lag in seconds as seen by konsumerator (uses production rate and messages behind",
+		},
+		[]string{"consumer", "partition"},
+	)
+	samplesReceivedTotal = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Namespace: namespace,
+			Subsystem: subsystem,
+			Name:      "samples_received_total",
+			Help:      "Number of timeseries samples received from the prometheus",
+		},
+		[]string{"consumer", "type"},
+	)
 	zeroValuesTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Namespace: namespace,
@@ -74,11 +92,11 @@ var (
 			Name:      "zero_values_total",
 			Help:      "Total number of estimation queries that returned 0 - NO DATA(metrics are missing, not even a cache)",
 		},
-		[]string{"consumer", "partitions", "type"},
+		[]string{"consumer", "partition", "type"},
 	)
 )
 
 func initMetrics() {
 	metrics.Registry.MustRegister(requestsTotal, requestErrors, requestDuration,
-		subRequestTotal, subRequestErrors, subRequestDuration, zeroValuesTotal)
+		subRequestTotal, subRequestErrors, subRequestDuration, lagObserved, zeroValuesTotal)
 }

@@ -127,8 +127,10 @@ func (l *PrometheusMP) GetLagByPartition(partition int32) time.Duration {
 	if production == 0 {
 		return 0
 	}
-	lag := float64(behind) / float64(production)
-	return time.Duration(lag) * time.Second
+	lagM := float64(behind) / float64(production)
+	lagT := time.Duration(lagM) * time.Second
+	lagObserved.WithLabelValues(l.consumer, strconv.Itoa(int(partition))).Set(lagT.Seconds())
+	return lagT
 }
 
 // Update updates metrics values by querying Prometheus
@@ -233,6 +235,7 @@ func (l *PrometheusMP) queryOffset() (metricsMap, error) {
 		return nil, errors.New("failed to get offset metrics from prometheus")
 	}
 	metrics := l.parse(value, l.offsetPartitionLabel)
+	samplesReceivedTotal.WithLabelValues(l.consumer, labelOffset).Set(float64(len(metrics)))
 	return metrics, nil
 }
 
@@ -250,6 +253,7 @@ func (l *PrometheusMP) queryProductionRate() (metricsMap, error) {
 		return nil, errors.New("failed to get production metrics from prometheus")
 	}
 	metrics := l.parse(value, l.productionPartitionLabel)
+	samplesReceivedTotal.WithLabelValues(l.consumer, labelProduction).Set(float64(len(metrics)))
 	return metrics, nil
 }
 
@@ -266,6 +270,7 @@ func (l *PrometheusMP) queryConsumptionRate() (metricsMap, error) {
 		return nil, errors.New("failed to get consumption metrics from prometheus")
 	}
 	metrics := l.parse(value, l.consumptionPartitionLabel)
+	samplesReceivedTotal.WithLabelValues(l.consumer, labelConsumption).Set(float64(len(metrics)))
 	return metrics, nil
 }
 
