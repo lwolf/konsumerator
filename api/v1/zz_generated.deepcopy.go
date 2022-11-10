@@ -350,6 +350,11 @@ func (in *PrometheusAutoscalerSpec) DeepCopyInto(out *PrometheusAutoscalerSpec) 
 	out.Offset = in.Offset
 	out.Production = in.Production
 	out.Consumption = in.Consumption
+	if in.FallbackStrategy != nil {
+		in, out := &in.FallbackStrategy, &out.FallbackStrategy
+		*out = new(FallbackStrategy)
+		**out = **in
+	}
 	if in.RatePerCore != nil {
 		in, out := &in.RatePerCore, &out.RatePerCore
 		*out = new(int64)

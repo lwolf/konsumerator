@@ -165,7 +165,7 @@ func (l *PrometheusMP) query(api *promAPI, ctx context.Context, query string) (m
 	start := time.Now()
 	value, warnings, err := api.client.Query(ctx, query, time.Now())
 	if err != nil {
-		if ctx.Err() != context.Canceled {
+		if !errors.Is(err, context.Canceled) {
 			subRequestErrors.WithLabelValues(l.consumer, api.addr).Inc()
 		}
 		return nil, err
@@ -195,7 +195,7 @@ func (l *PrometheusMP) queryAll(query string) model.Value {
 			defer wg.Done()
 			v, err := l.query(prom, ctx, query)
 			if err != nil {
-				if ctx.Err() != context.Canceled {
+				if !errors.Is(err, context.Canceled) {
 					l.log.Error(err, "failed to query prometheus")
 				}
 				return

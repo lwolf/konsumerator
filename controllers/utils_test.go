@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"github.com/lwolf/konsumerator/pkg/helpers/tests"
+	appsv1 "k8s.io/api/apps/v1"
 	"testing"
 	"time"
 
@@ -138,8 +140,6 @@ func TestUpdateStatusAnnotations(t *testing.T) {
 
 }
 
-func TestResourceRequirementsDiff(t *testing.T) {}
-func TestResourceRequirementsSum(t *testing.T)  {}
 func TestResourceListSum(t *testing.T) {
 	testCases := map[string]struct {
 		a   corev1.ResourceList
@@ -189,4 +189,147 @@ func isResourceListEqual(a, b corev1.ResourceList) bool {
 	return true
 }
 
-func TestResourceListDiff(t *testing.T) {}
+func TestCalculateFallbackFromPolicy(t *testing.T) {
+	testCases := map[string]struct {
+		strategy      konsumeratorv1.FallbackStrategy
+		containerName []string
+		policy        *konsumeratorv1.ResourcePolicy
+		expFallback   map[string]*corev1.ResourceRequirements
+	}{
+		"should return min allowed by containerName in the map": {
+			strategy:      konsumeratorv1.FallbackStrategyMin,
+			containerName: []string{"test"},
+			policy: &konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
+			}},
+			expFallback: map[string]*corev1.ResourceRequirements{"test": tests.NewResourceRequirements("100m", "100M", "100m", "100M")},
+		},
+		"should return max allowed by containerName in the map": {
+			strategy:      konsumeratorv1.FallbackStrategyMax,
+			containerName: []string{"test"},
+			policy: &konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
+			}},
+			expFallback: map[string]*corev1.ResourceRequirements{"test": tests.NewResourceRequirements("2", "150M", "2", "150M")},
+		},
+		"multi container setup should return correct values": {
+			strategy:      konsumeratorv1.FallbackStrategyMin,
+			containerName: []string{"test", "test2"},
+			policy: &konsumeratorv1.ResourcePolicy{ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+				tests.NewContainerResourcePolicy("test", "100m", "100M", "2", "150M"),
+				tests.NewContainerResourcePolicy("test2", "1", "1G", "5", "2G"),
+			}},
+			expFallback: map[string]*corev1.ResourceRequirements{
+				"test":  tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+				"test2": tests.NewResourceRequirements("1", "1G", "1", "1G"),
+			},
+		},
+		"should return nil if no such policy exists": {
+			strategy:      konsumeratorv1.FallbackStrategyMax,
+			containerName: []string{"test"},
+			policy:        nil,
+			expFallback:   nil,
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			fallback := calculateFallbackFromPolicy(tc.policy, tc.strategy)
+			if tc.expFallback == nil && fallback != nil {
+				t.Fatalf("Fallback is expected to be nil, got %v", fallback)
+			}
+			if tc.expFallback != nil {
+				for _, containerName := range tc.containerName {
+					if helpers.CmpResourceList(fallback[containerName].Requests, tc.expFallback[containerName].Requests) != 0 {
+						t.Errorf("Fallback results mismatch. want %v, got %v", tc.expFallback[containerName].Requests, fallback[containerName].Requests)
+					}
+					if helpers.CmpResourceList(fallback[containerName].Limits, tc.expFallback[containerName].Limits) != 0 {
+						t.Errorf("Fallback results mismatch. want %v, got %v", tc.expFallback[containerName].Requests, fallback[containerName].Requests)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestCalculateFallbackFromRunningInstances(t *testing.T) {
+	instances := []appsv1.Deployment{
+		{
+			Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: "busybox", Resources: *tests.NewResourceRequirements("100m", "100M", "100m", "100M")},
+							{Name: "test", Resources: *tests.NewResourceRequirements("600m", "600M", "600m", "600M")},
+						}},
+				},
+			},
+		},
+		{
+			Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: "busybox", Resources: *tests.NewResourceRequirements("150m", "150M", "1", "100G")},
+							{Name: "test", Resources: *tests.NewResourceRequirements("50m", "50M", "2", "200G")},
+						}},
+				},
+			},
+		},
+		{
+			Spec: appsv1.DeploymentSpec{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{Name: "busybox", Resources: *tests.NewResourceRequirements("200m", "200M", "300m", "300M")},
+							{Name: "test", Resources: *tests.NewResourceRequirements("100m", "100M", "300m", "300M")},
+						}},
+				},
+			},
+		},
+	}
+
+	testCases := map[string]struct {
+		strategy      konsumeratorv1.FallbackStrategy
+		containerName []string
+		instances     []appsv1.Deployment
+		expFallback   map[string]*corev1.ResourceRequirements
+	}{
+		"min": {
+			strategy:      konsumeratorv1.FallbackStrategyMin,
+			containerName: []string{"busybox", "test"},
+			instances:     instances,
+			expFallback: map[string]*corev1.ResourceRequirements{
+				"busybox": tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+				"test":    tests.NewResourceRequirements("50m", "50M", "2", "200G"),
+			},
+		},
+		"max": {
+			strategy:      konsumeratorv1.FallbackStrategyMax,
+			containerName: []string{"busybox", "test"},
+			instances:     instances,
+			expFallback: map[string]*corev1.ResourceRequirements{
+				"busybox": tests.NewResourceRequirements("200m", "200M", "300m", "300M"),
+				"test":    tests.NewResourceRequirements("600m", "600M", "600m", "600M"),
+			},
+		},
+	}
+	for testName, tc := range testCases {
+		t.Run(testName, func(t *testing.T) {
+			fallback := calculateFallbackFromRunningInstances(tc.instances, tc.strategy)
+			if tc.expFallback == nil && fallback != nil {
+				t.Fatalf("Fallback is expected to be nil, got %v", fallback)
+			}
+			if tc.expFallback != nil {
+				for _, containerName := range tc.containerName {
+					if helpers.CmpResourceList(fallback[containerName].Requests, tc.expFallback[containerName].Requests) != 0 {
+						t.Errorf("Fallback results mismatch. want %v, got %v", tc.expFallback[containerName].Requests, fallback[containerName].Requests)
+					}
+					if helpers.CmpResourceList(fallback[containerName].Limits, tc.expFallback[containerName].Limits) != 0 {
+						t.Errorf("Fallback results mismatch. want %v, got %v", tc.expFallback[containerName].Requests, fallback[containerName].Requests)
+					}
+				}
+			}
+
+		})
+	}
+}

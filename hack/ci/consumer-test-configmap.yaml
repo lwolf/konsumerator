@@ -34,6 +34,7 @@ data:
         # available, consumer will be scaled up to recover during
         # during this time.
         recoveryTime: "30m"
+        fallbackStrategy: "max"
         # prometheus addresses to query
         address:
           - "http://prometheus-server.kube-system:9090"
