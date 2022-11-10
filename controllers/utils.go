@@ -198,3 +198,56 @@ func sumAllRequestedResourcesInPod(containerSpecs []corev1.Container) *corev1.Re
 	}
 	return &result
 }
+
+func calculateFallbackFromPolicy(policy *konsumeratorv1.ResourcePolicy, strategy konsumeratorv1.FallbackStrategy) map[string]*corev1.ResourceRequirements {
+	if policy == nil {
+		return nil
+	}
+	res := make(map[string]*corev1.ResourceRequirements)
+	switch strategy {
+	case konsumeratorv1.FallbackStrategyMax:
+		for i := range policy.ContainerPolicies {
+			cp := policy.ContainerPolicies[i]
+			res[cp.ContainerName] = &corev1.ResourceRequirements{
+				Requests: cp.MaxAllowed,
+				Limits:   cp.MaxAllowed,
+			}
+		}
+	case konsumeratorv1.FallbackStrategyMin:
+		fallthrough
+	default:
+		for i := range policy.ContainerPolicies {
+			cp := policy.ContainerPolicies[i]
+			res[cp.ContainerName] = &corev1.ResourceRequirements{
+				Requests: cp.MinAllowed,
+				Limits:   cp.MinAllowed,
+			}
+		}
+	}
+	return res
+}
+
+func calculateFallbackFromRunningInstances(instances []appsv1.Deployment, strategy konsumeratorv1.FallbackStrategy) map[string]*corev1.ResourceRequirements {
+	res := make(map[string]*corev1.ResourceRequirements)
+	for i := range instances {
+		deploy := instances[i]
+		for c := range deploy.Spec.Template.Spec.Containers {
+			container := deploy.Spec.Template.Spec.Containers[c]
+			if _, ok := res[container.Name]; !ok {
+				res[container.Name] = &container.Resources
+				continue
+			}
+			switch strategy {
+			case konsumeratorv1.FallbackStrategyMin:
+				if container.Resources.Requests.Cpu().MilliValue() < res[container.Name].Requests.Cpu().MilliValue() {
+					res[container.Name] = &container.Resources
+				}
+			case konsumeratorv1.FallbackStrategyMax:
+				if container.Resources.Requests.Cpu().MilliValue() > res[container.Name].Requests.Cpu().MilliValue() {
+					res[container.Name] = &container.Resources
+				}
+			}
+		}
+	}
+	return res
+}

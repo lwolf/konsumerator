@@ -1,6 +1,7 @@
 package predictors
 
 import (
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 
@@ -9,15 +10,20 @@ import (
 )
 
 type NaivePredictor struct {
-	lagSource providers.MetricsProvider
-	promSpec  *konsumeratorv1.PrometheusAutoscalerSpec
+	lagSource     providers.MetricsProvider
+	promSpec      *konsumeratorv1.PrometheusAutoscalerSpec
+	fallbackValue map[string]*corev1.ResourceRequirements
+	log           logr.Logger
 }
 
-func NewNaivePredictor(store providers.MetricsProvider, promSpec *konsumeratorv1.PrometheusAutoscalerSpec) *NaivePredictor {
+func NewNaivePredictor(store providers.MetricsProvider, promSpec *konsumeratorv1.PrometheusAutoscalerSpec, fallback map[string]*corev1.ResourceRequirements, log logr.Logger) *NaivePredictor {
 	// TODO: we need to do a basic validation of all the fields during creating of the Predictor
+	ctrlLogger := log.WithName("naivePredictor")
 	return &NaivePredictor{
-		lagSource: store,
-		promSpec:  promSpec,
+		lagSource:     store,
+		promSpec:      promSpec,
+		fallbackValue: fallback,
+		log:           ctrlLogger,
 	}
 }
 
@@ -40,10 +46,22 @@ func (s *NaivePredictor) estimateMemory(ramPerCore int64, cpuL int64) (int64, in
 	return limit, limit
 }
 
-func (s *NaivePredictor) Estimate(_ string, partitions []int32) *corev1.ResourceRequirements {
+func (s *NaivePredictor) Estimate(containerName string, partitions []int32) *corev1.ResourceRequirements {
 	var expectedConsumption int64
 	for _, p := range partitions {
 		expectedConsumption += s.expectedConsumption(p)
+	}
+	// metrics are missing, no need for estimation, return fallback value instead
+	if expectedConsumption == 0 {
+		if v, ok := s.fallbackValue[containerName]; ok {
+			s.log.Info(
+				"Metrics are missing for all partitions. Using fallback value.",
+				"partitions", partitions,
+				"req.cpu", v.Requests.Cpu(),
+				"req.mem", v.Requests.Memory().ScaledValue(resource.Mega),
+			)
+			return v
+		}
 	}
 	// for backward compatibility, cpuIncrement is an optional field
 	var step int64

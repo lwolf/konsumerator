@@ -22,6 +22,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// FallbackStrategy specifies how resources should be assigned
+// in case of missing Prometheus metrics.
+// Currently, two strategies are implemented: min and max
+type FallbackStrategy string
+
 type AutoscalerType string
 
 // ContainerScalingMode controls whether autoscaler is enabled for a specific
@@ -37,6 +42,9 @@ const (
 	ContainerScalingModeAuto ContainerScalingMode = "Auto"
 	// ContainerScalingModeOff means autoscaling is disabled for a container.
 	ContainerScalingModeOff ContainerScalingMode = "Off"
+
+	FallbackStrategyMin = "min"
+	FallbackStrategyMax = "max"
 )
 
 // ConsumerSpec defines the desired state of Consumer
@@ -110,6 +118,8 @@ type PrometheusAutoscalerSpec struct {
 	Offset      OffsetQuerySpec      `json:"offset"`
 	Production  ProductionQuerySpec  `json:"production"`
 	Consumption ConsumptionQuerySpec `json:"consumption"`
+	// +optional
+	FallbackStrategy *FallbackStrategy `json:"fallbackStrategy,omitempty"`
 
 	RatePerCore *int64            `json:"ratePerCore"`
 	RamPerCore  resource.Quantity `json:"ramPerCore"`

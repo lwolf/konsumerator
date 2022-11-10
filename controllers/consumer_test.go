@@ -13,10 +13,6 @@ import (
 	konsumeratorv1 "github.com/lwolf/konsumerator/api/v1"
 )
 
-func TestEstimateResources(t *testing.T) {
-
-}
-
 func TestNewConsumerOperator(t *testing.T) {
 	testCases := []struct {
 		name           string

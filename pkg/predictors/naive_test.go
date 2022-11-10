@@ -87,7 +87,7 @@ func TestEstimateCpu(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			estimator := NaivePredictor{}
+			estimator := NaivePredictor{log: logr.Discard()}
 			cpuR, cpuL := estimator.estimateCpu(tt.consumption, tt.ratePerCore, tt.cpuIncrement)
 			if cpuR != tt.expectedCpuR {
 				t.Fatalf("expected Request CPU %d, got %d", tt.expectedCpuR, cpuR)
@@ -127,7 +127,7 @@ func TestEstimateMemory(t *testing.T) {
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
-			estimator := NaivePredictor{}
+			estimator := NaivePredictor{log: logr.Discard()}
 			memoryR, memoryL := estimator.estimateMemory(tt.ramPerCore, tt.cpuL)
 			if memoryR != tt.expectedMemoryR {
 				t.Fatalf("expected Request Memory %d, got %d", tt.expectedMemoryR, memoryR)
@@ -164,6 +164,7 @@ func TestExpectedConsumption(t *testing.T) {
 			estimator := NaivePredictor{
 				lagSource: tt.lagStore,
 				promSpec:  &tt.promSpec,
+				log:       logr.Discard(),
 			}
 			actual := estimator.expectedConsumption(tt.partition)
 			if actual != tt.expectedConsumption {
@@ -178,6 +179,7 @@ func TestEstimateResources(t *testing.T) {
 		containerName     string
 		promSpec          konsumeratorv1.PrometheusAutoscalerSpec
 		lagStore          providers.MetricsProvider
+		fallback          map[string]*corev1.ResourceRequirements
 		partitions        []int32
 		expectedResources corev1.ResourceRequirements
 	}{
@@ -186,6 +188,7 @@ func TestEstimateResources(t *testing.T) {
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 20000}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
 			partitions:    []int32{0},
+			fallback:      nil,
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("2"),
@@ -202,6 +205,7 @@ func TestEstimateResources(t *testing.T) {
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 20000, 1: 20000}, map[int32]int64{0: 20001, 1: 20001}, map[int32]int64{0: 0}),
 			partitions:    []int32{0, 1},
+			fallback:      nil,
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("4"),
@@ -218,6 +222,7 @@ func TestEstimateResources(t *testing.T) {
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 200}, map[int32]int64{0: 20001}, map[int32]int64{0: 0}),
 			partitions:    []int32{0},
+			fallback:      nil,
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("100m"),
@@ -234,6 +239,7 @@ func TestEstimateResources(t *testing.T) {
 			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:      NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
 			partitions:    []int32{0},
+			fallback:      nil,
 			expectedResources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceCPU:    resource.MustParse("0"),
@@ -250,14 +256,43 @@ func TestEstimateResources(t *testing.T) {
 			promSpec:          *genPromSpec(10000, resource.MustParse("1G")),
 			lagStore:          NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
 			partitions:        []int32{0},
+			fallback:          nil,
 			expectedResources: corev1.ResourceRequirements{},
+		},
+		"respect fallback policy when no metrics data provided": {
+			containerName: "test",
+			promSpec:      *genPromSpec(10000, resource.MustParse("1G")),
+			lagStore:      NewMockProvider(map[int32]int64{0: 0}, map[int32]int64{0: 0}, map[int32]int64{0: 0}),
+			partitions:    []int32{0},
+			fallback: map[string]*corev1.ResourceRequirements{"test": &corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("100M"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1.1"),
+					corev1.ResourceMemory: resource.MustParse("200M"),
+				},
+			}},
+			expectedResources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1"),
+					corev1.ResourceMemory: resource.MustParse("100M"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1.1"),
+					corev1.ResourceMemory: resource.MustParse("200M"),
+				},
+			},
 		},
 	}
 	for testName, tt := range tests {
 		t.Run(testName, func(t *testing.T) {
 			estimator := NaivePredictor{
-				lagSource: tt.lagStore,
-				promSpec:  &tt.promSpec,
+				lagSource:     tt.lagStore,
+				promSpec:      &tt.promSpec,
+				fallbackValue: tt.fallback,
+				log:           logr.Discard(),
 			}
 			resources := estimator.Estimate(tt.containerName, tt.partitions)
 			if helpers.CmpResourceRequirements(*resources, tt.expectedResources) != 0 {

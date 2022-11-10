@@ -84,6 +84,33 @@ func (o *operator) init(consumer *konsumeratorv1.Consumer, managedInstances apps
 	o.toEstimateInstances = make([]*appsv1.Deployment, 0)
 	o.toCreateInstances = make([]*appsv1.Deployment, 0)
 
+	fallbackValue := make(map[string]*corev1.ResourceRequirements)
+	var strategy konsumeratorv1.FallbackStrategy
+	if o.consumer.Spec.Autoscaler.Prometheus.FallbackStrategy != nil {
+		strategy = *o.consumer.Spec.Autoscaler.Prometheus.FallbackStrategy
+	} else {
+		strategy = konsumeratorv1.FallbackStrategyMin
+	}
+	// calculate min/max request.cpu value to use it as "fallback" value when metrics are missing,
+	// use it only when number of instances >10 and > 50% of instances are up and running, otherwise hard fail to min/max from the policy
+	if len(o.assignments) > 10 && len(managedInstances.Items) > (len(o.assignments)/2) {
+		fallbackValue = calculateFallbackFromRunningInstances(managedInstances.Items, strategy)
+	} else {
+		/*
+			In case metrics are missing, use fallback strategy to assign
+			min/max resources from the container policy
+			  containerPolicies:
+			    - containerName: name
+			      minAllowed:
+			        cpu: 3
+			        memory: 12Gi
+			      maxAllowed:
+			        cpu: 8
+			        memory: 12Gi
+		*/
+		fallbackValue = calculateFallbackFromPolicy(consumer.Spec.ResourcePolicy, strategy)
+	}
+
 	o.limiter = limiters.NewInstanceLimiter(consumer.Spec.ResourcePolicy, o.log)
 	o.globalLimiter = limiters.NewGlobalLimiter(consumer.Spec.ResourcePolicy, o.usedResources, o.log)
 
@@ -97,7 +124,8 @@ func (o *operator) init(consumer *konsumeratorv1.Consumer, managedInstances apps
 	if o.consumer.Spec.Autoscaler == nil || o.consumer.Spec.Autoscaler.Prometheus == nil {
 		return fmt.Errorf("Spec.Autoscaler.Prometheus can't be empty")
 	}
-	o.predictor = predictors.NewNaivePredictor(o.mp, o.consumer.Spec.Autoscaler.Prometheus)
+
+	o.predictor = predictors.NewNaivePredictor(o.mp, o.consumer.Spec.Autoscaler.Prometheus, fallbackValue, o.log)
 
 	o.syncInstanceStates(managedInstances)
 
