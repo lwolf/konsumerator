@@ -47,10 +47,16 @@ func (s *NaivePredictor) estimateMemory(ramPerCore int64, cpuL int64) (int64, in
 }
 
 func (s *NaivePredictor) Estimate(containerName string, partitions []int32) *corev1.ResourceRequirements {
-	var expectedConsumption int64
+	var consumptions []int64
 	for _, p := range partitions {
-		expectedConsumption += s.expectedConsumption(p)
+		consumptions = append(consumptions, s.expectedConsumption(p))
 	}
+	// workaround partially missing metrics
+	// e.g. if we have a list of 4 partitions with metrics missing for
+	// 2 out of 4, like [10,11,0,0], resulting "expectedConsumption will be sum of
+	// [10,11,11,11]
+	max := maxInSlice(consumptions)
+	expectedConsumption := sumWithDefault(consumptions, max)
 	// metrics are missing, no need for estimation, return fallback value instead
 	if expectedConsumption == 0 {
 		if v, ok := s.fallbackValue[containerName]; ok {
@@ -90,4 +96,26 @@ func ceilToMultipleOf(in int64, step int64) int64 {
 		return in
 	}
 	return in + (step - in%step)
+}
+
+func maxInSlice(s []int64) int64 {
+	var max int64
+	for i := range s {
+		if s[i] > max {
+			max = s[i]
+		}
+	}
+	return max
+}
+
+func sumWithDefault(s []int64, d int64) int64 {
+	var sum int64
+	for i := range s {
+		if s[i] > 0 {
+			sum += s[i]
+		} else {
+			sum += d
+		}
+	}
+	return sum
 }
