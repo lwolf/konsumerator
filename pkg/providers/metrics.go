@@ -98,5 +98,6 @@ var (
 
 func initMetrics() {
 	metrics.Registry.MustRegister(requestsTotal, requestErrors, requestDuration,
-		subRequestTotal, subRequestErrors, subRequestDuration, lagObserved, zeroValuesTotal)
+		subRequestTotal, subRequestErrors, subRequestDuration, lagObserved,
+		zeroValuesTotal, samplesReceivedTotal)
 }
