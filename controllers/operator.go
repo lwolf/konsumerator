@@ -434,10 +434,7 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 					logHeadline = fmt.Sprintf("No action. More resources estimated, but instance is SATURATED")
 				}
 			} else {
-				// XXX: changing annotation here doesn't make any sense.
-				// current state is: pod is running, no lag detected, but estimations thinks that it needs more resources
-				// this leads to changing state from RUNNING to SATURATED ?!
-				// isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
+				isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
 				logHeadline = fmt.Sprintf("No action. More resources estimated, but no lag detected")
 			}
 		case cmpResourcesLt:
