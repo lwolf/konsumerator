@@ -1011,6 +1011,186 @@ func TestConsumerReconciler_CriticalLagTest(t *testing.T) {
 	}
 }
 
+func TestConsumerReconciler_WrongSaturationStatus(t *testing.T) {
+	name, namespace := "ConsumerReconciler_Reconcile", "Test"
+	testCases := []struct {
+		name                  string
+		timePassed            time.Duration
+		promResponse          *fakeMetrics
+		expDeployAnnotation   map[string]map[string]string
+		expContainerResources map[string]corev1.ResourceRequirements
+		expContainerEnv       map[string]map[string]string
+		expConsumerState      konsumeratorv1.ConsumerStatus
+	}{
+		{
+			name:                "should have one missing deployment on consumer creation",
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+			},
+			expConsumerState: konsumeratorv1.ConsumerStatus{
+				Expected:  helpers.Ptr[int32](1),
+				Lagging:   helpers.Ptr[int32](0),
+				Missing:   helpers.Ptr[int32](1),
+				Outdated:  helpers.Ptr[int32](0),
+				Running:   helpers.Ptr[int32](0),
+				Redundant: helpers.Ptr[int32](0),
+				Paused:    helpers.Ptr[int32](0),
+			},
+		},
+		{
+			name:                "should have a single running deployment after the first reconcile",
+			promResponse:        promMetricsForLag(0),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+			},
+			expConsumerState: konsumeratorv1.ConsumerStatus{
+				Expected:  helpers.Ptr[int32](1),
+				Lagging:   helpers.Ptr[int32](0),
+				Missing:   helpers.Ptr[int32](0),
+				Outdated:  helpers.Ptr[int32](0),
+				Running:   helpers.Ptr[int32](1),
+				Redundant: helpers.Ptr[int32](0),
+				Paused:    helpers.Ptr[int32](0),
+			},
+		},
+		{
+			name:                "no lag, but should estimate more resources, status running",
+			timePassed:          time.Minute * 2,
+			promResponse:        promMetricsForLag(30),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+			},
+			expConsumerState: konsumeratorv1.ConsumerStatus{
+				Expected:  helpers.Ptr[int32](1),
+				Lagging:   helpers.Ptr[int32](0),
+				Missing:   helpers.Ptr[int32](0),
+				Outdated:  helpers.Ptr[int32](0),
+				Running:   helpers.Ptr[int32](1),
+				Redundant: helpers.Ptr[int32](0),
+				Paused:    helpers.Ptr[int32](0),
+			},
+		},
+		{
+			name:                "enormous lag detected, should set pending scale up status",
+			timePassed:          time.Minute * 2,
+			promResponse:        promMetricsForLag(600),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusPendingScaleUp),
+			expContainerEnv:     containerEnv("busybox", "0", "1", "80MiB", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("100m", "100M", "100m", "100M"),
+			},
+			expConsumerState: konsumeratorv1.ConsumerStatus{
+				Expected:  helpers.Ptr[int32](1),
+				Lagging:   helpers.Ptr[int32](1),
+				Missing:   helpers.Ptr[int32](0),
+				Outdated:  helpers.Ptr[int32](0),
+				Running:   helpers.Ptr[int32](1),
+				Redundant: helpers.Ptr[int32](0),
+				Paused:    helpers.Ptr[int32](0),
+			},
+		},
+		{
+			name:                "enormous lag detected, actually scale and saturate",
+			timePassed:          time.Minute * 10,
+			promResponse:        promMetricsForLag(600),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusSaturated),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
+			},
+			expConsumerState: konsumeratorv1.ConsumerStatus{
+				Expected:  helpers.Ptr[int32](1),
+				Lagging:   helpers.Ptr[int32](1),
+				Missing:   helpers.Ptr[int32](0),
+				Outdated:  helpers.Ptr[int32](0),
+				Running:   helpers.Ptr[int32](1),
+				Redundant: helpers.Ptr[int32](0),
+				Paused:    helpers.Ptr[int32](0),
+			},
+		},
+		{
+			name:                "lag consumed, same amount estimated, switch to running",
+			timePassed:          time.Minute * 15,
+			promResponse:        promMetricsForLag(14),
+			expDeployAnnotation: deployAnnotation(name, controllers.InstanceStatusRunning),
+			expContainerEnv:     containerEnv("busybox", "0", "2", "320MiB", "0", "1", "1"),
+			expContainerResources: map[string]corev1.ResourceRequirements{
+				"busybox": *tests.NewResourceRequirements("2", "400M", "2", "400M"),
+			},
+			expConsumerState: konsumeratorv1.ConsumerStatus{
+				Expected:  helpers.Ptr[int32](1),
+				Lagging:   helpers.Ptr[int32](0),
+				Missing:   helpers.Ptr[int32](0),
+				Outdated:  helpers.Ptr[int32](0),
+				Running:   helpers.Ptr[int32](1),
+				Redundant: helpers.Ptr[int32](0),
+				Paused:    helpers.Ptr[int32](0),
+			},
+		},
+	}
+	promServer := newFakePromServer(t)
+	c := newConsumer(name, namespace)
+	c.Spec.DeploymentTemplate.Template = corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{Name: "busybox", Image: "busybox-image"},
+			},
+		},
+	}
+	c.Spec.ResourcePolicy = &konsumeratorv1.ResourcePolicy{
+		ContainerPolicies: []konsumeratorv1.ContainerResourcePolicy{
+			tests.NewContainerResourcePolicy("busybox", "100m", "100M", "2", "400M"),
+		},
+	}
+	c.Spec.Autoscaler.Prometheus.Address = []string{promServer.URL}
+	c.Spec.Autoscaler.Prometheus.TolerableLag = &metav1.Duration{Duration: time.Minute * 50}
+	c.Spec.Autoscaler.Prometheus.RatePerCore = helpers.Ptr[int64](3000)
+	tr := newTestReconciler(t, c)
+
+	for step, tc := range testCases {
+		t.Run(fmt.Sprintf("step_%d", step+1), func(t *testing.T) {
+			t.Log(tc.name)
+			fakeClock.Step(tc.timePassed)
+			if tc.promResponse != nil {
+				promServer.setResponse(tc.promResponse)
+				tc.expConsumerState.LastSyncState = map[string]konsumeratorv1.InstanceState{
+					"0": {
+						ProductionRate:  tc.promResponse.production,
+						ConsumptionRate: tc.promResponse.consumption,
+						MessagesBehind:  tc.promResponse.offset,
+					},
+				}
+			}
+			tr.mustReconcile()
+			if err := tr.equalConsumerStatus(tc.expConsumerState); err != nil {
+				t.Logf("%s", err)
+				t.Fail()
+			}
+			deployments := tr.fetchDeployments()
+			for _, deployment := range deployments {
+				if err := deployment.diffAnnotation(tc.expDeployAnnotation); err != nil {
+					t.Logf("annotation diff err: %s", err)
+					t.Fail()
+				}
+				if err := deployment.diffEnv(tc.expContainerEnv); err != nil {
+					t.Logf("environment diff err: %s", err)
+					t.Fail()
+				}
+				if err := deployment.diffResources(tc.expContainerResources); err != nil {
+					t.Logf("resources diff err: %s", err)
+					t.Fail()
+				}
+			}
+		})
+	}
+}
+
 func newConsumer(name, namespace string) *konsumeratorv1.Consumer {
 	return &konsumeratorv1.Consumer{
 		ObjectMeta: metav1.ObjectMeta{
