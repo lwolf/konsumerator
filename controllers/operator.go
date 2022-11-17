@@ -404,8 +404,15 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 		var logHeadline string
 		switch cmpRes {
 		case cmpResourcesEq:
-			isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
-			logHeadline = fmt.Sprintf("No action. Same amount of resources estimated")
+			if isLagging {
+				isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
+				logHeadline = fmt.Sprintf("No action. Same amount of resources estimated, lag present")
+			} else {
+				// If equal amount estimated, and there is no lag, make sure to remove saturation levels and set
+				// status to RUNNING
+				logHeadline = fmt.Sprintf("No action. Same amount of resources estimated, no lag detected")
+				isChangedAnnotations = o.updateScaleAnnotations(deploy, &corev1.ResourceList{})
+			}
 		case cmpResourcesGt:
 			if isLagging {
 				switch currentState {
@@ -434,8 +441,17 @@ func (o *operator) estimateDeploy(deploy *appsv1.Deployment) (*appsv1.Deployment
 					logHeadline = fmt.Sprintf("No action. More resources estimated, but instance is SATURATED")
 				}
 			} else {
-				isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
-				logHeadline = fmt.Sprintf("No action. More resources estimated, but no lag detected")
+				switch currentState {
+				case InstanceStatusSaturated:
+					// if it's already in SATURATED state, make sure to update saturation levels
+					logHeadline = fmt.Sprintf("No action. More resources estimated, but instance is SATURATED")
+					isChangedAnnotations = o.updateScaleAnnotations(deploy, underProvision)
+				default:
+					// If more resources estimated, but lag disappeared, make sure to remove saturation levels and set
+					// status to RUNNING
+					logHeadline = fmt.Sprintf("No action. More resources estimated, but no lag detected")
+					isChangedAnnotations = o.updateScaleAnnotations(deploy, &corev1.ResourceList{})
+				}
 			}
 		case cmpResourcesLt:
 			if !isLagging {
