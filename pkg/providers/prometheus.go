@@ -125,6 +125,7 @@ func (l *PrometheusMP) GetLagByPartition(partition int32) time.Duration {
 	behind := l.GetMessagesBehind(partition)
 	production := l.GetProductionRate(partition)
 	if production == 0 {
+		lagObserved.WithLabelValues(l.consumer, strconv.Itoa(int(partition))).Set(0)
 		return 0
 	}
 	lagM := float64(behind) / float64(production)
