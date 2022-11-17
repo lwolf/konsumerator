@@ -142,7 +142,7 @@ $(KUSTOMIZE): $(LOCALBIN)
 .PHONY: controller-gen $(CONTROLLER_GEN)
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
-	$(LOCALBIN)/controller-gen --version | fgrep "$(CONTROLLER_TOOLS_VERSION)" || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+	$(LOCALBIN)/controller-gen --version | grep -F "$(CONTROLLER_TOOLS_VERSION)" || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
